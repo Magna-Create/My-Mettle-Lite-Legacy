@@ -99,7 +99,7 @@ export type SessionStatus = 'active' | 'completed' | 'abandoned' | 'discarded';
 export type HealthExportState = 'not_requested' | 'queued' | 'exported' | 'skipped' | 'conflict';
 export interface Session {
   id: Id; cycleId: Id; day: DaySymbol; mode: Mode; routineVersionId: Id; status: SessionStatus;
-  startedAt: string; completedAt?: string; editedAt?: string; discardedAt?: string | undefined;
+  startedAt: string; completedAt?: string; editedAt?: string | undefined; discardedAt?: string | undefined;
   excludedFromInsights?: boolean; bodyweightSnapshotKg: number | null; exercises: SessionExercise[];
   healthExportState?: HealthExportState | undefined; healthClientRecordId?: string; schemaVersion: number;
 }
