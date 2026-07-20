@@ -14,6 +14,11 @@ function optionalNumber(value: FormDataEntryValue | null): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function localDateValue(date = new Date()) {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
 export function ProfileSheet({ database, onClose, onAddMeasurement }: Props) {
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -28,6 +33,7 @@ export function ProfileSheet({ database, onClose, onAddMeasurement }: Props) {
   );
   const latestWeight = measurements.find((measurement) => typeof measurement.weightKg === 'number')?.weightKg;
   const latestHeight = measurements.find((measurement) => typeof measurement.heightCm === 'number')?.heightCm;
+  const today = localDateValue();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -36,7 +42,9 @@ export function ProfileSheet({ database, onClose, onAddMeasurement }: Props) {
     const weightKg = optionalNumber(form.get('weightKg'));
     const heightCm = optionalNumber(form.get('heightCm'));
     const input: { recordedAt: string; weightKg?: number; heightCm?: number } = {
-      recordedAt: new Date(`${date}T12:00:00`).toISOString(),
+      recordedAt: date === today
+        ? new Date().toISOString()
+        : new Date(`${date}T12:00:00`).toISOString(),
     };
     if (weightKg !== undefined) input.weightKg = weightKg;
     if (heightCm !== undefined) input.heightCm = heightCm;
@@ -88,9 +96,10 @@ export function ProfileSheet({ database, onClose, onAddMeasurement }: Props) {
 
           {adding && (
             <form className="measurement-form" onSubmit={submit}>
-              <label>Date<input name="date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></label>
+              <label>Date<input name="date" type="date" required max={today} defaultValue={today} /></label>
               <label>Weight<span className="input-with-suffix"><input name="weightKg" type="number" inputMode="decimal" min="1" step="0.1" /><i>kg</i></span></label>
-              <label>Height<span className="input-with-suffix"><input name="heightCm" type="number" inputMode="decimal" min="1" step="0.1" defaultValue={latestHeight} /><i>cm</i></span></label>
+              <label>Height<span className="input-with-suffix"><input name="heightCm" type="number" inputMode="decimal" min="1" step="0.1" /><i>cm</i></span></label>
+              {latestHeight !== undefined && <p className="measurement-hint">Current height remains {latestHeight.toFixed(0)} cm unless a new height is entered.</p>}
               {error && <p className="form-error" role="alert">{error}</p>}
               <button className="primary-action compact" disabled={saving} type="submit">{saving ? 'Saving…' : 'Save measurement'}</button>
             </form>
