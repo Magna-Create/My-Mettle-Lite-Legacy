@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { GymAppService } from '../application/GymAppService';
 import { IndexedDbGymRepository } from '../adapters/storage/IndexedDbGymRepository';
 import type { AppDatabase, DaySymbol, Importance, Mode, SetRecord } from '../domain/model';
+import { MODE_PRESENTATION } from '../domain/presentation';
 import { BriefPage } from '../features/brief/BriefPage';
 import { TrainPage } from '../features/train/TrainPage';
 import { ProgressPage } from '../features/progress/ProgressPage';
 import { LabPage } from '../features/lab/LabPage';
 import { LibraryPage } from '../features/library/LibraryPage';
 import { SettingsSheet } from '../features/settings/SettingsSheet';
+import { ProfileSheet } from '../features/settings/ProfileSheet';
 
 const tabs = ['brief', 'train', 'progress', 'lab', 'library'] as const;
 type Tab = (typeof tabs)[number];
@@ -25,6 +27,8 @@ export function App() {
   const [database, setDatabase] = useState<AppDatabase | null>(null);
   const [tab, setTab] = useState<Tab>('brief');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [trainProgress, setTrainProgress] = useState({ progress: 0, condensed: false });
   const [error, setError] = useState<string | null>(null);
   const databaseRef = useRef<AppDatabase | null>(null);
   const operationQueue = useRef<Promise<void>>(Promise.resolve());
@@ -54,21 +58,43 @@ export function App() {
     return operationQueue.current;
   }
 
+  const handleProgressState = useCallback((progress: number, condensed: boolean) => {
+    setTrainProgress((current) => (
+      current.progress === progress && current.condensed === condensed
+        ? current
+        : { progress, condensed }
+    ));
+  }, []);
+
   if (!database) {
-    return <main className="boot-screen"><p className="eyebrow">Opening local training system</p><h1>{error ?? 'Preparing the first build…'}</h1></main>;
+    return <main className="boot-screen"><p className="eyebrow">Opening My Mettle</p><h1>{error ?? 'Preparing…'}</h1></main>;
   }
 
   const activeSession = database.sessions.find((session) => session.id === database.activeSessionId);
+  const showHeaderProgress = tab === 'train' && Boolean(activeSession) && trainProgress.condensed;
+  const headerStyle = {
+    '--session-progress': `${Math.round(trainProgress.progress * 100)}%`,
+  } as CSSProperties;
 
   return (
     <div className="app-shell">
-      <header className="top-bar">
+      <header className={`top-bar ${showHeaderProgress ? 'has-session-progress' : ''}`} style={headerStyle}>
+        <span className="top-progress-fill" aria-hidden="true" />
         <button className="wordmark" onClick={() => setTab('brief')} aria-label="Open Brief">
-          <span>GYM</span><i>phase 1</i>
+          <span>MY METTLE</span>
         </button>
         <div className="top-actions">
-          {activeSession && <button className="active-session-pill" onClick={() => setTab('train')}>{activeSession.day} · {activeSession.mode} active</button>}
-          <button className="icon-button" aria-label="Open settings" onClick={() => setSettingsOpen(true)}>•••</button>
+          {activeSession && (
+            <button className="active-session-pill" onClick={() => setTab('train')}>
+              {activeSession.day} · {MODE_PRESENTATION[activeSession.mode].name}
+            </button>
+          )}
+          <button className="header-icon-button" aria-label="Open settings" onClick={() => setSettingsOpen(true)}>
+            <span aria-hidden="true">⚙</span>
+          </button>
+          <button className="profile-button" aria-label="Open profile" onClick={() => setProfileOpen(true)}>
+            {database.profile.displayName.slice(0, 1).toUpperCase()}
+          </button>
         </div>
       </header>
 
@@ -88,6 +114,7 @@ export function App() {
           <TrainPage
             database={database}
             onGoBrief={() => setTab('brief')}
+            onProgressState={handleProgressState}
             onUpdateSet={(sessionId, exerciseId, setId, patch) => run((current) => service.updateSet(current, sessionId, exerciseId, setId, patch))}
             onCompleteExercise={(sessionId, exerciseId) => run((current) => service.completeExercise(current, sessionId, exerciseId))}
             onCompleteSession={async (sessionId) => {
@@ -119,7 +146,7 @@ export function App() {
         {tabs.map((item) => (
           <button key={item} data-active={tab === item} onClick={() => setTab(item)}>
             <span className="nav-glyph" aria-hidden="true">{item === 'brief' ? '◌' : item === 'train' ? '↗' : item === 'progress' ? '∿' : item === 'lab' ? '⌁' : '▦'}</span>
-            {tabLabels[item]}
+            <span className="nav-label">{tabLabels[item]}</span>
           </button>
         ))}
       </nav>
@@ -137,6 +164,8 @@ export function App() {
           }}
         />
       )}
+
+      {profileOpen && <ProfileSheet database={database} onClose={() => setProfileOpen(false)} />}
     </div>
   );
 }
