@@ -34,6 +34,7 @@ export function LibraryPageV4(props: Props) {
   const [recoveryDraft, setRecoveryDraft] = useState<RoutineEditDraft | null>(null);
   const [headingTarget, setHeadingTarget] = useState<Element | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const checkedRecoveryForRoutine = useRef<string | null>(null);
   const { database, onEditStateChange } = props;
   const routine = database.routineVersions.find((candidate) => candidate.id === database.currentRoutineVersionId);
 
@@ -51,6 +52,19 @@ export function LibraryPageV4(props: Props) {
       button.classList.add('routine-title-static');
     });
   }, [database.currentRoutineVersionId, editDraft]);
+
+  useEffect(() => {
+    if (!routine || editDraft || checkedRecoveryForRoutine.current === routine.id) return;
+    checkedRecoveryForRoutine.current = routine.id;
+    const stored = localStorage.getItem(ROUTINE_EDIT_STORAGE_KEY_V2);
+    if (!stored) return;
+    const recovered = parseRoutineEditDraft(stored, routine.id);
+    if (recovered && isRoutineEditDraftDirty(database, recovered)) {
+      setRecoveryDraft(recovered);
+    } else {
+      localStorage.removeItem(ROUTINE_EDIT_STORAGE_KEY_V2);
+    }
+  }, [database, editDraft, routine]);
 
   if (!routine) return null;
 
