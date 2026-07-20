@@ -27,6 +27,7 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Run tests
+        id: tests
         shell: bash
         run: |
           set +e
@@ -38,7 +39,17 @@ jobs:
           fi
           cat test-output.log
 
+      - name: Upload test failure log
+        if: failure() && steps.tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failure-log
+          path: test-output.log
+          if-no-files-found: error
+          retention-days: 3
+
       - name: Build production bundle
+        id: web-build
         shell: bash
         run: |
           set +e
@@ -49,6 +60,15 @@ jobs:
             exit "$status"
           fi
           cat build-output.log
+
+      - name: Upload build failure log
+        if: failure() && steps.web-build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build-failure-log
+          path: build-output.log
+          if-no-files-found: error
+          retention-days: 3
 
   android:
     name: Build Android debug APK
