@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export type Id = string;
 export type DaySymbol = 'ψ' | 'φ' | 'π' | '&';
@@ -6,6 +6,77 @@ export type CoreDay = Exclude<DaySymbol, '&'>;
 export type Mode = 'A' | 'B' | 'C';
 export type Importance = 'principal' | 'core' | 'accessory';
 export type LoadUnit = 'kg' | 'lb';
+
+export type TrackingMetric = 'load_reps' | 'reps' | 'duration' | 'distance';
+export type LoadRelationship =
+  | 'external'
+  | 'assistance'
+  | 'bodyweight'
+  | 'bodyweight_plus_external'
+  | 'none';
+export type EntryBasis = 'total' | 'per_hand' | 'per_side';
+
+export interface ExerciseTrackingProfile {
+  metric: TrackingMetric;
+  loadRelationship: LoadRelationship;
+  entryBasis: EntryBasis;
+}
+
+export interface BodyMeasurement {
+  id: Id;
+  recordedAt: string;
+  weightKg?: number;
+  heightCm?: number;
+  source: 'manual' | 'health_connect' | 'samsung_health';
+  sourceRecordId?: string;
+  schemaVersion: number;
+}
+
+export interface RestTimerSettings {
+  autoStart: boolean;
+  vibrationEnabled: boolean;
+  vibrationStrength: 'standard' | 'strong';
+  chimeEnabled: boolean;
+}
+
+export interface AppSettings {
+  restTimer: RestTimerSettings;
+  schemaVersion: number;
+}
+
+export type HealthPermissionState = 'unavailable' | 'not_requested' | 'granted' | 'denied';
+export type HealthProviderKind = 'none' | 'health_connect' | 'samsung_health';
+export type HealthObservationType =
+  | 'exercise_session'
+  | 'heart_rate'
+  | 'resting_heart_rate'
+  | 'heart_rate_variability'
+  | 'sleep'
+  | 'weight'
+  | 'body_composition';
+
+export interface HealthObservation {
+  id: Id;
+  type: HealthObservationType;
+  startTime: string;
+  endTime?: string;
+  value?: number;
+  unit?: string;
+  provider: Exclude<HealthProviderKind, 'none'>;
+  sourceRecordId: string;
+  sourceDevice?: string;
+  payload?: Record<string, unknown>;
+  importedAt: string;
+  schemaVersion: number;
+}
+
+export interface HealthIntegrationState {
+  provider: HealthProviderKind;
+  permissionState: HealthPermissionState;
+  lastSyncedAt?: string;
+  lastError?: string;
+  schemaVersion: number;
+}
 
 export interface UserProfile {
   id: Id;
@@ -33,6 +104,7 @@ export interface Exercise {
   name: string;
   archived: boolean;
   defaultUnit: LoadUnit;
+  tracking: ExerciseTrackingProfile;
   progressionStep: number;
   essentialCue?: string;
   createdAt: string;
@@ -72,6 +144,8 @@ export interface SetRecord {
   setIndex: number;
   load: number | null;
   reps: number | null;
+  durationSeconds: number | null;
+  distanceMetres: number | null;
   unit: LoadUnit;
   completedAt?: string;
   note?: string;
@@ -86,6 +160,8 @@ export interface SessionExercise {
   slotId: Id;
   exerciseNameSnapshot: string;
   importanceSnapshot: Importance;
+  trackingSnapshot: ExerciseTrackingProfile;
+  bodyweightSnapshotKg: number | null;
   plannedLoad: number;
   prescription: ModePrescription;
   status: SessionExerciseStatus;
@@ -104,7 +180,10 @@ export interface Session {
   status: 'active' | 'completed' | 'abandoned';
   startedAt: string;
   completedAt?: string;
+  bodyweightSnapshotKg: number | null;
   exercises: SessionExercise[];
+  healthExportState?: 'not_requested' | 'queued' | 'exported' | 'skipped' | 'conflict';
+  healthClientRecordId?: string;
   schemaVersion: number;
 }
 
@@ -128,7 +207,6 @@ export interface Experiment {
   schemaVersion: number;
 }
 
-
 export interface TrainingCycle {
   id: Id;
   startedAt: string;
@@ -141,6 +219,8 @@ export interface TrainingCycle {
 
 export interface AppDatabase {
   profile: UserProfile;
+  settings: AppSettings;
+  bodyMeasurements: BodyMeasurement[];
   exercises: Exercise[];
   routineVersions: RoutineVersion[];
   currentRoutineVersionId: Id;
@@ -149,6 +229,8 @@ export interface AppDatabase {
   currentCycleId: Id;
   activeSessionId: Id | null;
   experiments: Experiment[];
+  healthObservations: HealthObservation[];
+  healthIntegration: HealthIntegrationState;
   createdAt: string;
   updatedAt: string;
   schemaVersion: number;
