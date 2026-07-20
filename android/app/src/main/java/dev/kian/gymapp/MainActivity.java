@@ -12,13 +12,13 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
         AppVisibility.setForeground(true);
     }
 
     @Override
-    protected void onPause() {
+    public void onPause() {
         AppVisibility.setForeground(false);
         super.onPause();
     }
