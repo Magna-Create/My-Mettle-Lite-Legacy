@@ -1,0 +1,95 @@
+[
+  {
+    "modelId": "google.embeddinggemma",
+    "displayName": "EmbeddingGemma",
+    "provider": "Google",
+    "source": "https://ai.google.dev/gemma/docs/embeddinggemma",
+    "revision": "unselected",
+    "licence": "Gemma licence — verify exact artefact before download",
+    "roles": ["retrieval"],
+    "runtimeCandidates": [
+      {
+        "runtime": "litert",
+        "format": "unselected",
+        "backends": ["cpu", "gpu"]
+      }
+    ],
+    "context": {
+      "maisDefaultTokens": 2048
+    },
+    "status": "candidate",
+    "notes": "Always-available semantic retrieval candidate. No artefact is approved or stored in Git."
+  },
+  {
+    "modelId": "google.gemma-4-e2b-it",
+    "displayName": "Gemma 4 E2B IT",
+    "provider": "Google",
+    "source": "https://developers.google.com/edge/litert-lm/models/gemma-4",
+    "revision": "unselected",
+    "licence": "Apache-2.0 — verify model terms and exact artefact before download",
+    "roles": ["governor", "coach", "memory_curator", "multimodal"],
+    "runtimeCandidates": [
+      {
+        "runtime": "litert-lm",
+        "format": ".litertlm",
+        "backends": ["cpu", "gpu", "npu"]
+      }
+    ],
+    "context": {
+      "nativeTokens": 131072,
+      "maisDefaultTokens": 4096
+    },
+    "status": "candidate",
+    "notes": "Fast governor and frequent foreground-work candidate."
+  },
+  {
+    "modelId": "google.gemma-4-e4b-it",
+    "displayName": "Gemma 4 E4B IT",
+    "provider": "Google",
+    "source": "https://developers.google.com/edge/litert-lm/models/gemma-4",
+    "revision": "unselected",
+    "licence": "Apache-2.0 — verify model terms and exact artefact before download",
+    "roles": ["analyst", "auditor", "coach", "memory_curator", "multimodal"],
+    "runtimeCandidates": [
+      {
+        "runtime": "litert-lm",
+        "format": ".litertlm",
+        "backends": ["cpu", "gpu", "npu"]
+      }
+    ],
+    "context": {
+      "nativeTokens": 131072,
+      "maisDefaultTokens": 8192
+    },
+    "status": "candidate",
+    "notes": "General reasoning and cross-family audit candidate."
+  },
+  {
+    "modelId": "qwen.qwen3-8b",
+    "displayName": "Qwen3-8B",
+    "provider": "Qwen",
+    "source": "https://huggingface.co/Qwen/Qwen3-8B",
+    "revision": "unselected",
+    "licence": "Apache-2.0 — verify selected revision before download",
+    "roles": ["analyst", "coding_analyst", "auditor", "research_broker"],
+    "runtimeCandidates": [
+      {
+        "runtime": "litert-lm",
+        "format": ".litertlm",
+        "backends": ["cpu", "gpu", "npu"]
+      },
+      {
+        "runtime": "executorch",
+        "format": ".pte",
+        "backends": ["xnnpack", "vulkan", "qualcomm"]
+      }
+    ],
+    "context": {
+      "nativeTokens": 32768,
+      "extendedTokens": 131072,
+      "maisDefaultTokens": 8192
+    },
+    "status": "candidate",
+    "notes": "Deep Lab reasoning, coding and experiment-design candidate."
+  }
+]
