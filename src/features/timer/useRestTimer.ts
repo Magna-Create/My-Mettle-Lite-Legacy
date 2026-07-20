@@ -33,6 +33,7 @@ function restoredTimer(): RestTimerState | null {
         remainingSeconds,
         completed: remainingSeconds === 0,
         paused: remainingSeconds === 0,
+        endsAt: remainingSeconds === 0 ? null : parsed.endsAt,
       };
     }
     return parsed;
@@ -89,18 +90,19 @@ export function useRestTimer(settings: RestTimerSettings) {
     if (!state || state.paused || state.completed || !state.endsAt) return;
     const tick = () => {
       const remainingSeconds = Math.max(0, Math.ceil((state.endsAt! - Date.now()) / 1000));
-      setState((current) => current
-        ? {
-            ...current,
-            remainingSeconds,
-            completed: remainingSeconds === 0,
-            paused: remainingSeconds === 0,
-            endsAt: remainingSeconds === 0 ? null : current.endsAt,
-          }
-        : null);
+      setState((current) => {
+        if (!current || current.remainingSeconds === remainingSeconds) return current;
+        return {
+          ...current,
+          remainingSeconds,
+          completed: remainingSeconds === 0,
+          paused: remainingSeconds === 0,
+          endsAt: remainingSeconds === 0 ? null : current.endsAt,
+        };
+      });
     };
     tick();
-    const interval = window.setInterval(tick, 250);
+    const interval = window.setInterval(tick, 1000);
     return () => window.clearInterval(interval);
   }, [state?.endsAt, state?.paused, state?.completed]);
 
@@ -130,9 +132,19 @@ export function useRestTimer(settings: RestTimerSettings) {
   }, [settings.autoStart]);
 
   const pause = useCallback(() => {
-    setState((current) => current
-      ? { ...current, paused: true, endsAt: null }
-      : null);
+    setState((current) => {
+      if (!current) return null;
+      const remainingSeconds = current.endsAt
+        ? Math.max(0, Math.ceil((current.endsAt - Date.now()) / 1000))
+        : current.remainingSeconds;
+      return {
+        ...current,
+        remainingSeconds,
+        paused: true,
+        completed: remainingSeconds === 0,
+        endsAt: null,
+      };
+    });
   }, []);
 
   const resume = useCallback(() => {
