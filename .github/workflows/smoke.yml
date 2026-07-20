@@ -1,0 +1,14 @@
+name: Actions Smoke Test
+
+"on":
+  workflow_dispatch:
+  push:
+    branches:
+      - "agent/actions-smoke-test"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prove runner starts
+        run: echo "GitHub Actions runner started successfully"
