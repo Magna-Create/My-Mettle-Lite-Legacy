@@ -127,7 +127,11 @@ Status: foundation established.
 
 ### Phase 2 — Accurate training representation
 
-Current focus.
+Status: **implementation complete; bug testing only.**
+
+The Phase 2 completion candidate passed the automated test suite, production web build, Capacitor synchronisation and Android debug APK build. No new Phase 2 features should be added. Changes are limited to defects discovered through `docs/PHASE_2_BUG_TEST_PLAN.md`.
+
+Implemented scope:
 
 - Exercise tracking schemas and adaptive input fields.
 - External, assisted, bodyweight and weighted-bodyweight calculations.
@@ -144,7 +148,7 @@ Current focus.
 - Health-data provider contracts, permission state, provenance and external-record identity.
 - Database migrations that preserve existing local data while adding the Phase 2 schema.
 
-Phase 2 exits into **bug testing only** when all items above are implemented, the automated test/build pass is green, and no further feature work is required before Phase 3.
+Phase 2 exits bug testing only after its defects are accepted or resolved. Phase 3 feature work must not begin before that decision.
 
 ### Phase 3 — Product completion and training intelligence
 
