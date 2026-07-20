@@ -11,6 +11,7 @@ import type {
   RoutineSlot,
 } from '../domain/model';
 import { SCHEMA_VERSION } from '../domain/model';
+import { EMPTY_EXERCISE_MEMORY } from '../domain/exerciseMemory';
 import { trackingFromPreset, type TrackingPreset } from '../domain/tracking';
 
 const now = () => new Date().toISOString();
@@ -40,6 +41,7 @@ function exercise(
   cue: string,
   preset: TrackingPreset = 'external_load',
   entryBasis: EntryBasis = 'total',
+  memory: Partial<Exercise['memory']> = {},
 ): Exercise {
   const timestamp = now();
   return {
@@ -50,6 +52,14 @@ function exercise(
     tracking: trackingFromPreset(preset, entryBasis),
     progressionStep,
     essentialCue: cue,
+    memory: {
+      ...EMPTY_EXERCISE_MEMORY,
+      ...memory,
+      cues: memory.cues ?? [cue],
+      targetMuscles: memory.targetMuscles ?? [],
+      commonMistakes: memory.commonMistakes ?? [],
+      substitutions: memory.substitutions ?? [],
+    },
     createdAt: timestamp,
     updatedAt: timestamp,
     schemaVersion: SCHEMA_VERSION,
@@ -88,16 +98,47 @@ export function createSeedDatabase(): AppDatabase {
     'Set the shoulder blades, then drive without losing the upper-back shelf.',
     'external_load',
     'per_hand',
+    {
+      category: 'Press',
+      equipment: 'Dumbbells and adjustable bench',
+      targetMuscles: ['Upper chest', 'Front delts', 'Triceps'],
+      machineSettings: 'Record bench angle used.',
+      substitutions: ['Incline machine press', 'Low-incline Smith press'],
+    },
   );
-  const row = exercise('Chest-supported row', 2, 'Pull through the elbow and keep the ribcage quiet.');
-  const squat = exercise('Hack squat', 5, 'Own the bottom position; do not trade depth for the final rep.');
-  const pulldown = exercise('Neutral-grip pulldown', 2.5, 'Let the shoulder blade rise, then pull it down before bending the elbow.');
+  const row = exercise('Chest-supported row', 2, 'Pull through the elbow and keep the ribcage quiet.', 'external_load', 'total', {
+    category: 'Row',
+    equipment: 'Chest-supported row machine',
+    targetMuscles: ['Upper back', 'Lats', 'Rear delts'],
+    substitutions: ['Seal row', 'Cable row'],
+  });
+  const squat = exercise('Hack squat', 5, 'Own the bottom position; do not trade depth for the final rep.', 'external_load', 'total', {
+    category: 'Squat',
+    equipment: 'Hack squat machine',
+    targetMuscles: ['Quads', 'Glutes'],
+    commonMistakes: ['Shortening depth as fatigue rises'],
+    machineSettings: 'Record foot position and sled setting.',
+    substitutions: ['Leg press', 'Smith squat'],
+  });
+  const pulldown = exercise('Neutral-grip pulldown', 2.5, 'Let the shoulder blade rise, then pull it down before bending the elbow.', 'external_load', 'total', {
+    category: 'Vertical pull',
+    equipment: 'Cable stack and neutral handle',
+    targetMuscles: ['Lats', 'Upper back', 'Biceps'],
+    substitutions: ['Assisted pull-up', 'Single-arm pulldown'],
+  });
   const lateralRaise = exercise(
     'Cable lateral raise',
     1,
     'Lead with the elbow and stop before the trap takes over.',
     'external_load',
     'per_side',
+    {
+      category: 'Isolation',
+      equipment: 'Cable stack and cuff/handle',
+      targetMuscles: ['Side delts'],
+      machineSettings: 'Record cable height and attachment.',
+      substitutions: ['Dumbbell lateral raise', 'Machine lateral raise'],
+    },
   );
   const curl = exercise(
     'Incline dumbbell curl',
@@ -105,6 +146,13 @@ export function createSeedDatabase(): AppDatabase {
     'Keep the upper arm behind the torso throughout.',
     'external_load',
     'per_hand',
+    {
+      category: 'Isolation',
+      equipment: 'Dumbbells and adjustable bench',
+      targetMuscles: ['Biceps'],
+      machineSettings: 'Record bench angle.',
+      substitutions: ['Bayesian cable curl', 'Preacher curl'],
+    },
   );
 
   const exercises = [inclinePress, row, squat, pulldown, lateralRaise, curl];
@@ -154,6 +202,7 @@ export function createSeedDatabase(): AppDatabase {
         vibrationEnabled: true,
         vibrationStrength: 'strong',
         chimeEnabled: false,
+        backgroundNotificationEnabled: true,
       },
       schemaVersion: SCHEMA_VERSION,
     },
