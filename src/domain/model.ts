@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export type Id = string;
 export type DaySymbol = 'ψ' | 'φ' | 'π' | '&';
@@ -32,11 +32,14 @@ export interface BodyMeasurement {
   schemaVersion: number;
 }
 
+export type VibrationStrength = 'low' | 'medium' | 'strong' | 'very_strong';
+
 export interface RestTimerSettings {
   autoStart: boolean;
   vibrationEnabled: boolean;
-  vibrationStrength: 'standard' | 'strong';
+  vibrationStrength: VibrationStrength;
   chimeEnabled: boolean;
+  backgroundNotificationEnabled: boolean;
 }
 
 export interface AppSettings {
@@ -99,6 +102,20 @@ export interface ModePrescription {
   deferToAnd: boolean;
 }
 
+export interface ExerciseMemory {
+  category: string;
+  equipment: string;
+  targetMuscles: string[];
+  fatigueCost: 1 | 2 | 3 | 4 | 5;
+  skillDifficulty: 1 | 2 | 3 | 4 | 5;
+  cues: string[];
+  commonMistakes: string[];
+  setupNotes: string;
+  personalNotes: string;
+  machineSettings: string;
+  substitutions: string[];
+}
+
 export interface Exercise {
   id: Id;
   name: string;
@@ -107,6 +124,7 @@ export interface Exercise {
   tracking: ExerciseTrackingProfile;
   progressionStep: number;
   essentialCue?: string;
+  memory: ExerciseMemory;
   createdAt: string;
   updatedAt: string;
   schemaVersion: number;
@@ -139,6 +157,8 @@ export interface RoutineVersion {
   schemaVersion: number;
 }
 
+export type SetKind = 'prescribed' | 'additional' | 'warm_up';
+
 export interface SetRecord {
   id: Id;
   setIndex: number;
@@ -150,6 +170,7 @@ export interface SetRecord {
   completedAt?: string | undefined;
   note?: string;
   warmUp: boolean;
+  kind: SetKind;
 }
 
 export type SessionExerciseStatus = 'planned' | 'active' | 'completed' | 'skipped' | 'deferred';
@@ -166,10 +187,13 @@ export interface SessionExercise {
   prescription: ModePrescription;
   status: SessionExerciseStatus;
   sets: SetRecord[];
+  note?: string;
   startedAt?: string;
   completedAt?: string;
   movementReason: 'base_routine' | 'active_experiment';
 }
+
+export type SessionStatus = 'active' | 'completed' | 'abandoned' | 'discarded';
 
 export interface Session {
   id: Id;
@@ -177,9 +201,12 @@ export interface Session {
   day: DaySymbol;
   mode: Mode;
   routineVersionId: Id;
-  status: 'active' | 'completed' | 'abandoned';
+  status: SessionStatus;
   startedAt: string;
   completedAt?: string;
+  editedAt?: string;
+  discardedAt?: string;
+  excludedFromInsights: boolean;
   bodyweightSnapshotKg: number | null;
   exercises: SessionExercise[];
   healthExportState?: 'not_requested' | 'queued' | 'exported' | 'skipped' | 'conflict';
