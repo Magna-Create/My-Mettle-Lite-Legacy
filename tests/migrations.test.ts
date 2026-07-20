@@ -10,7 +10,7 @@ function legacyDatabase() {
     },
     exercises: [{
       id: 'exercise_1', name: 'Legacy press', archived: false, defaultUnit: 'kg', progressionStep: 2,
-      createdAt: '2026-07-19T00:00:00Z', updatedAt: '2026-07-19T00:00:00Z', schemaVersion: 1,
+      essentialCue: 'Keep the upper back set.', createdAt: '2026-07-19T00:00:00Z', updatedAt: '2026-07-19T00:00:00Z', schemaVersion: 1,
     }],
     routineVersions: [{
       id: 'routine_1', version: 1, createdAt: '2026-07-19T00:00:00Z', effectiveAt: '2026-07-19T00:00:00Z',
@@ -48,20 +48,26 @@ function legacyDatabase() {
 }
 
 describe('Phase 2 migration', () => {
-  it('preserves legacy records while adding tracking, settings and health provenance', () => {
+  it('preserves legacy records while adding parity fields and health provenance', () => {
     const migrated = migrateDatabase(legacyDatabase() as unknown as AppDatabase);
 
-    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.schemaVersion).toBe(3);
     expect(migrated.exercises).toHaveLength(1);
     expect(migrated.exercises[0]?.name).toBe('Legacy press');
     expect(migrated.exercises[0]?.tracking).toEqual({
       metric: 'load_reps', loadRelationship: 'external', entryBasis: 'total',
     });
+    expect(migrated.exercises[0]?.memory).toMatchObject({
+      cues: ['Keep the upper back set.'], substitutions: [], commonMistakes: [], fatigueCost: 3,
+    });
     expect(migrated.sessions[0]?.exercises[0]?.sets[0]).toMatchObject({
-      load: 20, reps: 6, durationSeconds: null, distanceMetres: null,
+      load: 20, reps: 6, durationSeconds: null, distanceMetres: null, kind: 'prescribed',
     });
     expect(migrated.sessions[0]?.bodyweightSnapshotKg).toBeNull();
-    expect(migrated.settings.restTimer.autoStart).toBe(true);
+    expect(migrated.sessions[0]?.excludedFromInsights).toBe(false);
+    expect(migrated.settings.restTimer).toMatchObject({
+      autoStart: true, vibrationStrength: 'strong', backgroundNotificationEnabled: true,
+    });
     expect(migrated.healthIntegration.permissionState).toBe('not_requested');
     expect(migrated.activeSessionId).toBe('session_1');
   });
