@@ -76,8 +76,21 @@ describe('routine edit drafts', () => {
 
   it('does not mutate an active session snapshot', () => {
     const database = createSeedDatabase();
-    const activeSession = database.sessions.find((session) => session.id === database.activeSessionId);
-    if (!activeSession) throw new Error('Seed database requires an active session for this test.');
+    const activeSession = {
+      id: 'session_active_edit_test',
+      cycleId: database.currentCycleId,
+      day: 'ψ' as const,
+      mode: 'A' as const,
+      routineVersionId: database.currentRoutineVersionId,
+      status: 'active' as const,
+      startedAt: '2026-07-20T17:00:00Z',
+      bodyweightSnapshotKg: null,
+      exercises: [],
+      healthExportState: 'not_requested' as const,
+      schemaVersion: database.schemaVersion,
+    };
+    database.sessions = [activeSession];
+    database.activeSessionId = activeSession.id;
     const snapshot = structuredClone(activeSession);
     const slot = currentRoutine(database).days[0]!.slots[0]!;
     const draft = moveRoutineDraftSlot(createRoutineEditDraft(database), slot.id, 'π', 0);
