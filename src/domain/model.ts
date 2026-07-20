@@ -77,6 +77,7 @@ export interface SetRecord {
 
 export type TargetEngagementScale = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 'unsure';
 export type EnjoymentScale = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 'unsure';
+export type ReflectionScale = TargetEngagementScale | EnjoymentScale;
 export interface ExerciseReflection {
   targetMuscleEngagement: TargetEngagementScale;
   execution: 'clean' | 'mixed' | 'poor' | 'unsure';
