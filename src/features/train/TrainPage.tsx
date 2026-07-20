@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ExerciseRecordPatch } from '../../application/Phase2Management';
 import type { AppDatabase, SetRecord } from '../../domain/model';
 import type { ExerciseReflectionInput } from '../../application/ExerciseReflectionManagement';
 import { MODE_PRESENTATION } from '../../domain/presentation';
@@ -14,6 +15,7 @@ interface Props {
   onUpdateSet: (sessionId: string, sessionExerciseId: string, setId: string, patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>) => Promise<void>;
   onAddSet: (sessionId: string, sessionExerciseId: string) => Promise<void>;
   onRemoveSet: (sessionId: string, sessionExerciseId: string, setId: string) => Promise<void>;
+  onUpdateExercise: (exerciseId: string, patch: ExerciseRecordPatch) => Promise<void>;
   onSaveReflection: (sessionId: string, sessionExerciseId: string, input: ExerciseReflectionInput) => Promise<void>;
   onCompleteExercise: (sessionId: string, sessionExerciseId: string) => Promise<void>;
   onCompleteSession: (sessionId: string) => Promise<void>;
@@ -34,7 +36,7 @@ function statusLabel(status: string, expanded: boolean) {
 }
 function targetSuffix(metric: string) { return metric === 'duration' ? 'sec' : metric === 'distance' ? 'm' : 'reps'; }
 
-export function TrainPage({ database, onUpdateSet, onAddSet, onRemoveSet, onSaveReflection, onCompleteExercise, onCompleteSession, onGoBrief, onProgressState, onStartRest }: Props) {
+export function TrainPage({ database, onUpdateSet, onAddSet, onRemoveSet, onUpdateExercise, onSaveReflection, onCompleteExercise, onCompleteSession, onGoBrief, onProgressState, onStartRest }: Props) {
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(null);
   const [detailsExerciseId, setDetailsExerciseId] = useState<string | null>(null);
   const [reflectionExerciseId, setReflectionExerciseId] = useState<string | null>(null);
@@ -120,7 +122,7 @@ export function TrainPage({ database, onUpdateSet, onAddSet, onRemoveSet, onSave
     })}</section>
     <button className="completion-action" onClick={() => onCompleteSession(liveSession.id)}>Complete session</button>
     {undoRecord && <div className="undo-toast"><span>Set updated</span><button type="button" onClick={() => { void undoLastSetEdit(); }}>Undo</button></div>}
-    <ExerciseDetailsOverlay database={database} exercise={detailsExercise} onClose={() => setDetailsExerciseId(null)} />
+    <ExerciseDetailsOverlay database={database} exercise={detailsExercise} onClose={() => setDetailsExerciseId(null)} onUpdateExercise={onUpdateExercise} />
     <ExerciseReflectionOverlay exercise={reflectionExercise} onClose={() => setReflectionExerciseId(null)} onSave={(input) => onSaveReflection(liveSession.id, reflectionExercise!.id, input)} />
   </main>;
 }
