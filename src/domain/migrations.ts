@@ -4,8 +4,19 @@ import { DEFAULT_TRACKING } from './tracking';
 
 type LegacyRecord = Record<string, any>;
 
-function cloneTracking(value: unknown): ExerciseTrackingProfile {
-  if (!value || typeof value !== 'object') return { ...DEFAULT_TRACKING };
+function legacyTrackingForName(name: unknown): ExerciseTrackingProfile {
+  const normalised = typeof name === 'string' ? name.trim().toLowerCase() : '';
+  if (normalised === 'incline dumbbell press' || normalised === 'incline dumbbell curl') {
+    return { metric: 'load_reps', loadRelationship: 'external', entryBasis: 'per_hand' };
+  }
+  if (normalised === 'cable lateral raise') {
+    return { metric: 'load_reps', loadRelationship: 'external', entryBasis: 'per_side' };
+  }
+  return { ...DEFAULT_TRACKING };
+}
+
+function cloneTracking(value: unknown, exerciseName?: unknown): ExerciseTrackingProfile {
+  if (!value || typeof value !== 'object') return legacyTrackingForName(exerciseName);
   const candidate = value as LegacyRecord;
   const metric = ['load_reps', 'reps', 'duration', 'distance'].includes(candidate.metric)
     ? candidate.metric
@@ -23,7 +34,7 @@ export function migrateDatabase(database: AppDatabase): AppDatabase {
   const source = structuredClone(database) as unknown as LegacyRecord;
   const exercises = (source.exercises ?? []).map((exercise: LegacyRecord) => ({
     ...exercise,
-    tracking: cloneTracking(exercise.tracking),
+    tracking: cloneTracking(exercise.tracking, exercise.name),
     schemaVersion: SCHEMA_VERSION,
   }));
   const trackingByExercise = new Map(
@@ -48,6 +59,7 @@ export function migrateDatabase(database: AppDatabase): AppDatabase {
         ...exercise,
         trackingSnapshot: cloneTracking(
           exercise.trackingSnapshot ?? trackingByExercise.get(exercise.exerciseId),
+          exercise.exerciseNameSnapshot,
         ),
         bodyweightSnapshotKg:
           typeof exercise.bodyweightSnapshotKg === 'number'
