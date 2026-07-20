@@ -14,7 +14,7 @@ interface BriefSuggestion {
   value: string;
 }
 
-function buildSuggestions(hour: number): BriefSuggestion[] {
+function buildSuggestions(hour: number, firstMovement?: string): BriefSuggestion[] {
   const fuel = hour < 11
     ? 'Carbs + protein if breakfast has not happened.'
     : hour < 18
@@ -24,7 +24,12 @@ function buildSuggestions(hour: number): BriefSuggestion[] {
   return [
     { label: 'Fuel', value: fuel },
     { label: 'Water', value: '500–750 ml across the hour before training.' },
-    { label: 'Start', value: 'Ramp the first movement. No extra ceremony.' },
+    {
+      label: 'Warm-up',
+      value: firstMovement
+        ? `Two lighter sets before ${firstMovement}.`
+        : 'Two lighter sets before the first working movement.',
+    },
   ];
 }
 
@@ -37,9 +42,15 @@ export function BriefPage({ database, onBeginSession }: Props) {
   const [selectedDay, setSelectedDay] = useState<DaySymbol>(cycle.nextRecommendedDay);
   const completedCount = database.sessions.filter((session) => session.status === 'completed').length;
   const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long' }).format(new Date());
-  const suggestions = useMemo(() => buildSuggestions(new Date().getHours()), []);
   const routine = database.routineVersions.find((item) => item.id === database.currentRoutineVersionId);
-  const recommendedExerciseCount = routine?.days.find((day) => day.symbol === cycle.nextRecommendedDay)?.slots.length ?? 0;
+  const recommendedDay = routine?.days.find((day) => day.symbol === cycle.nextRecommendedDay);
+  const recommendedExerciseCount = recommendedDay?.slots.length ?? 0;
+  const firstExerciseId = recommendedDay?.slots[0]?.exerciseId;
+  const firstMovement = database.exercises.find((exercise) => exercise.id === firstExerciseId)?.name;
+  const suggestions = useMemo(
+    () => buildSuggestions(new Date().getHours(), firstMovement),
+    [firstMovement],
+  );
   const openExperimentCount = database.experiments.filter((item) =>
     ['active', 'ready_for_decision'].includes(item.status),
   ).length;
