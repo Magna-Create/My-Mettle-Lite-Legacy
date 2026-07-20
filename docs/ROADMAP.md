@@ -92,6 +92,20 @@ Historical sessions must snapshot the applicable tracking definition so later ed
 - Sessions should retain the bodyweight snapshot relevant at the time.
 - Assisted and weighted bodyweight exercises can then calculate effective load historically, even after bodyweight changes.
 
+### Health data architecture
+
+- Health Connect is the primary Android interoperability layer and should be implemented as a provider interface rather than coupled directly to product logic.
+- Phase 2 defines provider contracts, permission state, provenance, external-record identity and local observation storage; it does not require a live native connection to finish.
+- Phase 3 adds a bidirectional Health Connect adapter.
+- My Mettle may read supported Samsung Health data exposed through Health Connect, including exercise, heart rate, sleep and measurements when permission is granted.
+- My Mettle may write completed strength-training sessions and supported measurements to Health Connect. Samsung Health can then synchronise supported Health Connect records into Samsung Health when the user enables the relevant permissions.
+- Written exercise sessions should use stable client record IDs and include segment detail where Health Connect supports repetitions, weight and set index.
+- My Mettle writes only records it owns. Data read from Health Connect must not be written back as though it originated in My Mettle.
+- Before exporting a workout, detect materially overlapping external exercise sessions and ask the user which record should be kept to avoid duplicate Samsung/watch and My Mettle sessions.
+- The Samsung Health Data SDK remains an optional richer read adapter. Direct writes through that SDK require Samsung partnership credentials and are not required for the personal alpha.
+- Imported physiological information is recovery/readiness evidence, not a direct measurement of the central nervous system and not a medical diagnosis.
+- A Wear OS companion and live sensor stream sit outside the first-alpha six-phase roadmap. Revisit only after the month-long alpha demonstrates a clear benefit.
+
 ### Visual atmosphere
 
 - The current calm visual base is accepted, but it is intentionally incomplete.
@@ -127,6 +141,10 @@ Current focus.
 - Set correction, five-second Undo lifecycle and interrupted-session recovery.
 - Narrow icon-only liquid-glass navigation and centred header page labels.
 - Visible layout, clipping, shadow and contrast fixes.
+- Health-data provider contracts, permission state, provenance and external-record identity.
+- Database migrations that preserve existing local data while adding the Phase 2 schema.
+
+Phase 2 exits into **bug testing only** when all items above are implemented, the automated test/build pass is green, and no further feature work is required before Phase 3.
 
 ### Phase 3 — Product completion and training intelligence
 
@@ -142,6 +160,9 @@ Complete the major product surfaces while intelligence is built into them.
 - Clear explanation surfaces showing why a recommendation was made.
 - Local AI/model integration where useful.
 - Deterministic fallbacks so core behaviour never depends entirely on model output.
+- Bidirectional Health Connect adapter for supported reads and My Mettle-owned writes.
+- Duplicate detection and record-ownership controls for watch-recorded and My Mettle-recorded workouts.
+- Optional Samsung Health Data SDK read adapter where it offers data or provenance not available through Health Connect.
 
 ### Phase 4 — Character and generative visual system
 
