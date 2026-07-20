@@ -10,7 +10,9 @@ function legacyDatabase() {
     },
     exercises: [{
       id: 'exercise_1', name: 'Legacy press', archived: false, defaultUnit: 'kg', progressionStep: 2,
-      essentialCue: 'Keep the upper back set.', createdAt: '2026-07-19T00:00:00Z', updatedAt: '2026-07-19T00:00:00Z', schemaVersion: 1,
+      essentialCue: 'Keep the upper back set.',
+      memory: { personalNotes: 'Legacy note', videoReferenceUrl: 'https://youtube.com/watch?v=example' },
+      createdAt: '2026-07-19T00:00:00Z', updatedAt: '2026-07-19T00:00:00Z', schemaVersion: 1,
     }],
     routineVersions: [{
       id: 'routine_1', version: 1, createdAt: '2026-07-19T00:00:00Z', effectiveAt: '2026-07-19T00:00:00Z',
@@ -51,7 +53,7 @@ describe('Phase 2 migration', () => {
   it('preserves legacy records while adding parity fields and health provenance', () => {
     const migrated = migrateDatabase(legacyDatabase() as unknown as AppDatabase);
 
-    expect(migrated.schemaVersion).toBe(3);
+    expect(migrated.schemaVersion).toBe(4);
     expect(migrated.exercises).toHaveLength(1);
     expect(migrated.exercises[0]?.name).toBe('Legacy press');
     expect(migrated.exercises[0]?.tracking).toEqual({
@@ -59,7 +61,9 @@ describe('Phase 2 migration', () => {
     });
     expect(migrated.exercises[0]?.memory).toMatchObject({
       cues: ['Keep the upper back set.'], substitutions: [], commonMistakes: [], fatigueCost: 3,
+      videoReferenceUrl: 'https://youtube.com/watch?v=example',
     });
+    expect(migrated.exercises[0]?.memory).not.toHaveProperty('personalNotes');
     expect(migrated.sessions[0]?.exercises[0]?.sets[0]).toMatchObject({
       load: 20, reps: 6, durationSeconds: null, distanceMetres: null, kind: 'prescribed',
     });

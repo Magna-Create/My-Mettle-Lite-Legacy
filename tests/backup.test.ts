@@ -27,10 +27,11 @@ function legacyCompatibleBackup() {
 describe('backup restoration', () => {
   it('validates and migrates a complete legacy-compatible payload', () => {
     const restored = restoreBackupPayload(legacyCompatibleBackup());
-    expect(restored.schemaVersion).toBe(3);
+    expect(restored.schemaVersion).toBe(4);
     expect(restored.settings.restTimer.vibrationStrength).toBe('medium');
     expect(restored.settings.restTimer.backgroundNotificationEnabled).toBe(true);
     expect(restored.exercises[0]?.memory).toBeDefined();
+    expect(restored.exercises[0]?.memory?.videoReferenceUrl).toBe('');
     expect(restored.currentRoutineVersionId).toBeTruthy();
   });
 

@@ -1,15 +1,19 @@
-import type { AppDatabase, ExerciseReflection, ReflectionScale, Session } from '../domain/model';
+import type { AppDatabase, EnjoymentScale, ExerciseReflection, Session, TargetEngagementScale } from '../domain/model';
 import { SCHEMA_VERSION } from '../domain/model';
 
 export interface ExerciseReflectionInput {
-  targetMuscleEngagement: ReflectionScale;
+  targetMuscleEngagement: TargetEngagementScale;
   execution: ExerciseReflection['execution'];
-  enjoyment: ReflectionScale;
+  enjoyment: EnjoymentScale;
   comfort: ExerciseReflection['comfort'];
   note?: string;
 }
 
-function validScale(value: ReflectionScale) {
+function validTargetEngagement(value: TargetEngagementScale) {
+  return value === 'unsure' || (Number.isInteger(value) && value >= 0 && value <= 7);
+}
+
+function validEnjoyment(value: EnjoymentScale) {
   return value === 'unsure' || (Number.isInteger(value) && value >= 1 && value <= 7);
 }
 
@@ -27,8 +31,11 @@ export function saveExerciseReflection(
   sessionExerciseId: string,
   input: ExerciseReflectionInput,
 ): AppDatabase {
-  if (!validScale(input.targetMuscleEngagement) || !validScale(input.enjoyment)) {
-    throw new Error('Reflection sliders must be between 1 and 7 or marked unsure.');
+  if (!validTargetEngagement(input.targetMuscleEngagement)) {
+    throw new Error('Target engagement must be between 0 and 7 or marked unsure.');
+  }
+  if (!validEnjoyment(input.enjoyment)) {
+    throw new Error('Enjoyment must be between 1 and 7 or marked unsure.');
   }
   if (!['clean', 'mixed', 'poor', 'unsure'].includes(input.execution)) {
     throw new Error('Choose a form and execution response.');

@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export type Id = string;
 export type DaySymbol = 'ψ' | 'φ' | 'π' | '&';
@@ -49,7 +49,7 @@ export interface ModePrescription {
 export interface ExerciseMemory {
   category: string; equipment: string; targetMuscles: string[]; fatigueCost: 1 | 2 | 3 | 4 | 5;
   skillDifficulty: 1 | 2 | 3 | 4 | 5; cues: string[]; commonMistakes: string[]; setupNotes: string;
-  personalNotes: string; machineSettings: string; substitutions: string[];
+  videoReferenceUrl: string; machineSettings: string; substitutions: string[];
 }
 
 export interface Exercise {
@@ -75,11 +75,13 @@ export interface SetRecord {
   warmUp: boolean; kind?: SetKind;
 }
 
-export type ReflectionScale = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 'unsure';
+export type TargetEngagementScale = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 'unsure';
+export type EnjoymentScale = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 'unsure';
+export type ReflectionScale = TargetEngagementScale | EnjoymentScale;
 export interface ExerciseReflection {
-  targetMuscleEngagement: ReflectionScale;
+  targetMuscleEngagement: TargetEngagementScale;
   execution: 'clean' | 'mixed' | 'poor' | 'unsure';
-  enjoyment: ReflectionScale;
+  enjoyment: EnjoymentScale;
   comfort: 'good' | 'fine' | 'unsure' | 'uncomfortable' | 'pain';
   note?: string | undefined;
   recordedAt: string;

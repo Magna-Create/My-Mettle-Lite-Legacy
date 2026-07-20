@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ExerciseReflection, ReflectionScale, SessionExercise } from '../../domain/model';
+import type { EnjoymentScale, ExerciseReflection, SessionExercise, TargetEngagementScale } from '../../domain/model';
 import type { ExerciseReflectionInput } from '../../application/ExerciseReflectionManagement';
+import { reflectionHaptic } from './reflectionHaptics';
 
 interface Props {
   exercise: SessionExercise | null;
@@ -9,34 +10,54 @@ interface Props {
 }
 
 type Step = 0 | 1 | 2;
+type ScaleAnswer = TargetEngagementScale | EnjoymentScale;
 
-function ScaleQuestion({
+function ScaleQuestion<T extends ScaleAnswer>({
   label,
   low,
   high,
+  min,
+  max,
+  fallback,
   value,
   onChange,
 }: {
   label: string;
   low: string;
   high: string;
-  value: ReflectionScale | null;
-  onChange: (value: ReflectionScale) => void;
+  min: number;
+  max: number;
+  fallback: number;
+  value: T | null;
+  onChange: (value: T) => void;
 }) {
-  const numericValue = typeof value === 'number' ? value : 4;
+  const numericValue = typeof value === 'number' ? value : fallback;
+
+  function choose(next: number) {
+    if (next === value) return;
+    reflectionHaptic(next === min || next === max ? 'slider_extreme' : 'slider');
+    onChange(next as T);
+  }
+
+  function chooseUnsure() {
+    if (value === 'unsure') return;
+    reflectionHaptic('button');
+    onChange('unsure' as T);
+  }
+
   return <div className={`reflection-question reflection-slider ${value === null ? 'is-unanswered' : ''}`}>
-    <div className="reflection-question-heading"><strong>{label}</strong>{typeof value === 'number' && <span>{value}/7</span>}</div>
+    <div className="reflection-question-heading"><strong>{label}</strong></div>
     <input
       type="range"
-      min="1"
-      max="7"
+      min={min}
+      max={max}
       step="1"
       value={numericValue}
       aria-label={label}
-      onChange={(event) => onChange(Number(event.target.value) as ReflectionScale)}
+      onChange={(event) => choose(Number(event.target.value))}
     />
     <div className="reflection-scale-labels"><span>{low}</span><span>{high}</span></div>
-    <button className={`reflection-unsure ${value === 'unsure' ? 'is-selected' : ''}`} type="button" onClick={() => onChange('unsure')}>Unsure</button>
+    <button className={`reflection-unsure ${value === 'unsure' ? 'is-selected' : ''}`} type="button" onClick={chooseUnsure}>Unsure</button>
   </div>;
 }
 
@@ -51,9 +72,15 @@ function OptionQuestion<T extends string>({
   options: Array<{ value: T; label: string }>;
   onChange: (value: T) => void;
 }) {
+  function choose(next: T) {
+    if (next === value) return;
+    reflectionHaptic('button');
+    onChange(next);
+  }
+
   return <div className="reflection-question">
     <strong>{label}</strong>
-    <div className="reflection-options">{options.map((option) => <button key={option.value} className={value === option.value ? 'is-selected' : ''} type="button" onClick={() => onChange(option.value)}>{option.label}</button>)}</div>
+    <div className="reflection-options">{options.map((option) => <button key={option.value} className={value === option.value ? 'is-selected' : ''} type="button" onClick={() => choose(option.value)}>{option.label}</button>)}</div>
   </div>;
 }
 
@@ -64,9 +91,9 @@ function initialValue(exercise: SessionExercise | null) {
 export function ExerciseReflectionOverlay({ exercise, onClose, onSave }: Props) {
   const existing = initialValue(exercise);
   const [step, setStep] = useState<Step>(0);
-  const [targetMuscleEngagement, setTargetMuscleEngagement] = useState<ReflectionScale | null>(existing?.targetMuscleEngagement ?? null);
+  const [targetMuscleEngagement, setTargetMuscleEngagement] = useState<TargetEngagementScale | null>(existing?.targetMuscleEngagement ?? null);
   const [execution, setExecution] = useState<ExerciseReflection['execution'] | null>(existing?.execution ?? null);
-  const [enjoyment, setEnjoyment] = useState<ReflectionScale | null>(existing?.enjoyment ?? null);
+  const [enjoyment, setEnjoyment] = useState<EnjoymentScale | null>(existing?.enjoyment ?? null);
   const [comfort, setComfort] = useState<ExerciseReflection['comfort'] | null>(existing?.comfort ?? null);
   const [note, setNote] = useState(existing?.note ?? '');
   const [saving, setSaving] = useState(false);
@@ -117,8 +144,8 @@ export function ExerciseReflectionOverlay({ exercise, onClose, onSave }: Props) 
         <header><div><p className="eyebrow">Exercise reflection · {step + 1}/3</p><h2 id="reflection-title">{exercise.exerciseNameSnapshot}</h2></div><button className="icon-button" type="button" onClick={onClose} aria-label="Close reflection">×</button></header>
         <div className="reflection-progress" aria-hidden="true">{[0, 1, 2].map((index) => <i key={index} data-active={index <= step} />)}</div>
         <div className="reflection-card" key={step}>
-          {step === 0 && <><p className="eyebrow">Experience</p><h3>How did the movement feel?</h3><ScaleQuestion label="Target muscle engagement" low="Broad" high="Concentrated" value={targetMuscleEngagement} onChange={setTargetMuscleEngagement} /><OptionQuestion label="Form & execution" value={execution} onChange={setExecution} options={[{ value: 'clean', label: 'Clean' }, { value: 'mixed', label: 'Mixed' }, { value: 'poor', label: 'Poor' }, { value: 'unsure', label: 'Unsure' }]} /></>}
-          {step === 1 && <><p className="eyebrow">Vibe</p><h3>What was it like to do?</h3><ScaleQuestion label="Enjoyment" low="Hate" high="Love" value={enjoyment} onChange={setEnjoyment} /><OptionQuestion label="Comfort" value={comfort} onChange={setComfort} options={[{ value: 'good', label: 'Good' }, { value: 'fine', label: 'Fine' }, { value: 'unsure', label: 'Unsure' }, { value: 'uncomfortable', label: 'Uncomfortable' }, { value: 'pain', label: 'Pain' }]} /></>}
+          {step === 0 && <><p className="eyebrow">Experience</p><h3>How did the movement feel?</h3><ScaleQuestion label="Target muscle engagement" low="Broad" high="Concentrated" min={0} max={7} fallback={5} value={targetMuscleEngagement} onChange={setTargetMuscleEngagement} /><OptionQuestion label="Form & execution" value={execution} onChange={setExecution} options={[{ value: 'clean', label: 'Clean' }, { value: 'mixed', label: 'Mixed' }, { value: 'poor', label: 'Poor' }, { value: 'unsure', label: 'Unsure' }]} /></>}
+          {step === 1 && <><p className="eyebrow">Vibe</p><h3>What was it like to do?</h3><ScaleQuestion label="Enjoyment" low="Hate" high="Love" min={1} max={7} fallback={4} value={enjoyment} onChange={setEnjoyment} /><OptionQuestion label="Comfort" value={comfort} onChange={setComfort} options={[{ value: 'good', label: 'Good' }, { value: 'fine', label: 'Fine' }, { value: 'unsure', label: 'Unsure' }, { value: 'uncomfortable', label: 'Uncomfortable' }, { value: 'pain', label: 'Pain' }]} /></>}
           {step === 2 && <><p className="eyebrow">Optional note</p><h3>Anything worth remembering?</h3><label className="reflection-note"><textarea value={note} maxLength={2000} onChange={(event) => setNote(event.target.value)} placeholder="Setup, sensation, context, or anything else worth keeping…" /><small>Optional. Leave this empty when there’s nothing to add. A future on-device model may choose to read this note.</small></label></>}
         </div>
         {error && <p className="form-error" role="alert">{error}</p>}

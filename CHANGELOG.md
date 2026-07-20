@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1 — Phase 2 final polish
+
+- Removed visible numeric pills from exercise-reflection sliders.
+- Added crisp tactile feedback to reflection sliders and response buttons, with stronger feedback at scale extremes.
+- Split target engagement into a documented 0–7 scale while keeping enjoyment on 1–7.
+- Made setup notes editable from workout Additional Details and saved them back to the shared exercise record on close.
+- Added an editable YouTube/video-reference field to Additional Details and Library exercise management.
+- Retired exercise-level Personal Notes so session-specific thoughts remain attached to session reflections.
+- Added the Phase 3 AI-interface contract describing subjective scale semantics, uncertainty and inference boundaries.
+- Bumped the local data schema to version 4 with migration and backup coverage.
+
 ## 0.4.0 — Phase 2 completion candidate
 
 - Added versioned exercise-tracking definitions for external load, assistance, bodyweight, added load, repetitions, duration and distance.
