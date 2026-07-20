@@ -1,5 +1,6 @@
-import type { AppDatabase, ExerciseTrackingProfile } from './model';
+import type { AppDatabase, ExerciseTrackingProfile, VibrationStrength } from './model';
 import { SCHEMA_VERSION } from './model';
+import { normaliseExerciseMemory } from './exerciseMemory';
 import { DEFAULT_TRACKING } from './tracking';
 
 type LegacyRecord = Record<string, any>;
@@ -30,11 +31,19 @@ function cloneTracking(value: unknown, exerciseName?: unknown): ExerciseTracking
   return { metric, loadRelationship, entryBasis } as ExerciseTrackingProfile;
 }
 
+function vibrationStrength(value: unknown): VibrationStrength {
+  if (value === 'low' || value === 'medium' || value === 'strong' || value === 'very_strong') return value;
+  if (value === 'standard') return 'medium';
+  return 'strong';
+}
+
 export function migrateDatabase(database: AppDatabase): AppDatabase {
   const source = structuredClone(database) as unknown as LegacyRecord;
   const exercises = (source.exercises ?? []).map((exercise: LegacyRecord) => ({
     ...exercise,
+    archived: Boolean(exercise.archived),
     tracking: cloneTracking(exercise.tracking, exercise.name),
+    memory: normaliseExerciseMemory(exercise.memory, exercise.essentialCue),
     schemaVersion: SCHEMA_VERSION,
   }));
   const trackingByExercise = new Map(
@@ -54,6 +63,7 @@ export function migrateDatabase(database: AppDatabase): AppDatabase {
     return {
       ...session,
       bodyweightSnapshotKg,
+      excludedFromInsights: Boolean(session.excludedFromInsights),
       healthExportState: session.healthExportState ?? 'not_requested',
       exercises: (session.exercises ?? []).map((exercise: LegacyRecord) => ({
         ...exercise,
@@ -65,12 +75,15 @@ export function migrateDatabase(database: AppDatabase): AppDatabase {
           typeof exercise.bodyweightSnapshotKg === 'number'
             ? exercise.bodyweightSnapshotKg
             : bodyweightSnapshotKg,
-        sets: (exercise.sets ?? []).map((set: LegacyRecord) => ({
+        sets: (exercise.sets ?? []).map((set: LegacyRecord, index: number) => ({
           ...set,
+          setIndex: index,
           durationSeconds:
             typeof set.durationSeconds === 'number' ? set.durationSeconds : null,
           distanceMetres:
             typeof set.distanceMetres === 'number' ? set.distanceMetres : null,
+          warmUp: Boolean(set.warmUp),
+          kind: set.kind ?? (set.warmUp ? 'warm_up' : index < Number(exercise.prescription?.sets ?? 0) ? 'prescribed' : 'additional'),
         })),
       })),
       schemaVersion: SCHEMA_VERSION,
@@ -87,8 +100,9 @@ export function migrateDatabase(database: AppDatabase): AppDatabase {
       restTimer: {
         autoStart: source.settings?.restTimer?.autoStart ?? true,
         vibrationEnabled: source.settings?.restTimer?.vibrationEnabled ?? true,
-        vibrationStrength: source.settings?.restTimer?.vibrationStrength ?? 'strong',
+        vibrationStrength: vibrationStrength(source.settings?.restTimer?.vibrationStrength),
         chimeEnabled: source.settings?.restTimer?.chimeEnabled ?? false,
+        backgroundNotificationEnabled: source.settings?.restTimer?.backgroundNotificationEnabled ?? true,
       },
       schemaVersion: SCHEMA_VERSION,
     },
@@ -96,6 +110,10 @@ export function migrateDatabase(database: AppDatabase): AppDatabase {
     exercises,
     routineVersions: (source.routineVersions ?? []).map((version: LegacyRecord) => ({
       ...version,
+      days: (version.days ?? []).map((day: LegacyRecord) => ({
+        ...day,
+        slots: (day.slots ?? []).map((slot: LegacyRecord, index: number) => ({ ...slot, position: index })),
+      })),
       schemaVersion: SCHEMA_VERSION,
     })),
     sessions,
