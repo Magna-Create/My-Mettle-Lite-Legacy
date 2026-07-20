@@ -64,6 +64,29 @@ describe('exercise reflection', () => {
     expect(updated.sessions[0]!.editedAt).toBeTruthy();
   });
 
+  it('accepts zero as the broad end of target engagement', () => {
+    const { database, session } = databaseWithSession();
+    const exercise = session.exercises[0]!;
+    const updated = saveExerciseReflection(database, session.id, exercise.id, {
+      targetMuscleEngagement: 0,
+      execution: 'mixed',
+      enjoyment: 4,
+      comfort: 'fine',
+    });
+    expect(updated.sessions[0]!.exercises[0]!.reflection?.targetMuscleEngagement).toBe(0);
+  });
+
+  it('keeps enjoyment on its one-to-seven scale', () => {
+    const { database, session } = databaseWithSession();
+    const exercise = session.exercises[0]!;
+    expect(() => saveExerciseReflection(database, session.id, exercise.id, {
+      targetMuscleEngagement: 5,
+      execution: 'clean',
+      enjoyment: 0 as never,
+      comfort: 'good',
+    })).toThrow('Enjoyment must be between 1 and 7 or marked unsure.');
+  });
+
   it('accepts unsure without inventing a middle score', () => {
     const { database, session } = databaseWithSession();
     const exercise = session.exercises[0]!;
