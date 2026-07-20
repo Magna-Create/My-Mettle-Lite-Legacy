@@ -2,6 +2,8 @@
 
 Status: Phase 2 data contract for later on-device and Lab inference.
 
+Schema anchor: local data schema v4.
+
 This document defines how future AI components should interpret user-authored training data. It is intentionally separate from UI copy so model behaviour does not depend on reverse-engineering visible labels.
 
 ## Evidence hierarchy
