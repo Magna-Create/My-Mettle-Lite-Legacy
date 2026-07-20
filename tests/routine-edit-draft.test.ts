@@ -3,6 +3,7 @@ import { createSeedDatabase } from '../src/data/seed';
 import {
   commitRoutineEditDraft,
   createRoutineEditDraft,
+  duplicateRoutineDraftSlot,
   isRoutineEditDraftDirty,
   moveRoutineDraftSlot,
   parseRoutineEditDraft,
@@ -41,6 +42,24 @@ describe('routine edit drafts', () => {
     const draft = createRoutineEditDraft(database);
     const committed = commitRoutineEditDraft(database, draft);
     expect(committed).toBe(database);
+  });
+
+  it('duplicates a slot as a second occurrence of the same exercise', () => {
+    const database = createSeedDatabase();
+    const original = currentRoutine(database);
+    const source = original.days[0]!.slots[0]!;
+    const draft = duplicateRoutineDraftSlot(createRoutineEditDraft(database), source.id);
+    const duplicatedDay = draft.days[0]!;
+    const duplicate = duplicatedDay.slots[1]!;
+
+    expect(duplicatedDay.slots).toHaveLength(original.days[0]!.slots.length + 1);
+    expect(duplicate.id).not.toBe(source.id);
+    expect(duplicate.exerciseId).toBe(source.exerciseId);
+    expect(duplicate.prescriptions).toEqual(source.prescriptions);
+
+    const committed = commitRoutineEditDraft(database, draft);
+    expect(committed.exercises).toHaveLength(database.exercises.length);
+    expect(currentRoutine(committed).days[0]!.slots.filter((slot) => slot.exerciseId === source.exerciseId)).toHaveLength(2);
   });
 
   it('archives an exercise removed from its final active slot', () => {
