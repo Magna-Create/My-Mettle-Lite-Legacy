@@ -1,6 +1,6 @@
 import type { AppDatabase, SessionExercise } from '../../domain/model';
 import { calculateExercisePerformance } from '../../domain/rules/performance';
-import { entryBasisLabel, relationshipLabel } from '../../domain/tracking';
+import { entryBasisLabel, getTrackingPresentation, relationshipLabel } from '../../domain/tracking';
 
 interface Props {
   database: AppDatabase;
@@ -11,6 +11,10 @@ interface Props {
 export function ExerciseDetailsOverlay({ database, exercise, onClose }: Props) {
   if (!exercise) return null;
   const record = database.exercises.find((candidate) => candidate.id === exercise.exerciseId);
+  const presentation = getTrackingPresentation(
+    exercise.trackingSnapshot,
+    record?.defaultUnit ?? database.profile.units,
+  );
   const recent = database.sessions
     .filter((session) => session.status === 'completed')
     .flatMap((session) => session.exercises.map((candidate) => ({ session, exercise: candidate })))
@@ -36,8 +40,8 @@ export function ExerciseDetailsOverlay({ database, exercise, onClose }: Props) {
             <small>{entryBasisLabel(exercise.trackingSnapshot.entryBasis)} · {exercise.trackingSnapshot.metric.replace('_', ' ')}</small>
           </article>
           <article>
-            <span>Progression step</span>
-            <strong>{record?.progressionStep ?? '—'} {record?.defaultUnit ?? ''}</strong>
+            <span>{presentation.progressionLabel}</span>
+            <strong>{record?.progressionStep ?? '—'} {record ? presentation.progressionSuffix : ''}</strong>
             <small>{exercise.trackingSnapshot.loadRelationship === 'assistance' ? 'Reduce assistance when promoted.' : 'Applied through Lab.'}</small>
           </article>
           <article>
