@@ -71,6 +71,21 @@ export function moveRoutineDraftSlot(
   return { ...draft, days: normaliseDays(days), updatedAt: timestamp() };
 }
 
+export function duplicateRoutineDraftSlot(draft: RoutineEditDraft, slotId: string): RoutineEditDraft {
+  const { day: sourceDay, index, slot } = locateDraftSlot(draft, slotId);
+  const duplicate: RoutineSlot = {
+    ...structuredClone(slot),
+    id: createId('slot'),
+  };
+  const days = draft.days.map((day) => {
+    if (day.symbol !== sourceDay.symbol) return day;
+    const slots = [...day.slots];
+    slots.splice(index + 1, 0, duplicate);
+    return { ...day, slots };
+  });
+  return { ...draft, days: normaliseDays(days), updatedAt: timestamp() };
+}
+
 export function removeRoutineDraftSlot(draft: RoutineEditDraft, slotId: string): RoutineEditDraft {
   locateDraftSlot(draft, slotId);
   const days = draft.days.map((day) => ({
