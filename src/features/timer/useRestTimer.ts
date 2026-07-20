@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RestTimerSettings } from '../../domain/model';
+import type { RestTimerSettings, VibrationStrength } from '../../domain/model';
+import { cancelNativeRestTimer, scheduleNativeRestTimer } from '../../native/RestTimerNotifications';
 
-const STORAGE_KEY = 'my-mettle:rest-timer:v2';
+const STORAGE_KEY = 'my-mettle:rest-timer:v3';
 
 export interface RestTimerStart {
   exerciseId: string;
@@ -22,7 +23,7 @@ export interface RestTimerState {
 
 function restoredTimer(): RestTimerState | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem('my-mettle:rest-timer:v2');
     if (!raw) return null;
     const parsed = JSON.parse(raw) as RestTimerState;
     if (!parsed || typeof parsed.remainingSeconds !== 'number') return null;
@@ -62,17 +63,20 @@ function playChime() {
     oscillator.stop(context.currentTime + 0.45);
     oscillator.addEventListener('ended', () => { void context.close(); });
   } catch {
-    // Sound is an optional enhancement and may be blocked by the WebView.
+    // Sound is optional and may be blocked by the WebView.
   }
+}
+
+function vibrationPattern(strength: VibrationStrength): number[] {
+  if (strength === 'low') return [180, 120, 220];
+  if (strength === 'medium') return [300, 120, 350];
+  if (strength === 'very_strong') return [650, 100, 650, 100, 900];
+  return [480, 110, 520, 110, 700];
 }
 
 function signalCompletion(settings: RestTimerSettings) {
   if (settings.vibrationEnabled && navigator.vibrate) {
-    navigator.vibrate(
-      settings.vibrationStrength === 'strong'
-        ? [500, 120, 500, 120, 700]
-        : [300, 120, 400],
-    );
+    navigator.vibrate(vibrationPattern(settings.vibrationStrength));
   }
   if (settings.chimeEnabled) playChime();
 }
@@ -83,26 +87,51 @@ export function useRestTimer(settings: RestTimerSettings) {
 
   useEffect(() => {
     if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    else localStorage.removeItem(STORAGE_KEY);
+    else {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('my-mettle:rest-timer:v2');
+    }
   }, [state]);
+
+  useEffect(() => {
+    if (!settings.backgroundNotificationEnabled || !state || state.paused || state.completed || !state.endsAt) {
+      void cancelNativeRestTimer();
+      return;
+    }
+    void scheduleNativeRestTimer({
+      endsAt: state.endsAt,
+      exerciseName: state.exerciseName,
+      vibrationStrength: settings.vibrationStrength,
+      vibrationEnabled: settings.vibrationEnabled,
+      chimeEnabled: settings.chimeEnabled,
+    });
+  }, [
+    state?.endsAt,
+    state?.paused,
+    state?.completed,
+    state?.exerciseName,
+    settings.backgroundNotificationEnabled,
+    settings.vibrationStrength,
+    settings.vibrationEnabled,
+    settings.chimeEnabled,
+  ]);
 
   useEffect(() => {
     if (!state || state.paused || state.completed || !state.endsAt) return;
     const tick = () => {
       const remainingSeconds = Math.max(0, Math.ceil((state.endsAt! - Date.now()) / 1000));
-      setState((current) => {
-        if (!current || current.remainingSeconds === remainingSeconds) return current;
-        return {
-          ...current,
-          remainingSeconds,
-          completed: remainingSeconds === 0,
-          paused: remainingSeconds === 0,
-          endsAt: remainingSeconds === 0 ? null : current.endsAt,
-        };
-      });
+      setState((current) => current
+        ? {
+            ...current,
+            remainingSeconds,
+            completed: remainingSeconds === 0,
+            paused: remainingSeconds === 0,
+            endsAt: remainingSeconds === 0 ? null : current.endsAt,
+          }
+        : null);
     };
     tick();
-    const interval = window.setInterval(tick, 1000);
+    const interval = window.setInterval(tick, 250);
     return () => window.clearInterval(interval);
   }, [state?.endsAt, state?.paused, state?.completed]);
 
@@ -132,28 +161,12 @@ export function useRestTimer(settings: RestTimerSettings) {
   }, [settings.autoStart]);
 
   const pause = useCallback(() => {
-    setState((current) => {
-      if (!current) return null;
-      const remainingSeconds = current.endsAt
-        ? Math.max(0, Math.ceil((current.endsAt - Date.now()) / 1000))
-        : current.remainingSeconds;
-      return {
-        ...current,
-        remainingSeconds,
-        paused: true,
-        completed: remainingSeconds === 0,
-        endsAt: null,
-      };
-    });
+    setState((current) => current ? { ...current, paused: true, endsAt: null } : null);
   }, []);
 
   const resume = useCallback(() => {
     setState((current) => current && !current.completed
-      ? {
-          ...current,
-          paused: false,
-          endsAt: Date.now() + current.remainingSeconds * 1000,
-        }
+      ? { ...current, paused: false, endsAt: Date.now() + current.remainingSeconds * 1000 }
       : current);
   }, []);
 
@@ -182,17 +195,9 @@ export function useRestTimer(settings: RestTimerSettings) {
 
   const dismiss = useCallback(() => {
     navigator.vibrate?.(0);
+    void cancelNativeRestTimer();
     setState(null);
   }, []);
 
-  return {
-    state,
-    start,
-    pause,
-    resume,
-    addSeconds,
-    minimize,
-    expand,
-    dismiss,
-  };
+  return { state, start, pause, resume, addSeconds, minimize, expand, dismiss };
 }
