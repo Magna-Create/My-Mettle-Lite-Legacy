@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://my-mettle.local/schemas/mais-model-manifest.schema.json",
+  "title": "MAIS model manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "modelId",
+    "displayName",
+    "provider",
+    "source",
+    "revision",
+    "licence",
+    "roles",
+    "runtimeCandidates",
+    "status"
+  ],
+  "properties": {
+    "modelId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$" },
+    "displayName": { "type": "string", "minLength": 1 },
+    "provider": { "type": "string", "minLength": 1 },
+    "source": { "type": "string", "format": "uri" },
+    "revision": { "type": "string", "minLength": 1 },
+    "licence": { "type": "string", "minLength": 1 },
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "retrieval",
+          "governor",
+          "analyst",
+          "coding_analyst",
+          "auditor",
+          "coach",
+          "memory_curator",
+          "research_broker",
+          "multimodal"
+        ]
+      }
+    },
+    "runtimeCandidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["runtime", "format", "backends"],
+        "properties": {
+          "runtime": { "enum": ["litert-lm", "executorch", "litert", "other"] },
+          "format": { "type": "string", "minLength": 1 },
+          "quantisation": { "type": "string" },
+          "backends": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "enum": ["cpu", "gpu", "npu", "xnnpack", "vulkan", "qualcomm"] }
+          }
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nativeTokens": { "type": "integer", "minimum": 1 },
+        "extendedTokens": { "type": "integer", "minimum": 1 },
+        "maisDefaultTokens": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "artefact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "downloadBytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "conversionRecipe": { "type": "string" }
+      }
+    },
+    "status": { "enum": ["candidate", "benchmarking", "selected", "rejected", "retired"] },
+    "notes": { "type": "string" }
+  }
+}
