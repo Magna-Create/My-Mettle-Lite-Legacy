@@ -39,7 +39,7 @@ export interface RestTimerSettings {
   vibrationEnabled: boolean;
   vibrationStrength: VibrationStrength;
   chimeEnabled: boolean;
-  backgroundNotificationEnabled: boolean;
+  backgroundNotificationEnabled?: boolean;
 }
 
 export interface AppSettings {
@@ -124,7 +124,7 @@ export interface Exercise {
   tracking: ExerciseTrackingProfile;
   progressionStep: number;
   essentialCue?: string;
-  memory: ExerciseMemory;
+  memory?: ExerciseMemory;
   createdAt: string;
   updatedAt: string;
   schemaVersion: number;
@@ -170,7 +170,7 @@ export interface SetRecord {
   completedAt?: string | undefined;
   note?: string;
   warmUp: boolean;
-  kind: SetKind;
+  kind?: SetKind;
 }
 
 export type SessionExerciseStatus = 'planned' | 'active' | 'completed' | 'skipped' | 'deferred';
@@ -206,7 +206,7 @@ export interface Session {
   completedAt?: string;
   editedAt?: string;
   discardedAt?: string;
-  excludedFromInsights: boolean;
+  excludedFromInsights?: boolean;
   bodyweightSnapshotKg: number | null;
   exercises: SessionExercise[];
   healthExportState?: 'not_requested' | 'queued' | 'exported' | 'skipped' | 'conflict';
