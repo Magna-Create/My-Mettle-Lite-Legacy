@@ -2,6 +2,7 @@ import { createId } from '../domain/ids';
 import type {
   AppDatabase,
   DaySymbol,
+  EntryBasis,
   Exercise,
   Importance,
   Mode,
@@ -10,6 +11,7 @@ import type {
   RoutineSlot,
 } from '../domain/model';
 import { SCHEMA_VERSION } from '../domain/model';
+import { trackingFromPreset, type TrackingPreset } from '../domain/tracking';
 
 const now = () => new Date().toISOString();
 
@@ -32,13 +34,20 @@ function prescription(
   };
 }
 
-function exercise(name: string, progressionStep: number, cue: string): Exercise {
+function exercise(
+  name: string,
+  progressionStep: number,
+  cue: string,
+  preset: TrackingPreset = 'external_load',
+  entryBasis: EntryBasis = 'total',
+): Exercise {
   const timestamp = now();
   return {
     id: createId('exercise'),
     name,
     archived: false,
     defaultUnit: 'kg',
+    tracking: trackingFromPreset(preset, entryBasis),
     progressionStep,
     essentialCue: cue,
     createdAt: timestamp,
@@ -73,12 +82,30 @@ function slot(
 
 export function createSeedDatabase(): AppDatabase {
   const timestamp = now();
-  const inclinePress = exercise('Incline dumbbell press', 2, 'Set the shoulder blades, then drive without losing the upper-back shelf.');
+  const inclinePress = exercise(
+    'Incline dumbbell press',
+    2,
+    'Set the shoulder blades, then drive without losing the upper-back shelf.',
+    'external_load',
+    'per_hand',
+  );
   const row = exercise('Chest-supported row', 2, 'Pull through the elbow and keep the ribcage quiet.');
   const squat = exercise('Hack squat', 5, 'Own the bottom position; do not trade depth for the final rep.');
   const pulldown = exercise('Neutral-grip pulldown', 2.5, 'Let the shoulder blade rise, then pull it down before bending the elbow.');
-  const lateralRaise = exercise('Cable lateral raise', 1, 'Lead with the elbow and stop before the trap takes over.');
-  const curl = exercise('Incline dumbbell curl', 1, 'Keep the upper arm behind the torso throughout.');
+  const lateralRaise = exercise(
+    'Cable lateral raise',
+    1,
+    'Lead with the elbow and stop before the trap takes over.',
+    'external_load',
+    'per_side',
+  );
+  const curl = exercise(
+    'Incline dumbbell curl',
+    1,
+    'Keep the upper arm behind the torso throughout.',
+    'external_load',
+    'per_hand',
+  );
 
   const exercises = [inclinePress, row, squat, pulldown, lateralRaise, curl];
 
@@ -121,6 +148,16 @@ export function createSeedDatabase(): AppDatabase {
       updatedAt: timestamp,
       schemaVersion: SCHEMA_VERSION,
     },
+    settings: {
+      restTimer: {
+        autoStart: true,
+        vibrationEnabled: true,
+        vibrationStrength: 'strong',
+        chimeEnabled: false,
+      },
+      schemaVersion: SCHEMA_VERSION,
+    },
+    bodyMeasurements: [],
     exercises,
     routineVersions: [
       {
@@ -129,7 +166,7 @@ export function createSeedDatabase(): AppDatabase {
         createdAt: timestamp,
         effectiveAt: timestamp,
         source: 'seed',
-        changeReason: 'Phase 1 development seed routine',
+        changeReason: 'Phase 2 development seed routine',
         days,
         schemaVersion: SCHEMA_VERSION,
       },
@@ -149,6 +186,12 @@ export function createSeedDatabase(): AppDatabase {
     currentCycleId: cycleId,
     activeSessionId: null,
     experiments: [],
+    healthObservations: [],
+    healthIntegration: {
+      provider: 'none',
+      permissionState: 'not_requested',
+      schemaVersion: SCHEMA_VERSION,
+    },
     createdAt: timestamp,
     updatedAt: timestamp,
     schemaVersion: SCHEMA_VERSION,
