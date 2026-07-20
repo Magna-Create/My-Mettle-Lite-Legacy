@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createSeedDatabase } from '../src/data/seed';
 import { addSessionSet, archiveExercise, discardSession, moveRoutineSlot, removeSessionSet, reorderRoutineSlot, restoreDiscardedSession, setSessionExcluded } from '../src/application/Phase2Management';
+import { restoreArchivedExercise } from '../src/application/restoreArchivedExercise';
 import { createId } from '../src/domain/ids';
 import type { Session } from '../src/domain/model';
 
@@ -47,6 +48,20 @@ describe('Phase 2 routine management', () => {
     expect(updated.exercises.find((item) => item.id === slot.exerciseId)?.archived).toBe(true);
     expect(routine(updated).days.some((day) => day.slots.some((item) => item.exerciseId === slot.exerciseId))).toBe(false);
     expect(database.exercises.find((item) => item.id === slot.exerciseId)?.archived).toBe(false);
+  });
+
+  it('restores an archived exercise to its latest day and prescription', () => {
+    const database = createSeedDatabase();
+    const originalSlot = routine(database).days[0]!.slots[0]!;
+    const archived = archiveExercise(database, originalSlot.exerciseId);
+    const restored = restoreArchivedExercise(archived, originalSlot.exerciseId);
+    const restoredSlot = routine(restored).days[0]!.slots.find((item) => item.exerciseId === originalSlot.exerciseId);
+
+    expect(restored.exercises.find((item) => item.id === originalSlot.exerciseId)?.archived).toBe(false);
+    expect(restoredSlot).toBeDefined();
+    expect(restoredSlot?.id).not.toBe(originalSlot.id);
+    expect(restoredSlot?.plannedLoad).toBe(originalSlot.plannedLoad);
+    expect(restoredSlot?.prescriptions).toEqual(originalSlot.prescriptions);
   });
 });
 
