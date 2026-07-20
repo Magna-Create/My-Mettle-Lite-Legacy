@@ -33,14 +33,18 @@ export function ProfileSheet({ database, onClose, onAddMeasurement }: Props) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const date = String(form.get('date'));
+    const weightKg = optionalNumber(form.get('weightKg'));
+    const heightCm = optionalNumber(form.get('heightCm'));
+    const input: { recordedAt: string; weightKg?: number; heightCm?: number } = {
+      recordedAt: new Date(`${date}T12:00:00`).toISOString(),
+    };
+    if (weightKg !== undefined) input.weightKg = weightKg;
+    if (heightCm !== undefined) input.heightCm = heightCm;
+
     try {
       setSaving(true);
       setError(null);
-      await onAddMeasurement({
-        recordedAt: new Date(`${date}T12:00:00`).toISOString(),
-        weightKg: optionalNumber(form.get('weightKg')),
-        heightCm: optionalNumber(form.get('heightCm')),
-      });
+      await onAddMeasurement(input);
       setAdding(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Measurement could not be saved.');
