@@ -5,6 +5,7 @@ import './styles.css';
 import './refinement.css';
 import './mobile-hardening.css';
 import './phase2.css';
+import './phase2-fixes.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
