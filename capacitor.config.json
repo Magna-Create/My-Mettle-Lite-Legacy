@@ -1,0 +1,11 @@
+{
+  "appId": "dev.kian.gymapp",
+  "appName": "Gym App",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#f3eee4"
+  }
+}

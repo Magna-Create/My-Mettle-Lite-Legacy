@@ -1,0 +1,637 @@
+{
+  "document": {
+    "title": "Gym App Master Product, UX and Technical Specification",
+    "version": "1.0",
+    "status": "authoritative_working_brief",
+    "language": "en-GB",
+    "primary_user": "Kian",
+    "primary_device": "Galaxy S25 Ultra",
+    "interpretation": {
+      "MUST": "essential",
+      "SHOULD": "strongly preferred unless testing justifies change",
+      "MAY": "optional",
+      "source_of_truth": true
+    }
+  },
+  "product": {
+    "type": "offline-first personal training intelligence platform",
+    "core_loop": [
+      "brief",
+      "train",
+      "progress",
+      "lab",
+      "base_routine_evolution"
+    ],
+    "release_rule": "all core workstreams must form a coherent loop before the product is considered usable",
+    "emotional_thesis": "Soft atmosphere. Subtle power. Decisive impact.",
+    "desired_attributes": [
+      "personal",
+      "experimental",
+      "physical",
+      "intelligent",
+      "quietly playful",
+      "alive",
+      "empowering",
+      "calm but not passive"
+    ],
+    "forbidden_feelings": [
+      "sci-fi futuristic",
+      "medical report",
+      "gym-bro",
+      "generic wellness",
+      "cold clinical",
+      "American sports advertising",
+      "gratuitous gamification"
+    ],
+    "non_goals": [
+      "social network",
+      "leaderboard",
+      "calorie tracker",
+      "medical diagnosis",
+      "wearable replacement",
+      "automatic body composition scanner",
+      "cloud-first service",
+      "spoken virtual coach",
+      "autonomous routine editor"
+    ]
+  },
+  "target_user": {
+    "personalised_first": true,
+    "diet": "vegetarian",
+    "avatar_presentation": "masculine and based on actual user-provided proportions/build",
+    "training_preferences": {
+      "principal_core_rep_bias": "approximately 6 clean reps where appropriate",
+      "progression": "micro-load after clean target achievement",
+      "avoid_default_high_rep_grinding": true
+    },
+    "contexts": [
+      "pre-gym",
+      "during session",
+      "rest periods",
+      "post-session review",
+      "home analysis",
+      "cloud AI export"
+    ]
+  },
+  "navigation": {
+    "bottom_tabs": [
+      "brief",
+      "train",
+      "progress",
+      "lab",
+      "library"
+    ],
+    "settings_location": "consistent top-level control",
+    "roles": {
+      "brief": "what should I know today",
+      "train": "what am I doing now",
+      "progress": "what appears to be happening",
+      "lab": "what should I change, test or adopt",
+      "library": "how exercises and routines are constructed",
+      "settings": "how the system behaves"
+    }
+  },
+  "routine_system": {
+    "days": {
+      "psi": {
+        "symbol": "ψ",
+        "role": "core"
+      },
+      "phi": {
+        "symbol": "φ",
+        "role": "core"
+      },
+      "pi": {
+        "symbol": "π",
+        "role": "core"
+      },
+      "and": {
+        "symbol": "&",
+        "role": "additional_catchup_optional"
+      }
+    },
+    "and_eligibility": {
+      "requires_core_days_completed": [
+        "ψ",
+        "φ",
+        "π"
+      ],
+      "completed_modes_count": [
+        "A",
+        "B",
+        "C"
+      ],
+      "whole_missed_core_day_not_replaced_by_and": true,
+      "omitted_completed_day_work_can_be_candidate": true
+    },
+    "modes": {
+      "A": "full intended session",
+      "B": "reduced session for limited time/capacity",
+      "C": "minimum viable useful session"
+    },
+    "mode_selected_by_user": true,
+    "importance": {
+      "principal": {
+        "cross_day_move": false,
+        "within_day_reorder": true,
+        "priority": "highest"
+      },
+      "core": {
+        "cross_day_move": "only if enabled and constraints allow",
+        "within_day_reorder": true
+      },
+      "accessory": {
+        "cross_day_move": "only if enabled and constraints allow",
+        "within_day_reorder": true,
+        "catchup_flexibility": "highest"
+      }
+    },
+    "versioned": true
+  },
+  "dynamic_scheduling": {
+    "levels": [
+      "session_adaptation",
+      "controlled_experiment",
+      "permanent_optimisation"
+    ],
+    "session_reasons": [
+      "catchup",
+      "recovery",
+      "time",
+      "equipment",
+      "active_experiment",
+      "established_optimisation",
+      "manual_move",
+      "substitution"
+    ],
+    "permanent_change_requires_approval": true,
+    "successful_experiment_can_promote_to_base": true,
+    "hard_constraints": [
+      "principal_never_crosses_days",
+      "locks_respected",
+      "and_gate_respected",
+      "equipment_requirements_met",
+      "dependencies_safe",
+      "no_silent_deletion",
+      "every_change_has_reason"
+    ],
+    "scoring_dimensions": [
+      "principal_performance",
+      "muscle_recovery",
+      "cycle_coverage",
+      "sequence_interference",
+      "systemic_fatigue_proxy",
+      "setup_efficiency",
+      "adherence",
+      "session_duration",
+      "priority",
+      "catchup_value",
+      "experiment_information_value"
+    ],
+    "decision_log": true
+  },
+  "brief": {
+    "purpose": "daily orientation and warm greeting",
+    "recommends_day": true,
+    "recommends_mode": false,
+    "main_and_full_layers": true,
+    "configurable_modules": [
+      "session_duration",
+      "nutrition",
+      "muscle_highlights",
+      "recovery",
+      "previous_notes",
+      "routine_changes",
+      "cycle_balance",
+      "experiments",
+      "data_quality"
+    ],
+    "begin_session": {
+      "routine_visible_behind": true,
+      "background_blur": true,
+      "central_mode_modal": true
+    }
+  },
+  "train": {
+    "exercise_card_states": {
+      "ultra_compact": [
+        "name",
+        "importance",
+        "completion",
+        "small_status"
+      ],
+      "compact": [
+        "mode prescription",
+        "rest",
+        "progression jump",
+        "last comparable performance",
+        "set table",
+        "exercise timer",
+        "rest timer",
+        "essential cue"
+      ],
+      "expanded": [
+        "equipment",
+        "setup",
+        "video",
+        "notes",
+        "muscle load",
+        "progression",
+        "history",
+        "reviews",
+        "analytics",
+        "editing"
+      ]
+    },
+    "gestures": {
+      "tap": "focus",
+      "swipe_right": "complete with threshold and undo",
+      "swipe_left": "secondary actions",
+      "vertical": "ordinary session scroll",
+      "button_alternative_required": true
+    },
+    "timers": [
+      "exercise_duration",
+      "rest_duration"
+    ],
+    "autosave": true,
+    "structured_review_questions": 4,
+    "rep_drop_rule": {
+      "trigger": "drop greater than 3 reps at same load",
+      "first_action": "recommend longer rest",
+      "second_action": "suggest 5-10% load reduction if repeated"
+    }
+  },
+  "library": {
+    "exercise_actions": [
+      "create",
+      "clone",
+      "edit",
+      "archive",
+      "restore",
+      "delete_when_safe",
+      "search",
+      "filter",
+      "import"
+    ],
+    "exercise_fields": [
+      "sets/reps by mode",
+      "rest",
+      "progression jump",
+      "last PB basis",
+      "set input",
+      "action notes",
+      "importance",
+      "equipment",
+      "video",
+      "muscle load table",
+      "progress journal",
+      "comparison method",
+      "review configuration"
+    ],
+    "routine_editor": [
+      "reorder",
+      "eligible cross-day movement",
+      "locks",
+      "A/B/C configuration",
+      "load balance preview",
+      "duration preview",
+      "version comparison",
+      "experiment visibility"
+    ],
+    "ai_assisted_draft_requires_review": true
+  },
+  "progress": {
+    "time_windows": [
+      "2w",
+      "1m",
+      "3m",
+      "6m",
+      "1y",
+      "YTD",
+      "all",
+      "custom"
+    ],
+    "top_layer": "organic embodied understanding",
+    "deep_layer": "precise graphs, values and source sessions",
+    "exercise_metrics_are_configurable": true,
+    "muscle_progress_is_inferred_not_measured_hypertrophy": true,
+    "confidence_levels": [
+      "collecting",
+      "low",
+      "moderate",
+      "strong"
+    ],
+    "weakness_cross_reference": true,
+    "sequence_interference": true,
+    "systemic_cns_label": "proxy/inference only"
+  },
+  "body": {
+    "technology": "2D vector art with 2.5D presentation",
+    "views": [
+      "front",
+      "side",
+      "rear"
+    ],
+    "personalised_non_idealised": true,
+    "style_layers": [
+      "illustrated planes",
+      "soft 3D shading",
+      "muted colour",
+      "pencil/chalk muscle overlay",
+      "particle field"
+    ],
+    "stable_muscle_ids": true,
+    "monthly_asset_updates": true,
+    "alive_behaviours": [
+      "breathing",
+      "light shift",
+      "particle drift",
+      "responsive highlight",
+      "relationship motion",
+      "parallax"
+    ]
+  },
+  "lab": {
+    "role": "action centre",
+    "sections": [
+      "needs_attention",
+      "opportunities",
+      "running_experiments",
+      "results_awaiting_decision",
+      "applied",
+      "deferred",
+      "rejected",
+      "decision_history"
+    ],
+    "actions": [
+      "apply",
+      "edit",
+      "run_experiment",
+      "extend",
+      "defer",
+      "reject",
+      "mark_wrong",
+      "restore",
+      "promote_to_base"
+    ],
+    "proposal_fields": [
+      "interpretation",
+      "evidence",
+      "alternative",
+      "confidence",
+      "action",
+      "routine_effect",
+      "benefit",
+      "downside",
+      "duration",
+      "success_criteria"
+    ]
+  },
+  "ai": {
+    "core_dependency": false,
+    "runtime_strategy": [
+      "system ML Kit GenAI/AICore when capability check passes",
+      "app-owned local model fallback",
+      "deterministic no-model fallback"
+    ],
+    "native_bridge": "Kotlin",
+    "allowed_tasks": [
+      "brief wording",
+      "note classification",
+      "theme extraction",
+      "exercise draft extraction",
+      "scheduler explanation",
+      "experiment summary",
+      "scoped local Q&A"
+    ],
+    "forbidden_authority": [
+      "authoritative analytics",
+      "comparability decision",
+      "constraint enforcement",
+      "silent routine edits",
+      "medical diagnosis",
+      "invented nutrition quantities",
+      "database authority"
+    ],
+    "structured_output_validation": true,
+    "local_first_privacy": true
+  },
+  "visual": {
+    "thesis": "light paper-like companion, spatial and alive, deeper layers increasingly analytical",
+    "default_theme": "light",
+    "foundation": "kinetic paper",
+    "materials": [
+      "paper_surface",
+      "atmospheric_glass",
+      "focus_layer"
+    ],
+    "colour": {
+      "base": [
+        "warm chalk",
+        "paper cream",
+        "pale stone",
+        "cool grey",
+        "soft ink"
+      ],
+      "atmospheric": [
+        "washed blue",
+        "misted violet",
+        "grass green",
+        "sunset peach",
+        "muted rose",
+        "soft amber"
+      ],
+      "attention": [
+        "warm yellow",
+        "orange",
+        "saturated blue",
+        "violet",
+        "clear green"
+      ]
+    },
+    "information_density": "sparse until progressively opened",
+    "one_ui_influence": [
+      "hierarchy",
+      "grouping",
+      "spacing",
+      "settings clarity",
+      "touch targets"
+    ],
+    "one_ui_not_copied": [
+      "palette",
+      "iconography",
+      "dark rounded cards"
+    ]
+  },
+  "motion": {
+    "states": [
+      "resting",
+      "charging",
+      "impact",
+      "release_integration"
+    ],
+    "character": {
+      "expressive": "cinematic and spatial",
+      "functional": "springy and tactile"
+    },
+    "particle_motif": true,
+    "reduced_motion": true
+  },
+  "sound_haptics": {
+    "spoken_coach": false,
+    "sound_modes": [
+      "off",
+      "subtle",
+      "expressive"
+    ],
+    "haptic_modes": [
+      "off",
+      "functional",
+      "full"
+    ],
+    "motion_modes": [
+      "reduced",
+      "standard",
+      "cinematic"
+    ],
+    "must_not_interrupt_music": true,
+    "sonic_materials": [
+      "granular rush",
+      "paper/ink flick",
+      "low impact",
+      "air movement",
+      "tight tick",
+      "tonal bloom"
+    ]
+  },
+  "voice": {
+    "coach": "passionate, intense, observant, British, rooting for the user",
+    "analyst": "restrained and evidence-led",
+    "lab": "friendly, conversational and collaborative",
+    "forbidden": [
+      "shame",
+      "false certainty",
+      "American gym slogans",
+      "pseudo-medical language"
+    ]
+  },
+  "component_system": {
+    "central_tokens": true,
+    "typed_registry": true,
+    "arbitrary_json_ui": false,
+    "component_gallery": true,
+    "visual_regression": true,
+    "levels": [
+      "tokens",
+      "primitives",
+      "patterns",
+      "feature compositions"
+    ]
+  },
+  "technical": {
+    "primary_form": "Android app",
+    "provisional_stack": [
+      "React",
+      "TypeScript",
+      "Vite",
+      "Capacitor",
+      "Kotlin bridge",
+      "SQLite",
+      "IndexedDB fallback",
+      "SVG/CSS",
+      "Canvas/WebGL particles",
+      "Web Audio/native haptics"
+    ],
+    "architecture_layers": [
+      "domain",
+      "application",
+      "engines",
+      "infrastructure",
+      "presentation"
+    ],
+    "repository_abstraction": true,
+    "offline_first": true,
+    "active_session_recovery": true
+  },
+  "data": {
+    "versioned": [
+      "exercise",
+      "routine",
+      "knowledge packs",
+      "algorithms",
+      "body assets"
+    ],
+    "core_entities": [
+      "UserProfile",
+      "BodyAvatarVersion",
+      "Muscle",
+      "Exercise",
+      "ExerciseVersion",
+      "ExerciseMuscleLoad",
+      "Routine",
+      "RoutineVersion",
+      "RoutineDay",
+      "RoutineSlot",
+      "ModePrescription",
+      "TrainingCycle",
+      "Session",
+      "SessionExercise",
+      "SetRecord",
+      "ExerciseReview",
+      "PerformanceMetric",
+      "MuscleMetric",
+      "InterferenceSignal",
+      "BriefingRecord",
+      "LabProposal",
+      "Experiment",
+      "SchedulerDecision",
+      "KnowledgePackVersion",
+      "AIInteractionLog",
+      "Settings"
+    ],
+    "backup_restore": true,
+    "context_export": [
+      "Markdown_or_HTML",
+      "JSON"
+    ]
+  },
+  "release_gate": [
+    "all five navigation areas coherent",
+    "offline persistence reliable",
+    "exercise and routine editing complete",
+    "A/B/C complete",
+    "ψ/φ/π/& complete",
+    "dynamic scheduler connected to Lab",
+    "routine promotion/versioning complete",
+    "Progress body and evidence complete",
+    "Brief configurable",
+    "AI fallback path complete",
+    "sound/haptics/motion settings complete",
+    "backup/restore complete",
+    "active session recovery complete",
+    "target device testing passed"
+  ],
+  "open_decisions": [
+    "product name",
+    "typefaces",
+    "final palette",
+    "icon family",
+    "body illustration workflow",
+    "particle renderer",
+    "sound assets",
+    "haptic waveforms",
+    "exact React libraries",
+    "SQLite bridge",
+    "target-device system AI availability",
+    "fallback local model",
+    "exercise formulas",
+    "initial routine",
+    "review question library",
+    "nutrition knowledge pack",
+    "edge-case cycle rules",
+    "default duration visibility",
+    "gesture thresholds",
+    "distribution method"
+  ]
+}
