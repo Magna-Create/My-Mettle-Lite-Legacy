@@ -1,1 +1,1 @@
-export { LibraryPageV2 as LibraryPage } from './LibraryPageV2';
+export { LibraryPageV3 as LibraryPage } from './LibraryPageV3';
