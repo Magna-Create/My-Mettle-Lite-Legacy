@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 — Mobile hardening
+
+- Kept the exercise-card wizard inside the dynamic mobile viewport when the keyboard opens.
+- Added sticky wizard actions for small screens.
+- Added clear keyboard-focus treatment.
+- Added a reduced-motion fallback for atmospheric and card animations.
+
 ## 0.3.0 — Phase 2 foundations
 
 - Replaced the single exercise form with a card-based guided flow.
