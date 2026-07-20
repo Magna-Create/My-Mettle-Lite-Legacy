@@ -76,7 +76,7 @@ export interface MaisTask {
   status: MaisTaskStatus;
   steps: MaisTaskStep[];
   currentStepIndex: number;
-  checkpointId?: string;
+  checkpointId?: string | undefined;
   createdAt: string;
   updatedAt: string;
   attempts: number;
@@ -91,7 +91,7 @@ export interface MaisEpisode {
   status: MaisEpisodeStatus;
   startedAt: string;
   endedAt?: string;
-  resumedFromCheckpointId?: string;
+  resumedFromCheckpointId?: string | undefined;
   stepCount: number;
   terminationReason?:
     | 'task_complete'
@@ -109,7 +109,7 @@ export interface MaisCheckpoint {
   episodeId: string;
   stepIndex: number;
   summary: string;
-  nextRole?: MaisRole;
+  nextRole?: MaisRole | undefined;
   createdAt: string;
 }
 
@@ -174,7 +174,7 @@ export interface MaisRoleRequest {
   step: MaisTaskStep;
   triggerEvents: MaisEvent[];
   taskArtifacts: MaisArtifact[];
-  checkpoint?: MaisCheckpoint;
+  checkpoint?: MaisCheckpoint | undefined;
   resourceMode: MaisResourceMode;
 }
 
