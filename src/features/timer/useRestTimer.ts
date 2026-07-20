@@ -3,6 +3,7 @@ import type { RestTimerSettings, VibrationStrength } from '../../domain/model';
 import { cancelNativeRestTimer, scheduleNativeRestTimer } from '../../native/RestTimerNotifications';
 
 const STORAGE_KEY = 'my-mettle:rest-timer:v3';
+const PRESENTATION_DELAY_MS = 1000;
 
 export interface RestTimerStart {
   exerciseId: string;
@@ -82,8 +83,24 @@ function signalCompletion(settings: RestTimerSettings) {
 }
 
 export function useRestTimer(settings: RestTimerSettings) {
-  const [state, setState] = useState<RestTimerState | null>(() => restoredTimer());
+  const restoredPresentationRef = useRef(false);
+  const [state, setState] = useState<RestTimerState | null>(() => {
+    const restored = restoredTimer();
+    restoredPresentationRef.current = Boolean(restored);
+    return restored;
+  });
+  const [presentationReady, setPresentationReady] = useState(restoredPresentationRef.current);
+  const presentationTimeoutRef = useRef<number | null>(null);
   const notifiedRef = useRef(false);
+
+  function clearPresentationTimeout() {
+    if (presentationTimeoutRef.current !== null) {
+      window.clearTimeout(presentationTimeoutRef.current);
+      presentationTimeoutRef.current = null;
+    }
+  }
+
+  useEffect(() => () => clearPresentationTimeout(), []);
 
   useEffect(() => {
     if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -94,7 +111,12 @@ export function useRestTimer(settings: RestTimerSettings) {
   }, [state]);
 
   useEffect(() => {
-    if (!settings.backgroundNotificationEnabled || !state || state.paused || state.completed || !state.endsAt) {
+    if (!settings.backgroundNotificationEnabled || !state) {
+      void cancelNativeRestTimer();
+      return;
+    }
+    if (state.completed) return;
+    if (state.paused || !state.endsAt) {
       void cancelNativeRestTimer();
       return;
     }
@@ -140,6 +162,7 @@ export function useRestTimer(settings: RestTimerSettings) {
       notifiedRef.current = false;
       return;
     }
+    setPresentationReady(true);
     if (notifiedRef.current) return;
     notifiedRef.current = true;
     signalCompletion(settings);
@@ -147,7 +170,9 @@ export function useRestTimer(settings: RestTimerSettings) {
 
   const start = useCallback((input: RestTimerStart) => {
     if (!settings.autoStart || input.seconds <= 0) return;
+    clearPresentationTimeout();
     notifiedRef.current = false;
+    setPresentationReady(false);
     setState({
       exerciseId: input.exerciseId,
       exerciseName: input.exerciseName,
@@ -158,6 +183,10 @@ export function useRestTimer(settings: RestTimerSettings) {
       minimized: false,
       completed: false,
     });
+    presentationTimeoutRef.current = window.setTimeout(() => {
+      setPresentationReady(true);
+      presentationTimeoutRef.current = null;
+    }, PRESENTATION_DELAY_MS);
   }, [settings.autoStart]);
 
   const pause = useCallback(() => {
@@ -186,18 +215,23 @@ export function useRestTimer(settings: RestTimerSettings) {
   }, []);
 
   const minimize = useCallback(() => {
+    clearPresentationTimeout();
+    setPresentationReady(true);
     setState((current) => current ? { ...current, minimized: true } : null);
   }, []);
 
   const expand = useCallback(() => {
+    setPresentationReady(true);
     setState((current) => current ? { ...current, minimized: false } : null);
   }, []);
 
   const dismiss = useCallback(() => {
+    clearPresentationTimeout();
+    setPresentationReady(false);
     navigator.vibrate?.(0);
     void cancelNativeRestTimer();
     setState(null);
   }, []);
 
-  return { state, start, pause, resume, addSeconds, minimize, expand, dismiss };
+  return { state, presentationReady, start, pause, resume, addSeconds, minimize, expand, dismiss };
 }

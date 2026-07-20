@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AppDatabase, SetRecord } from '../../domain/model';
+import type { ExerciseReflectionInput } from '../../application/ExerciseReflectionManagement';
 import { MODE_PRESENTATION } from '../../domain/presentation';
 import { calculateExercisePerformance } from '../../domain/rules/performance';
 import { getTrackingPresentation, isSetComplete } from '../../domain/tracking';
 import { SetEntryRow } from '../../components/SetEntryRow';
 import type { RestTimerStart } from '../timer/useRestTimer';
 import { ExerciseDetailsOverlay } from './ExerciseDetailsOverlay';
+import { ExerciseReflectionOverlay } from './ExerciseReflectionOverlay';
 
 interface Props {
   database: AppDatabase;
   onUpdateSet: (sessionId: string, sessionExerciseId: string, setId: string, patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>) => Promise<void>;
   onAddSet: (sessionId: string, sessionExerciseId: string) => Promise<void>;
   onRemoveSet: (sessionId: string, sessionExerciseId: string, setId: string) => Promise<void>;
+  onSaveReflection: (sessionId: string, sessionExerciseId: string, input: ExerciseReflectionInput) => Promise<void>;
   onCompleteExercise: (sessionId: string, sessionExerciseId: string) => Promise<void>;
   onCompleteSession: (sessionId: string) => Promise<void>;
   onGoBrief: () => void;
@@ -31,16 +34,17 @@ function statusLabel(status: string, expanded: boolean) {
 }
 function targetSuffix(metric: string) { return metric === 'duration' ? 'sec' : metric === 'distance' ? 'm' : 'reps'; }
 
-export function TrainPage({ database, onUpdateSet, onAddSet, onRemoveSet, onCompleteExercise, onCompleteSession, onGoBrief, onProgressState, onStartRest }: Props) {
+export function TrainPage({ database, onUpdateSet, onAddSet, onRemoveSet, onSaveReflection, onCompleteExercise, onCompleteSession, onGoBrief, onProgressState, onStartRest }: Props) {
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(null);
   const [detailsExerciseId, setDetailsExerciseId] = useState<string | null>(null);
+  const [reflectionExerciseId, setReflectionExerciseId] = useState<string | null>(null);
   const [undoRecord, setUndoRecord] = useState<UndoRecord | null>(null);
   const progressAnchorRef = useRef<HTMLDivElement | null>(null);
   const session = database.sessions.find((candidate) => candidate.id === database.activeSessionId);
   const exerciseStatusKey = session?.exercises.map((exercise) => `${exercise.id}:${exercise.status}`).join('|') ?? '';
 
   useEffect(() => {
-    if (!session) { setExpandedExerciseId(null); setDetailsExerciseId(null); setUndoRecord(null); return; }
+    if (!session) { setExpandedExerciseId(null); setDetailsExerciseId(null); setReflectionExerciseId(null); setUndoRecord(null); return; }
     const expanded = session.exercises.find((exercise) => exercise.id === expandedExerciseId);
     if (!expanded || expanded.status === 'completed') {
       const next = session.exercises.find((exercise) => exercise.status !== 'completed') ?? session.exercises.at(-1);
@@ -70,8 +74,8 @@ export function TrainPage({ database, onUpdateSet, onAddSet, onRemoveSet, onComp
   if (!session) return <main className="page empty-page"><p className="eyebrow">Train</p><h1>Nothing active.</h1><p>Pick a day in Brief.</p><button className="primary-action" onClick={onGoBrief}>Open Brief</button></main>;
 
   async function updateSetWithUndo(exerciseId: string, set: SetRecord, patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>) {
-    const exercise = session?.exercises.find((candidate) => candidate.id === exerciseId);
-    if (!session || !exercise) return;
+    const exercise = session.exercises.find((candidate) => candidate.id === exerciseId);
+    if (!exercise) return;
     const previous: UndoRecord['previous'] = {};
     if ('load' in patch) previous.load = set.load;
     if ('reps' in patch) previous.reps = set.reps;
@@ -91,14 +95,15 @@ export function TrainPage({ database, onUpdateSet, onAddSet, onRemoveSet, onComp
   }
 
   async function completeExercise(exerciseId: string) {
-    if (!session) return;
     setUndoRecord(null);
     await onCompleteExercise(session.id, exerciseId);
   }
 
   const detailsExercise = session.exercises.find((exercise) => exercise.id === detailsExerciseId) ?? null;
+  const reflectionExercise = session.exercises.find((exercise) => exercise.id === reflectionExerciseId) ?? null;
+
   return <main className="page train-page">
-    <header className="session-header" ref={progressAnchorRef}><div><p className="eyebrow">Active session</p><h1>{session.day} · {MODE_PRESENTATION[session.mode].name}</h1>{session.bodyweightSnapshotKg !== null && <small className="session-snapshot">Bodyweight snapshot {session.bodyweightSnapshotKg.toFixed(1)} kg</small>}</div><div className="session-progress"><span>{completed}/{session.exercises.length}</span><div><i style={{ width: `${progress * 100}%` }} /></div></div></header>
+    <header className="session-header" ref={progressAnchorRef}><div><p className="eyebrow">Active session</p><h1>{session.day} · {MODE_PRESENTATION[session.mode].name}</h1></div><div className="session-progress"><span>{completed}/{session.exercises.length}</span><div><i style={{ width: `${progress * 100}%` }} /></div></div></header>
     <section className="exercise-stack">{session.exercises.map((exercise, index) => {
       const performance = performanceByExercise.get(exercise.id) ?? calculateExercisePerformance(exercise);
       const cue = database.exercises.find((item) => item.id === exercise.exerciseId)?.essentialCue;
@@ -109,11 +114,12 @@ export function TrainPage({ database, onUpdateSet, onAddSet, onRemoveSet, onComp
       return <article className={`exercise-card ${isExpanded ? 'is-expanded' : 'is-compact'} ${isComplete ? 'is-complete' : ''}`} key={exercise.id} style={{ zIndex: session.exercises.length - index }}>
         <button className="exercise-card-toggle" type="button" aria-expanded={isExpanded} onClick={() => setExpandedExerciseId(exercise.id)}><div><p className="eyebrow">{index + 1} · {exercise.importanceSnapshot}</p><h2>{exercise.exerciseNameSnapshot}</h2></div><span className="status-chip">{statusLabel(exercise.status, isExpanded)}</span></button>
         {!isExpanded && <div className="compact-prescription"><strong>{exercise.prescription.sets} × {exercise.prescription.repMin}–{exercise.prescription.repMax} {targetUnit}</strong>{presentation.requiresStartingValue && <span>{presentation.valueLabel} {exercise.plannedLoad} {presentation.valueSuffix}</span>}<span>{exercise.prescription.restSeconds}s rest</span></div>}
-        {isExpanded && <div className="exercise-card-body"><div className="prescription-row"><strong>{exercise.prescription.sets} × {exercise.prescription.repMin}–{exercise.prescription.repMax} {targetUnit}</strong><span>{exercise.prescription.restSeconds}s rest</span>{presentation.requiresStartingValue && <span>{presentation.valueLabel} {exercise.plannedLoad} {presentation.valueSuffix}</span>}</div>{exercise.movementReason === 'active_experiment' && <p className="experiment-notice">Lab test · temporary value.</p>}{cue && <p className="setup-cue">{cue}</p>}<div className="set-table">{exercise.sets.map((set) => <SetEntryRow key={set.id} set={set} tracking={exercise.trackingSnapshot} bodyweightKg={exercise.bodyweightSnapshotKg} onChange={(patch) => { void updateSetWithUndo(exercise.id, set, patch); }} onRemove={set.kind === 'additional' ? () => { void onRemoveSet(session.id, exercise.id, set.id); } : undefined} />)}</div><button className="add-set-button" type="button" onClick={() => { void onAddSet(session.id, exercise.id); }}>＋ Add set</button>{performance.repDropWarning && <p className="warning-card">Reps dropped by more than three at the same load. Rest longer; if it repeats, reduce load by 5–10%.</p>}<footer><span>{Math.round(performance.primaryTotal)} {performance.primaryUnit} logged</span><div className="exercise-footer-actions"><button className="text-button details-button" type="button" onClick={() => setDetailsExerciseId(exercise.id)}>Details</button><button className="secondary-action" disabled={exercise.status === 'completed'} onClick={() => { void completeExercise(exercise.id); }}>{exercise.status === 'completed' ? 'Completed' : 'Complete exercise'}</button></div></footer></div>}
+        {isExpanded && <div className="exercise-card-body"><div className="prescription-row"><strong>{exercise.prescription.sets} × {exercise.prescription.repMin}–{exercise.prescription.repMax} {targetUnit}</strong><span>{exercise.prescription.restSeconds}s rest</span>{presentation.requiresStartingValue && <span>{presentation.valueLabel} {exercise.plannedLoad} {presentation.valueSuffix}</span>}</div>{exercise.movementReason === 'active_experiment' && <p className="experiment-notice">Lab test · temporary value.</p>}{cue && <p className="setup-cue">{cue}</p>}<div className="set-table">{exercise.sets.map((set) => <SetEntryRow key={set.id} set={set} tracking={exercise.trackingSnapshot} bodyweightKg={exercise.bodyweightSnapshotKg} onChange={(patch) => { void updateSetWithUndo(exercise.id, set, patch); }} onRemove={set.kind === 'additional' ? () => { void onRemoveSet(session.id, exercise.id, set.id); } : undefined} />)}</div><button className="add-set-button" type="button" onClick={() => { void onAddSet(session.id, exercise.id); }}>＋ Add set</button>{performance.repDropWarning && <p className="warning-card">Reps dropped by more than three at the same load. Rest longer; if it repeats, reduce load by 5–10%.</p>}<footer><button className="additional-details-link" type="button" onClick={() => setDetailsExerciseId(exercise.id)}>Additional Details…</button><div className="exercise-footer-actions"><button className="secondary-action reflection-action" type="button" onClick={() => setReflectionExerciseId(exercise.id)}>{exercise.reflection ? 'Edit rating' : 'Rate exercise'}</button><button className="secondary-action exercise-complete-action" disabled={exercise.status === 'completed'} onClick={() => { void completeExercise(exercise.id); }}>{exercise.status === 'completed' ? 'Completed' : 'Complete exercise'}</button></div></footer></div>}
       </article>;
     })}</section>
     <button className="completion-action" onClick={() => onCompleteSession(session.id)}>Complete session</button>
     {undoRecord && <div className="undo-toast"><span>Set updated</span><button type="button" onClick={() => { void undoLastSetEdit(); }}>Undo</button></div>}
     <ExerciseDetailsOverlay database={database} exercise={detailsExercise} onClose={() => setDetailsExerciseId(null)} />
+    <ExerciseReflectionOverlay exercise={reflectionExercise} onClose={() => setReflectionExerciseId(null)} onSave={(input) => onSaveReflection(session.id, reflectionExercise!.id, input)} />
   </main>;
 }

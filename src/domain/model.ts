@@ -75,11 +75,23 @@ export interface SetRecord {
   warmUp: boolean; kind?: SetKind;
 }
 
+export type ReflectionScale = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 'unsure';
+export interface ExerciseReflection {
+  targetMuscleEngagement: ReflectionScale;
+  execution: 'clean' | 'mixed' | 'poor' | 'unsure';
+  enjoyment: ReflectionScale;
+  comfort: 'good' | 'fine' | 'unsure' | 'uncomfortable' | 'pain';
+  note?: string | undefined;
+  recordedAt: string;
+  updatedAt: string;
+}
+
 export type SessionExerciseStatus = 'planned' | 'active' | 'completed' | 'skipped' | 'deferred';
 export interface SessionExercise {
   id: Id; exerciseId: Id; slotId: Id; exerciseNameSnapshot: string; importanceSnapshot: Importance;
   trackingSnapshot: ExerciseTrackingProfile; bodyweightSnapshotKg: number | null; plannedLoad: number;
   prescription: ModePrescription; status: SessionExerciseStatus; sets: SetRecord[]; note?: string;
+  reflection?: ExerciseReflection | undefined;
   startedAt?: string; completedAt?: string; movementReason: 'base_routine' | 'active_experiment';
 }
 
