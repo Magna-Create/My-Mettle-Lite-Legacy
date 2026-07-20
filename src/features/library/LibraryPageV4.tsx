@@ -10,7 +10,7 @@ import {
 } from '../../application/RoutineEditDraft';
 import type { AppDatabase, DaySymbol } from '../../domain/model';
 import { LibraryPageV2 } from './LibraryPageV2';
-import { ROUTINE_EDIT_STORAGE_KEY, RoutineEditMode } from './RoutineEditMode';
+import { ROUTINE_EDIT_STORAGE_KEY_V2, RoutineEditModeV2 } from './RoutineEditModeV2';
 
 interface EditState { editing: boolean; dirty: boolean; }
 
@@ -55,18 +55,18 @@ export function LibraryPageV4(props: Props) {
   if (!routine) return null;
 
   function beginEdit() {
-    const stored = localStorage.getItem(ROUTINE_EDIT_STORAGE_KEY);
+    const stored = localStorage.getItem(ROUTINE_EDIT_STORAGE_KEY_V2);
     const recovered = stored ? parseRoutineEditDraft(stored, database.currentRoutineVersionId) : null;
     if (recovered && isRoutineEditDraftDirty(database, recovered)) {
       setRecoveryDraft(recovered);
       return;
     }
-    localStorage.removeItem(ROUTINE_EDIT_STORAGE_KEY);
+    localStorage.removeItem(ROUTINE_EDIT_STORAGE_KEY_V2);
     setEditDraft(createRoutineEditDraft(database));
   }
 
   if (editDraft) {
-    return <RoutineEditMode
+    return <RoutineEditModeV2
       database={database}
       initialDraft={editDraft}
       externalDiscardToken={props.externalDiscardToken}
@@ -99,7 +99,7 @@ export function LibraryPageV4(props: Props) {
       <h2>Continue editing?</h2>
       <p>The recovered draft is based on routine v{routine.version}.</p>
       <footer>
-        <button className="secondary-action" type="button" onClick={() => { localStorage.removeItem(ROUTINE_EDIT_STORAGE_KEY); setRecoveryDraft(null); setEditDraft(createRoutineEditDraft(database)); }}>Discard</button>
+        <button className="secondary-action" type="button" onClick={() => { localStorage.removeItem(ROUTINE_EDIT_STORAGE_KEY_V2); setRecoveryDraft(null); setEditDraft(createRoutineEditDraft(database)); }}>Discard</button>
         <button className="primary-action compact" type="button" onClick={() => { setEditDraft(recoveryDraft); setRecoveryDraft(null); }}>Continue</button>
       </footer>
     </section></div>}
