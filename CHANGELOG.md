@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.0 — Phase 2 completion candidate
+
+- Added versioned exercise-tracking definitions for external load, assistance, bodyweight, added load, repetitions, duration and distance.
+- Added per-hand, per-side and total-load entry semantics.
+- Added timestamped weight and height history with session bodyweight snapshots.
+- Added non-destructive migration from the Phase 1 local database schema.
+- Made exercise creation, set entry, work-volume evidence and Lab progression tracking-aware.
+- Made assisted-bodyweight progression reduce assistance rather than increase it.
+- Rebuilt the rest timer as a recoverable app-level focus surface with pause, resume, minimise, `+30`, skip, vibration and optional chime.
+- Added general rest-timer preferences.
+- Added a five-second Undo lifecycle for set edits.
+- Added the full-screen exercise Details foundation.
+- Replaced the expanding navigation labels with a narrower icon-only liquid-glass bar and centred header context.
+- Preserved the scroll-linked workout progress tint.
+- Added health-provider contracts, provenance, stable export identities and duplicate-detection boundaries for later Health Connect integration.
+- Added Phase 2 migration, tracking and assisted-bodyweight tests.
+
 ## 0.3.1 — Mobile hardening
 
 - Kept the exercise-card wizard inside the dynamic mobile viewport when the keyboard opens.
