@@ -25,8 +25,8 @@ export interface ExerciseTrackingProfile {
 export interface BodyMeasurement {
   id: Id;
   recordedAt: string;
-  weightKg?: number;
-  heightCm?: number;
+  weightKg?: number | undefined;
+  heightCm?: number | undefined;
   source: 'manual' | 'health_connect' | 'samsung_health';
   sourceRecordId?: string;
   schemaVersion: number;
@@ -147,7 +147,7 @@ export interface SetRecord {
   durationSeconds: number | null;
   distanceMetres: number | null;
   unit: LoadUnit;
-  completedAt?: string;
+  completedAt?: string | undefined;
   note?: string;
   warmUp: boolean;
 }
