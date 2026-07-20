@@ -13,9 +13,7 @@ When project references disagree, use them in this order:
 3. Accepted decisions recorded in active or merged pull requests.
 4. The original master specification in `docs/spec/`.
 
-The master specification remains the product foundation, but it is no longer assumed to describe every current decision. Later accepted decisions supersede it where they conflict.
-
-Development should therefore be **Git-first**: inspect the current branch, repository documents and relevant pull-request history before relying on an older exported project file or conversational memory.
+The master specification remains the product foundation, but later accepted decisions supersede it where they conflict. Development is **Git-first**: inspect the current branch, current repository documents and relevant pull-request history before relying on an older exported project file or conversational memory.
 
 ## Current product direction
 
@@ -23,94 +21,114 @@ My Mettle is an adaptive personal training system that meets the user where they
 
 The interaction tone should be concise, British, direct and occasionally funny. Avoid reassurance-for-its-own-sake, therapist-style language and unnecessary explanation.
 
-## Accepted interface decisions
+## Accepted interface and product decisions
 
 ### Navigation and header
 
-- The bottom navigation becomes icon-only and substantially narrower than the current full-width bar.
-- It should remain comfortably tappable while reading as a compact floating object rather than a dock.
-- The material becomes lighter, more translucent and more liquid-glass-like, with blur, subtle refraction, a fine highlight and colour interaction with content beneath.
-- The selected icon is highlighted without expanding to show a text label.
+- The bottom navigation is icon-only, compact and substantially narrower than a full-width dock.
+- Its material should be light, translucent and liquid-glass-like, with blur, restrained refraction, a thin top highlight and colour interaction with content beneath.
+- The selected icon is highlighted without expanding to reveal a text label.
 - The current page name appears in the centre of the app header, slightly faded, between the `MY METTLE` wordmark and settings/profile controls.
-- During an active workout, the header may show contextual session information while retaining the scroll-linked progress tint.
-- The existing header progress-fill behaviour is accepted and should be preserved.
+- The accepted scroll-linked workout progress tint remains.
+- Material Symbols selected for the primary bar are:
+  - Brief: `cycle`;
+  - Train: `sports_martial_arts`;
+  - Progress: `analytics`;
+  - Lab: `tactic`;
+  - Library: `add_row_below`.
+- Icons must be optically centred and use local bundled assets rather than network fonts.
 
 ### Brief
 
-- Brief should favour useful information over motivational or reassuring copy.
-- Fuel and water guidance remain.
-- Generic phrases such as “Ramp the first movement. No extra ceremony.” should be replaced by concrete movement-aware warm-up guidance.
+- Brief favours useful information over motivational or reassuring copy.
+- Fuel guidance includes carbohydrate and protein quantities, plus water.
+- Generic phrases such as “Ramp the first movement. No extra ceremony.” are replaced by concrete movement-aware warm-up guidance.
 - The primary Begin action remains lower in the briefing sequence.
-- Future Brief content will be informed by the complete routine, recent training data and local intelligence.
+- A future preparation-confirmation gesture may let the user mark fuel, hydration and warm-up items as done without literal checkboxes; this belongs to Phase 3 unless required for dumb-input parity.
 
 ### Workout cards
 
-- The current compact/expanded exercise-card system is accepted as the working interaction model.
-- A swipe-through deck is optional future exploration, not a requirement.
-- Exercise cards need a separate Details action that can open a full-screen information surface.
-- Details may contain setup, technique, notes, recent performance, substitutions, progression logic, Lab tests and later character imagery.
+- The current compact/expanded exercise-card system remains the working interaction model.
+- Workout-card transitions should be slightly slower and calmer than the current implementation.
+- A minimal, low-emphasis `Add set` action is available beneath prescribed sets.
+- Additional sets remain visible as extra work and are distinguished from prescribed sets in stored data.
+- Details opens a full-screen exercise surface.
+- By Phase 2 completion, Details includes setup, technique cues, common mistakes, personal notes, equipment/machine settings, substitutions, recent performance and deterministic progression configuration.
+- Character imagery remains deferred to the character/generative phase.
+
+### Routine and exercise management
+
+- The current routine is fully editable rather than append-only.
+- Exercises can be reordered within a day, moved between days, edited, removed from the current routine, archived and restored.
+- Permanent routine changes create a new immutable routine version; historical sessions retain their original routine and exercise snapshots.
+- Exercise objects support category, equipment, target muscles, fatigue cost, skill difficulty, cues, common mistakes, personal setup/machine settings, notes and substitutions.
+- Updating an exercise updates future routine use while historical session snapshots remain unchanged.
+- Permanent deletion is only allowed for records with no historical references; normal removal uses routine removal or archive.
+
+### Session history and amendments
+
+- Profile contains a chronological Session History surface.
+- Completed and abandoned sessions can be reviewed individually.
+- A completed session can be amended: set values, notes and additional/accidental sets may be changed after completion.
+- A session can be excluded from Progress/Lab while preserving the raw record, or permanently discarded with explicit confirmation.
+- Amendments retain metadata such as original completion time and latest edit time.
+- Historical calculations update from the amended session without mutating unrelated routine versions.
 
 ### Set editing
 
-- The `Set updated` Undo toast should dismiss automatically after five seconds.
-- A newer edit restarts the five-second timer.
+- The `Set updated` Undo toast dismisses after five seconds; a newer edit restarts the timer.
 - Undo and exercise completion clear the toast immediately.
+- Added sets use stable IDs and maintain contiguous display indices after removal.
 
 ### Rest timer
 
-- The timer should become an app-level object rather than remaining embedded inside the exercise card.
-- Expanded rest mode lifts above the workout and may soften or blur content beneath.
+- The timer is an app-level object rather than part of an exercise card.
+- Expanded rest mode lifts above the workout and softens content beneath.
 - Controls include Pause/Resume, `+30`, Skip and Minimise.
-- Minimise collapses the timer into a compact header or dynamic-island-style widget that can be expanded again.
-- Completion should support strong vibration and an optional short chime.
-- Timer-completion preferences live under general app settings.
-- Timing should be based on an absolute end timestamp so it remains accurate while backgrounded or throttled.
+- Minimise collapses the timer into a compact header widget that can be expanded again.
+- Completion supports an optional chime and vibration levels: Low, Medium, Strong and Very strong.
+- Timer settings live under `Settings → Workout → Rest timer`.
+- Timing uses an absolute deadline.
+- Android completion must remain reliable while My Mettle is backgrounded or the screen is off, using native scheduling and a timer notification.
+- The project may request the permissions needed for exact alarms, notifications, vibration and foreground/background timer delivery; the personal user is expected to grant them.
+
+### Settings architecture
+
+- Settings use nested Android-style navigation rather than one continuously growing sheet.
+- Initial groups are Workout, Units & measurements, Notifications & feedback, Data, Accessibility and About/diagnostics.
+- Workout contains Rest timer and future set/session behaviour.
+- Data contains export, restore and reset.
 
 ### Exercise creation and tracking
 
-- The guided card-based creation flow and final review page are accepted.
-- Inputs should display their unit or measurement suffix inside the field where relevant.
-- “Planned load” should be replaced by clearer context-dependent language such as Starting load, Assistance, Added load, Duration or Distance.
-- Exercises must define how performance is recorded rather than assuming every movement uses ordinary kilograms.
-
-Initial tracking dimensions should support:
-
-- external load;
-- assisted bodyweight;
-- bodyweight only;
-- bodyweight plus external load;
-- load per hand, per side or total;
-- repetitions only;
-- duration;
-- distance.
-
-Historical sessions must snapshot the applicable tracking definition so later edits do not reinterpret old training data.
+- The guided card-based creation flow and review screen remain.
+- Inputs display measurement suffixes inside the field.
+- Exercises define how performance is recorded rather than assuming ordinary kilograms.
+- Tracking supports external load, assisted bodyweight, bodyweight, bodyweight plus external load, total/per-hand/per-side entry, repetitions, duration and distance.
+- Historical sessions snapshot the applicable tracking definition so later edits do not reinterpret old data.
 
 ### Body measurements
 
-- Profile data should include timestamped weight and height records rather than one mutable value.
-- Sessions should retain the bodyweight snapshot relevant at the time.
-- Assisted and weighted bodyweight exercises can then calculate effective load historically, even after bodyweight changes.
+- Profile contains timestamped weight and height records rather than one mutable value.
+- Sessions retain the relevant bodyweight snapshot.
+- Assisted and weighted bodyweight exercises can therefore calculate effective load historically.
 
 ### Health data architecture
 
-- Health Connect is the primary Android interoperability layer and should be implemented as a provider interface rather than coupled directly to product logic.
-- Phase 2 defines provider contracts, permission state, provenance, external-record identity and local observation storage; it does not require a live native connection to finish.
+- Health Connect is the primary Android interoperability layer and is implemented behind a provider interface.
+- Phase 2 defines provider contracts, permission state, provenance, external-record identity and local observation storage.
 - Phase 3 adds a bidirectional Health Connect adapter.
-- My Mettle may read supported Samsung Health data exposed through Health Connect, including exercise, heart rate, sleep and measurements when permission is granted.
-- My Mettle may write completed strength-training sessions and supported measurements to Health Connect. Samsung Health can then synchronise supported Health Connect records into Samsung Health when the user enables the relevant permissions.
-- Written exercise sessions should use stable client record IDs and include segment detail where Health Connect supports repetitions, weight and set index.
-- My Mettle writes only records it owns. Data read from Health Connect must not be written back as though it originated in My Mettle.
-- Before exporting a workout, detect materially overlapping external exercise sessions and ask the user which record should be kept to avoid duplicate Samsung/watch and My Mettle sessions.
-- The Samsung Health Data SDK remains an optional richer read adapter. Direct writes through that SDK require Samsung partnership credentials and are not required for the personal alpha.
-- Imported physiological information is recovery/readiness evidence, not a direct measurement of the central nervous system and not a medical diagnosis.
-- A Wear OS companion and live sensor stream sit outside the first-alpha six-phase roadmap. Revisit only after the month-long alpha demonstrates a clear benefit.
+- My Mettle may read supported Samsung Health data exposed through Health Connect and write My Mettle-owned completed sessions and measurements.
+- Stable client record IDs, record ownership and overlap detection prevent duplicate watch/My Mettle workouts.
+- The Samsung Health Data SDK remains an optional richer read adapter.
+- Imported physiological information is recovery/readiness evidence, not a direct CNS measurement or medical diagnosis.
+- A Wear OS companion sits outside the first-alpha six-phase roadmap.
 
 ### Visual atmosphere
 
-- The current calm visual base is accepted, but it is intentionally incomplete.
-- Full cinematic energy should be applied after the main product surfaces and interaction architecture are mature.
-- Character creation precedes the final cinematic integration because it affects composition, card design and motion.
+- The calm visual base is accepted but intentionally incomplete.
+- Character creation precedes final cinematic integration because it affects composition and motion.
+- The full cinematic pass happens after the main product surfaces and interaction architecture are mature.
 
 ## Development phases
 
@@ -123,81 +141,73 @@ Status: foundation established.
 - Session creation, exercise sequence and set entry.
 - Cycle logic and day selection.
 - Brief, Train, Progress, Lab and Library foundations.
-- Initial mobile Android build and local installation workflow.
+- Initial Android build and local installation workflow.
 
-### Phase 2 — Accurate training representation
+### Phase 2 — Complete non-intelligent training product
 
-Status: **implementation complete; bug testing only.**
+Status: **reopened; implementation in progress.**
 
-The Phase 2 completion candidate passed the automated test suite, production web build, Capacitor synchronisation and Android debug APK build. No new Phase 2 features should be added. Changes are limited to defects discovered through `docs/PHASE_2_BUG_TEST_PLAN.md`.
+Phase 2 is complete only when My Mettle can replace the original gym web app as a reliable day-to-day “dumb input” tracker without depending on AI.
 
-Implemented scope:
+Already implemented:
 
-- Exercise tracking schemas and adaptive input fields.
+- Tracking schemas and adaptive input fields.
 - External, assisted, bodyweight and weighted-bodyweight calculations.
 - Per-hand, per-side and total-load configuration.
 - Repetition, duration and distance tracking.
-- Timestamped body-measurement history.
-- Session bodyweight and tracking snapshots.
-- App-level rest timer with pause, minimise and completion feedback.
-- General timer settings.
-- Exercise Details overlay.
-- Set correction, five-second Undo lifecycle and interrupted-session recovery.
-- Narrow icon-only liquid-glass navigation and centred header page labels.
-- Visible layout, clipping, shadow and contrast fixes.
-- Health-data provider contracts, permission state, provenance and external-record identity.
-- Database migrations that preserve existing local data while adding the Phase 2 schema.
+- Timestamped body measurements and session snapshots.
+- App-level rest timer, five-second Undo, Details foundation and schema migration.
+- Compact navigation, centred header labels and health-provider foundations.
 
-Phase 2 exits bug testing only after its defects are accepted or resolved. Phase 3 feature work must not begin before that decision.
+Remaining completion scope:
+
+- Full routine editing: reorder, move, edit, remove, archive and restore.
+- Complete exercise Details data: notes, substitutions, mistakes, setup and machine settings, deterministic progression configuration.
+- Minimal additional-set creation and correction.
+- Session history, completed-session amendment, exclusion and discard.
+- Nested settings architecture.
+- Native Android background timer scheduling and notification delivery.
+- Four vibration strengths and reliable completion feedback outside the foreground app.
+- Final Material Symbol hotbar assets and optical alignment.
+- Slower workout-card transitions and remaining glass/highlight refinements.
+- Concrete carbohydrate, protein and hydration quantities in Brief.
+- Tests, migration coverage and an updated device bug-test plan for all parity functions.
+
+Phase 2 exits into **bug testing only** after every item above is implemented and the automated web/Android build is green. No Phase 3 feature work begins before the Phase 2 device pass is accepted.
 
 ### Phase 3 — Product completion and training intelligence
 
-Complete the major product surfaces while intelligence is built into them.
-
 - Useful Progress views, trends and comparisons.
 - Full Lab experiment creation, operation and evaluation.
-- Profile and measurement-history management.
-- Complete settings and routine-management flows.
-- Contextual Brief suggestions.
+- Contextual Brief suggestions and preparation feedback.
 - Dynamic warm-ups, fuel, water and readiness guidance.
 - Progression, regression and training-recommendation logic.
-- Clear explanation surfaces showing why a recommendation was made.
-- Local AI/model integration where useful.
-- Deterministic fallbacks so core behaviour never depends entirely on model output.
-- Bidirectional Health Connect adapter for supported reads and My Mettle-owned writes.
-- Duplicate detection and record-ownership controls for watch-recorded and My Mettle-recorded workouts.
-- Optional Samsung Health Data SDK read adapter where it offers data or provenance not available through Health Connect.
+- Clear explanation surfaces.
+- Local AI/model integration with deterministic fallbacks.
+- Bidirectional Health Connect adapter and duplicate controls.
+- Optional Samsung Health Data SDK read adapter.
 
 ### Phase 4 — Character and generative visual system
 
-Develop the character and the AI-assisted tools used to create consistent visual content.
-
 - Base character identity, proportions and body model.
 - Consistent face, clothing and rendering language.
-- Exercise pose generation and pose-control pipeline.
-- Dot, particle or 2.5D visual treatment.
-- Exercise-card imagery and expanded exercise visuals.
-- Character progression over time.
-- Consistency checks, image correction, caching and local asset management.
-- Generative-image assistance that supports the defined art direction rather than deciding it.
+- Exercise pose generation and control pipeline.
+- Dot, particle or 2.5D treatment.
+- Exercise-card imagery and expanded visuals.
+- Character progression, consistency checks, correction, caching and local asset management.
 
 ### Phase 5 — Cinematic integration
 
-Apply the mature motion, sound and visual-world language throughout the product.
-
 - Animated Brief environments and blurred video/light backgrounds.
-- Character integration across appropriate surfaces.
-- Particles, atmospheric depth and scroll-linked effects.
+- Character integration, particles and atmospheric depth.
 - Card transitions and spatial choreography.
-- Timer focus mode and completion sequences.
-- Tactile and audio language.
-- Refined liquid-glass materials.
-- Shared spring, blur, elevation and timing rules.
-- Reduced-motion equivalents.
+- Timer focus and completion sequences.
+- Tactile/audio language and refined liquid glass.
+- Shared spring, blur, elevation and timing rules with reduced-motion equivalents.
 
 ### Phase 6 — Alpha hardening and personal release
 
-Prepare the first complete alpha for a genuine month-long personal test.
+Prepare **My Mettle Alpha 0.1** for a genuine month-long personal test:
 
 - End-to-end and regression testing.
 - Schema migration and data-integrity testing.
@@ -206,17 +216,9 @@ Prepare the first complete alpha for a genuine month-long personal test.
 - Notification, vibration and timer reliability.
 - Accessibility and reduced-motion verification.
 - Exercise-tracking edge cases.
-- Export, backup and restoration.
-- Stable signing and upgrade installation.
-- Local diagnostic logs.
-- Final copy and visual-consistency pass.
-
-Target output:
-
-> **My Mettle Alpha 0.1 — personal month-long test**
-
-That month should produce evidence for Alpha 0.2: which recommendations help, which interactions become irritating through repetition, which data is missing and which cinematic elements remain useful in daily use.
+- Export, backup, restoration, stable signing and upgrade installation.
+- Local diagnostic logs and final copy/visual consistency.
 
 ## Roadmap maintenance
 
-Update this document whenever an accepted decision materially changes scope, phase order, product behaviour or the reference hierarchy. Do not rewrite the original master specification merely to make it appear current; retain it as the historical foundation and record active direction here.
+Update this document whenever an accepted decision materially changes scope, phase order, product behaviour or the reference hierarchy. Retain the original master specification as the historical foundation rather than rewriting it to appear current.
