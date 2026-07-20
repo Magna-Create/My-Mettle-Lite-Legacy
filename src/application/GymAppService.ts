@@ -1,9 +1,14 @@
 import { createSeedDatabase } from '../data/seed';
 import { createId } from '../domain/ids';
+import { migrateDatabase } from '../domain/migrations';
 import type {
   AppDatabase,
+  AppSettings,
+  BodyMeasurement,
   CoreDay,
   DaySymbol,
+  EntryBasis,
+  ExerciseTrackingProfile,
   Experiment,
   Importance,
   Mode,
@@ -17,23 +22,68 @@ import type {
 import { SCHEMA_VERSION } from '../domain/model';
 import { isAndEligible } from '../domain/rules/cycle';
 import { calculateExercisePerformance } from '../domain/rules/performance';
+import { isSetComplete } from '../domain/tracking';
+import { healthClientRecordId } from '../health/HealthDataProvider';
 import type { GymRepository } from '../adapters/storage/GymRepository';
 
 const timestamp = () => new Date().toISOString();
+
+export interface AddExerciseInput {
+  name: string;
+  day: DaySymbol;
+  importance: Importance;
+  tracking: ExerciseTrackingProfile;
+  startingValue: number;
+  targetValue: number;
+  progressionStep: number;
+}
+
+function latestBodyweight(database: AppDatabase, at = timestamp()): number | null {
+  const measurement = [...database.bodyMeasurements]
+    .filter((candidate) => candidate.recordedAt <= at && typeof candidate.weightKg === 'number')
+    .sort((left, right) => right.recordedAt.localeCompare(left.recordedAt))[0];
+  return measurement?.weightKg ?? null;
+}
+
+function progressionProposal(
+  relationship: ExerciseTrackingProfile['loadRelationship'],
+  baseline: number,
+  step: number,
+): number {
+  return relationship === 'assistance'
+    ? Math.max(0, baseline - step)
+    : baseline + step;
+}
+
+function progressionHypothesis(
+  name: string,
+  relationship: ExerciseTrackingProfile['loadRelationship'],
+  baseline: number,
+  proposed: number,
+): string {
+  if (relationship === 'assistance') {
+    return `${name} can preserve the current repetition target with assistance reduced from ${baseline} kg to ${proposed} kg.`;
+  }
+  return `${name} can preserve the current clean repetition target after moving from ${baseline} kg to ${proposed} kg.`;
+}
 
 export class GymAppService {
   constructor(private readonly repository: GymRepository) {}
 
   async initialise(): Promise<AppDatabase> {
     const existing = await this.repository.load();
-    if (existing) return existing;
+    if (existing) {
+      const migrated = migrateDatabase(existing);
+      await this.repository.save(migrated);
+      return migrated;
+    }
     const seeded = createSeedDatabase();
     await this.repository.save(seeded);
     return seeded;
   }
 
   async persist(database: AppDatabase): Promise<AppDatabase> {
-    const next = { ...database, updatedAt: timestamp() };
+    const next = { ...database, updatedAt: timestamp(), schemaVersion: SCHEMA_VERSION };
     await this.repository.save(next);
     return next;
   }
@@ -103,6 +153,8 @@ export class GymAppService {
     const activeExperiments = workingDatabase.experiments.filter(
       (experiment) => experiment.status === 'active',
     );
+    const sessionStartedAt = timestamp();
+    const bodyweightSnapshotKg = latestBodyweight(workingDatabase, sessionStartedAt);
 
     const exercises: SessionExercise[] = routineDay.slots
       .filter((slot) => slot.prescriptions[mode].included)
@@ -113,11 +165,16 @@ export class GymAppService {
           (candidate) => candidate.routineSlotId === slot.id,
         );
         const prescription = structuredClone(slot.prescriptions[mode]);
+        const plannedLoad = experiment?.proposedLoad ?? slot.plannedLoad;
+        const startsWithLoad = exercise.tracking.metric === 'load_reps'
+          && exercise.tracking.loadRelationship !== 'bodyweight';
         const sets: SetRecord[] = Array.from({ length: prescription.sets }, (_, setIndex) => ({
           id: createId('set'),
           setIndex,
-          load: experiment?.proposedLoad ?? slot.plannedLoad,
+          load: startsWithLoad ? plannedLoad : null,
           reps: null,
+          durationSeconds: null,
+          distanceMetres: null,
           unit: exercise.defaultUnit,
           warmUp: false,
         }));
@@ -128,7 +185,9 @@ export class GymAppService {
           slotId: slot.id,
           exerciseNameSnapshot: exercise.name,
           importanceSnapshot: slot.importance,
-          plannedLoad: experiment?.proposedLoad ?? slot.plannedLoad,
+          trackingSnapshot: structuredClone(exercise.tracking),
+          bodyweightSnapshotKg,
+          plannedLoad,
           prescription,
           status: 'planned',
           sets,
@@ -136,15 +195,19 @@ export class GymAppService {
         };
       });
 
+    const sessionId = createId('session');
     const session: Session = {
-      id: createId('session'),
+      id: sessionId,
       cycleId: cycle.id,
       day,
       mode,
       routineVersionId: routine.id,
       status: 'active',
-      startedAt: timestamp(),
+      startedAt: sessionStartedAt,
+      bodyweightSnapshotKg,
       exercises,
+      healthExportState: 'not_requested',
+      healthClientRecordId: healthClientRecordId(sessionId),
       schemaVersion: SCHEMA_VERSION,
     };
 
@@ -160,7 +223,7 @@ export class GymAppService {
     sessionId: string,
     sessionExerciseId: string,
     setId: string,
-    patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'note'>>,
+    patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>,
   ): Promise<AppDatabase> {
     const sessions = database.sessions.map((session) => {
       if (session.id !== sessionId) return session;
@@ -175,9 +238,9 @@ export class GymAppService {
             sets: exercise.sets.map((set) => {
               if (set.id !== setId) return set;
               const updated = { ...set, ...patch };
-              return patch.reps !== undefined && patch.reps !== null
-                ? { ...updated, completedAt: timestamp() }
-                : updated;
+              return isSetComplete(updated, exercise.trackingSnapshot)
+                ? { ...updated, completedAt: set.completedAt ?? timestamp() }
+                : { ...updated, completedAt: undefined };
             }),
           };
         }),
@@ -206,17 +269,33 @@ export class GymAppService {
     return this.persist({ ...database, sessions });
   }
 
+  async abandonSession(database: AppDatabase, sessionId: string): Promise<AppDatabase> {
+    const session = database.sessions.find((candidate) => candidate.id === sessionId);
+    if (!session || session.status !== 'active') throw new Error('Active session not found.');
+    return this.persist({
+      ...database,
+      activeSessionId: null,
+      sessions: database.sessions.map((candidate) =>
+        candidate.id === sessionId
+          ? { ...candidate, status: 'abandoned' as const, completedAt: timestamp() }
+          : candidate,
+      ),
+    });
+  }
+
   async completeSession(database: AppDatabase, sessionId: string): Promise<AppDatabase> {
     const session = database.sessions.find((candidate) => candidate.id === sessionId);
     if (!session) throw new Error('Session not found.');
 
+    const completedAt = timestamp();
     const completedSession: Session = {
       ...session,
       status: 'completed',
-      completedAt: timestamp(),
+      completedAt,
+      healthExportState: 'queued',
       exercises: session.exercises.map((exercise) =>
         exercise.status === 'planned' || exercise.status === 'active'
-          ? { ...exercise, status: 'completed' as const, completedAt: timestamp() }
+          ? { ...exercise, status: 'completed' as const, completedAt }
           : exercise,
       ),
     };
@@ -242,7 +321,7 @@ export class GymAppService {
                 status: 'ready_for_decision' as const,
                 testedSessionId: completedSession.id,
                 evidenceSummary: performance.allTargetsMet
-                  ? `Target met at ${existingActive.proposedLoad} kg across the prescribed work sets.`
+                  ? `Target met at the tested value of ${existingActive.proposedLoad} kg.`
                   : `Exposure logged at ${existingActive.proposedLoad} kg, but the prescribed minimum was not met across every work set.`,
               },
         );
@@ -251,29 +330,44 @@ export class GymAppService {
 
       const alreadyOpen = experiments.some(
         (experiment) =>
-          experiment.routineSlotId === exercise.slotId &&
-          ['proposed', 'active', 'ready_for_decision'].includes(experiment.status),
+          experiment.routineSlotId === exercise.slotId
+          && ['proposed', 'active', 'ready_for_decision'].includes(experiment.status),
       );
-
       const exerciseRecord = database.exercises.find(
         (candidate) => candidate.id === exercise.exerciseId,
       );
+      const loadProgressionSupported = exercise.trackingSnapshot.metric === 'load_reps'
+        && ['external', 'assistance', 'bodyweight_plus_external'].includes(
+          exercise.trackingSnapshot.loadRelationship,
+        );
 
-      if (performance.allTargetsMet && !alreadyOpen && exerciseRecord) {
-        const proposal: Experiment = {
-          id: createId('experiment'),
-          exerciseId: exercise.exerciseId,
-          routineSlotId: exercise.slotId,
-          exerciseName: exercise.exerciseNameSnapshot,
-          hypothesis: `A ${exerciseRecord.progressionStep} kg micro-load increase can preserve the current clean repetition target.`,
-          baselineLoad: exercise.plannedLoad,
-          proposedLoad: exercise.plannedLoad + exerciseRecord.progressionStep,
-          targetRepMin: exercise.prescription.repMin,
-          status: 'proposed',
-          createdAt: timestamp(),
-          schemaVersion: SCHEMA_VERSION,
-        };
-        experiments.push(proposal);
+      if (performance.allTargetsMet && !alreadyOpen && exerciseRecord && loadProgressionSupported) {
+        const proposedLoad = progressionProposal(
+          exercise.trackingSnapshot.loadRelationship,
+          exercise.plannedLoad,
+          exerciseRecord.progressionStep,
+        );
+        if (proposedLoad !== exercise.plannedLoad) {
+          const proposal: Experiment = {
+            id: createId('experiment'),
+            exerciseId: exercise.exerciseId,
+            routineSlotId: exercise.slotId,
+            exerciseName: exercise.exerciseNameSnapshot,
+            hypothesis: progressionHypothesis(
+              exercise.exerciseNameSnapshot,
+              exercise.trackingSnapshot.loadRelationship,
+              exercise.plannedLoad,
+              proposedLoad,
+            ),
+            baselineLoad: exercise.plannedLoad,
+            proposedLoad,
+            targetRepMin: exercise.prescription.repMin,
+            status: 'proposed',
+            createdAt: timestamp(),
+            schemaVersion: SCHEMA_VERSION,
+          };
+          experiments.push(proposal);
+        }
       }
     }
 
@@ -367,6 +461,7 @@ export class GymAppService {
       source: 'experiment_promotion' as const,
       changeReason: `Promoted experiment: ${experiment.hypothesis}`,
       days,
+      schemaVersion: SCHEMA_VERSION,
     };
 
     return this.persist({
@@ -387,22 +482,25 @@ export class GymAppService {
 
   async addExerciseToRoutine(
     database: AppDatabase,
-    input: {
-      name: string;
-      day: DaySymbol;
-      importance: Importance;
-      plannedLoad: number;
-      targetReps: number;
-      progressionStep: number;
-    },
+    input: AddExerciseInput,
   ): Promise<AppDatabase> {
+    const name = input.name.trim();
+    if (!name) throw new Error('Exercise name is required.');
+    if (!Number.isFinite(input.targetValue) || input.targetValue <= 0) {
+      throw new Error('Target value must be greater than zero.');
+    }
+    if (!Number.isFinite(input.progressionStep) || input.progressionStep <= 0) {
+      throw new Error('Progression step must be greater than zero.');
+    }
+
     const createdAt = timestamp();
     const exerciseId = createId('exercise');
     const exercise = {
       id: exerciseId,
-      name: input.name.trim(),
+      name,
       archived: false,
       defaultUnit: database.profile.units,
+      tracking: structuredClone(input.tracking),
       progressionStep: input.progressionStep,
       createdAt,
       updatedAt: createdAt,
@@ -413,17 +511,17 @@ export class GymAppService {
       exerciseId,
       position: 999,
       importance: input.importance,
-      plannedLoad: input.plannedLoad,
+      plannedLoad: input.tracking.metric === 'load_reps' ? input.startingValue : 0,
       lockedToDay: input.importance === 'principal',
       prescriptions: {
         A: {
-          mode: 'A', included: true, sets: 3, repMin: input.targetReps, repMax: input.targetReps + 1, restSeconds: 120, deferToAnd: false,
+          mode: 'A', included: true, sets: 3, repMin: input.targetValue, repMax: input.targetValue + 1, restSeconds: 120, deferToAnd: false,
         },
         B: {
-          mode: 'B', included: true, sets: 2, repMin: input.targetReps, repMax: input.targetReps + 1, restSeconds: 120, deferToAnd: true,
+          mode: 'B', included: true, sets: 2, repMin: input.targetValue, repMax: input.targetValue + 1, restSeconds: 120, deferToAnd: true,
         },
         C: {
-          mode: 'C', included: true, sets: 1, repMin: input.targetReps, repMax: input.targetReps + 1, restSeconds: 120, deferToAnd: true,
+          mode: 'C', included: true, sets: 1, repMin: input.targetValue, repMax: input.targetValue + 1, restSeconds: 120, deferToAnd: true,
         },
       },
     };
@@ -448,6 +546,7 @@ export class GymAppService {
       source: 'manual_edit' as const,
       changeReason: `Added ${exercise.name} to ${input.day}`,
       days,
+      schemaVersion: SCHEMA_VERSION,
     };
 
     return this.persist({
@@ -455,6 +554,55 @@ export class GymAppService {
       exercises: [...database.exercises, exercise],
       routineVersions: [...database.routineVersions, nextVersion],
       currentRoutineVersionId: nextVersionId,
+    });
+  }
+
+  async addBodyMeasurement(
+    database: AppDatabase,
+    input: { recordedAt: string; weightKg?: number; heightCm?: number },
+  ): Promise<AppDatabase> {
+    const weightKg = input.weightKg;
+    const heightCm = input.heightCm;
+    if (weightKg === undefined && heightCm === undefined) {
+      throw new Error('Add a weight or height measurement.');
+    }
+    if (weightKg !== undefined && (!Number.isFinite(weightKg) || weightKg <= 0)) {
+      throw new Error('Weight must be greater than zero.');
+    }
+    if (heightCm !== undefined && (!Number.isFinite(heightCm) || heightCm <= 0)) {
+      throw new Error('Height must be greater than zero.');
+    }
+
+    const measurement: BodyMeasurement = {
+      id: createId('measurement'),
+      recordedAt: input.recordedAt,
+      weightKg,
+      heightCm,
+      source: 'manual',
+      schemaVersion: SCHEMA_VERSION,
+    };
+
+    return this.persist({
+      ...database,
+      bodyMeasurements: [...database.bodyMeasurements, measurement]
+        .sort((left, right) => left.recordedAt.localeCompare(right.recordedAt)),
+    });
+  }
+
+  async updateSettings(
+    database: AppDatabase,
+    patch: { restTimer?: Partial<AppSettings['restTimer']> },
+  ): Promise<AppDatabase> {
+    return this.persist({
+      ...database,
+      settings: {
+        ...database.settings,
+        restTimer: {
+          ...database.settings.restTimer,
+          ...patch.restTimer,
+        },
+        schemaVersion: SCHEMA_VERSION,
+      },
     });
   }
 }
