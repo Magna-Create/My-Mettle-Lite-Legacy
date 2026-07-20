@@ -1,8 +1,13 @@
-import type { SetRecord } from '../domain/model';
+import type { ExerciseTrackingProfile, SetRecord } from '../domain/model';
+import { effectiveLoadKg, getTrackingPresentation } from '../domain/tracking';
 
 interface Props {
   set: SetRecord;
-  onChange: (patch: Partial<Pick<SetRecord, 'load' | 'reps'>>) => void;
+  tracking: ExerciseTrackingProfile;
+  bodyweightKg: number | null;
+  onChange: (
+    patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres'>>,
+  ) => void;
 }
 
 function parseNumber(value: string): number | null {
@@ -11,35 +16,105 @@ function parseNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function SetEntryRow({ set, onChange }: Props) {
+interface NumberInputProps {
+  label: string;
+  suffix: string;
+  value: number | null;
+  step: number;
+  inputMode: 'decimal' | 'numeric';
+  ariaLabel: string;
+  onChange: (value: number | null) => void;
+}
+
+function NumberInput({
+  label,
+  suffix,
+  value,
+  step,
+  inputMode,
+  ariaLabel,
+  onChange,
+}: NumberInputProps) {
   return (
-    <div className="set-row">
+    <label className="tracked-input">
+      <span>{label}</span>
+      <span className="input-with-suffix">
+        <input
+          inputMode={inputMode}
+          type="number"
+          min="0"
+          step={step}
+          value={value ?? ''}
+          onChange={(event) => onChange(parseNumber(event.target.value))}
+          aria-label={ariaLabel}
+        />
+        <i>{suffix}</i>
+      </span>
+    </label>
+  );
+}
+
+export function SetEntryRow({ set, tracking, bodyweightKg, onChange }: Props) {
+  const presentation = getTrackingPresentation(tracking, set.unit);
+  const effectiveLoad = effectiveLoadKg(set, tracking, bodyweightKg);
+  const showEffectiveLoad = effectiveLoad !== null
+    && ['assistance', 'bodyweight', 'bodyweight_plus_external'].includes(tracking.loadRelationship);
+
+  return (
+    <div className={`set-row metric-${tracking.metric}`}>
       <span className="set-index">{set.setIndex + 1}</span>
-      <label>
-        <span>Load</span>
-        <input
-          inputMode="decimal"
-          type="number"
-          min="0"
-          step="0.5"
-          value={set.load ?? ''}
-          onChange={(event) => onChange({ load: parseNumber(event.target.value) })}
-          aria-label={`Set ${set.setIndex + 1} load`}
-        />
-      </label>
-      <span className="unit">{set.unit}</span>
-      <label>
-        <span>Reps</span>
-        <input
-          inputMode="numeric"
-          type="number"
-          min="0"
-          step="1"
-          value={set.reps ?? ''}
-          onChange={(event) => onChange({ reps: parseNumber(event.target.value) })}
-          aria-label={`Set ${set.setIndex + 1} repetitions`}
-        />
-      </label>
+      <div className="set-inputs">
+        {tracking.metric === 'load_reps' && (
+          <NumberInput
+            label={presentation.valueLabel}
+            suffix={presentation.valueSuffix}
+            value={set.load}
+            step={0.5}
+            inputMode="decimal"
+            ariaLabel={`Set ${set.setIndex + 1} ${presentation.valueLabel.toLowerCase()}`}
+            onChange={(load) => onChange({ load })}
+          />
+        )}
+
+        {(tracking.metric === 'load_reps' || tracking.metric === 'reps') && (
+          <NumberInput
+            label="Repetitions"
+            suffix="reps"
+            value={set.reps}
+            step={1}
+            inputMode="numeric"
+            ariaLabel={`Set ${set.setIndex + 1} repetitions`}
+            onChange={(reps) => onChange({ reps })}
+          />
+        )}
+
+        {tracking.metric === 'duration' && (
+          <NumberInput
+            label="Duration"
+            suffix="sec"
+            value={set.durationSeconds}
+            step={1}
+            inputMode="numeric"
+            ariaLabel={`Set ${set.setIndex + 1} duration`}
+            onChange={(durationSeconds) => onChange({ durationSeconds })}
+          />
+        )}
+
+        {tracking.metric === 'distance' && (
+          <NumberInput
+            label="Distance"
+            suffix="m"
+            value={set.distanceMetres}
+            step={1}
+            inputMode="decimal"
+            ariaLabel={`Set ${set.setIndex + 1} distance`}
+            onChange={(distanceMetres) => onChange({ distanceMetres })}
+          />
+        )}
+      </div>
+      {showEffectiveLoad && (
+        <small className="effective-load">Effective resistance {effectiveLoad.toFixed(1)} kg</small>
+      )}
     </div>
   );
 }
