@@ -18,10 +18,29 @@ interface Props {
   onProgressState: (progress: number, condensed: boolean) => void;
 }
 
+interface RestTimerState {
+  exerciseId: string;
+  total: number;
+  remaining: number;
+}
+
+interface UndoRecord {
+  sessionId: string;
+  exerciseId: string;
+  setId: string;
+  previous: Partial<Pick<SetRecord, 'load' | 'reps'>>;
+}
+
 function statusLabel(status: string, expanded: boolean) {
   if (status === 'completed') return 'Done';
   if (expanded) return 'Active';
   return 'Up next';
+}
+
+function formatTime(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}:${String(remainder).padStart(2, '0')}`;
 }
 
 export function TrainPage({
@@ -33,13 +52,18 @@ export function TrainPage({
   onProgressState,
 }: Props) {
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(null);
+  const [restTimer, setRestTimer] = useState<RestTimerState | null>(null);
+  const [undoRecord, setUndoRecord] = useState<UndoRecord | null>(null);
   const progressAnchorRef = useRef<HTMLDivElement | null>(null);
+  const restDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const session = database.sessions.find((candidate) => candidate.id === database.activeSessionId);
   const exerciseStatusKey = session?.exercises.map((exercise) => `${exercise.id}:${exercise.status}`).join('|') ?? '';
 
   useEffect(() => {
     if (!session) {
       setExpandedExerciseId(null);
+      setRestTimer(null);
+      setUndoRecord(null);
       return;
     }
 
@@ -50,6 +74,25 @@ export function TrainPage({
       setExpandedExerciseId(next?.id ?? null);
     }
   }, [session?.id, exerciseStatusKey, expandedExerciseId]);
+
+  useEffect(() => {
+    if (!restTimer) return;
+    if (restTimer.remaining <= 0) {
+      const completeDelay = window.setTimeout(() => setRestTimer(null), 1200);
+      return () => window.clearTimeout(completeDelay);
+    }
+
+    const interval = window.setInterval(() => {
+      setRestTimer((current) => current
+        ? { ...current, remaining: Math.max(0, current.remaining - 1) }
+        : null);
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [restTimer?.remaining]);
+
+  useEffect(() => () => {
+    if (restDelayRef.current) clearTimeout(restDelayRef.current);
+  }, []);
 
   const completed = session?.exercises.filter((exercise) => exercise.status === 'completed').length ?? 0;
   const progress = session ? completed / Math.max(session.exercises.length, 1) : 0;
@@ -65,7 +108,9 @@ export function TrainPage({
     if (!target) return;
 
     const observer = new IntersectionObserver(
-      ([entry]) => onProgressState(progress, !entry.isIntersecting),
+      ([entry]) => {
+        if (entry) onProgressState(progress, !entry.isIntersecting);
+      },
       { threshold: 0.08 },
     );
     observer.observe(target);
@@ -73,7 +118,7 @@ export function TrainPage({
   }, [session?.id, progress, onProgressState]);
 
   const performanceByExercise = useMemo(() => {
-    if (!session) return new Map();
+    if (!session) return new Map<string, ReturnType<typeof calculateExercisePerformance>>();
     return new Map(session.exercises.map((exercise) => [exercise.id, calculateExercisePerformance(exercise)]));
   }, [session]);
 
@@ -86,6 +131,47 @@ export function TrainPage({
         <button className="primary-action" onClick={onGoBrief}>Open Brief</button>
       </main>
     );
+  }
+
+  async function updateSetWithUndo(
+    exerciseId: string,
+    set: SetRecord,
+    restSeconds: number,
+    patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'note'>>,
+  ) {
+    if (!session) return;
+
+    const previous: Partial<Pick<SetRecord, 'load' | 'reps'>> = {};
+    if ('load' in patch) previous.load = set.load;
+    if ('reps' in patch) previous.reps = set.reps;
+
+    setUndoRecord({ sessionId: session.id, exerciseId, setId: set.id, previous });
+    await onUpdateSet(session.id, exerciseId, set.id, patch);
+
+    if ('reps' in patch) {
+      if (restDelayRef.current) clearTimeout(restDelayRef.current);
+      if (patch.reps === null) {
+        if (restTimer?.exerciseId === exerciseId) setRestTimer(null);
+      } else {
+        restDelayRef.current = setTimeout(() => {
+          setRestTimer({ exerciseId, total: restSeconds, remaining: restSeconds });
+        }, 650);
+      }
+    }
+  }
+
+  async function undoLastSetEdit() {
+    if (!undoRecord) return;
+    const record = undoRecord;
+    setUndoRecord(null);
+    await onUpdateSet(record.sessionId, record.exerciseId, record.setId, record.previous);
+  }
+
+  async function completeExercise(exerciseId: string) {
+    if (!session) return;
+    if (restDelayRef.current) clearTimeout(restDelayRef.current);
+    if (restTimer?.exerciseId === exerciseId) setRestTimer(null);
+    await onCompleteExercise(session.id, exerciseId);
   }
 
   return (
@@ -107,6 +193,7 @@ export function TrainPage({
           const cue = database.exercises.find((item) => item.id === exercise.exerciseId)?.essentialCue;
           const isExpanded = expandedExerciseId === exercise.id;
           const isComplete = exercise.status === 'completed';
+          const timer = restTimer?.exerciseId === exercise.id ? restTimer : null;
 
           return (
             <article
@@ -132,6 +219,7 @@ export function TrainPage({
                   <strong>{exercise.prescription.sets} × {exercise.prescription.repMin}–{exercise.prescription.repMax}</strong>
                   <span>{exercise.plannedLoad} kg</span>
                   <span>{exercise.prescription.restSeconds}s</span>
+                  {timer && <span className="compact-timer">Rest {formatTime(timer.remaining)}</span>}
                 </div>
               )}
 
@@ -151,10 +239,25 @@ export function TrainPage({
                       <SetEntryRow
                         key={set.id}
                         set={set}
-                        onChange={(patch) => onUpdateSet(session.id, exercise.id, set.id, patch)}
+                        onChange={(patch) => { void updateSetWithUndo(exercise.id, set, exercise.prescription.restSeconds, patch); }}
                       />
                     ))}
                   </div>
+
+                  {timer && (
+                    <aside className="rest-timer" aria-live="polite">
+                      <div className="rest-timer-copy">
+                        <span>{timer.remaining === 0 ? 'Go' : 'Rest'}</span>
+                        <strong>{formatTime(timer.remaining)}</strong>
+                      </div>
+                      <div className="rest-timer-track"><i style={{ width: `${(timer.remaining / timer.total) * 100}%` }} /></div>
+                      <div className="rest-timer-actions">
+                        <button type="button" onClick={() => setRestTimer((current) => current ? { ...current, total: current.total + 30, remaining: current.remaining + 30 } : null)}>+30</button>
+                        <button type="button" onClick={() => setRestTimer(null)}>Skip</button>
+                      </div>
+                    </aside>
+                  )}
+
                   {performance.repDropWarning && (
                     <p className="warning-card">
                       Reps dropped by more than three at the same load. Rest longer; if it repeats, reduce load by 5–10%.
@@ -165,7 +268,7 @@ export function TrainPage({
                     <button
                       className="secondary-action"
                       disabled={exercise.status === 'completed'}
-                      onClick={() => onCompleteExercise(session.id, exercise.id)}
+                      onClick={() => { void completeExercise(exercise.id); }}
                     >
                       {exercise.status === 'completed' ? 'Completed' : 'Complete exercise'}
                     </button>
@@ -180,6 +283,13 @@ export function TrainPage({
       <button className="completion-action" onClick={() => onCompleteSession(session.id)}>
         Complete session
       </button>
+
+      {undoRecord && (
+        <div className="undo-toast" role="status">
+          <span>Set updated</span>
+          <button type="button" onClick={() => { void undoLastSetEdit(); }}>Undo</button>
+        </div>
+      )}
     </main>
   );
 }

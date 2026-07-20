@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 — Phase 2 foundations
+
+- Replaced the single exercise form with a card-based guided flow.
+- Added local JSON exercise import with validation.
+- Added automatic rest timing, +30-second extension and skip controls.
+- Added one-step undo for load and repetition edits.
+
 ## 0.2.0 — Phase 1 interaction refinement
 
 - Renamed the in-app shell to My Mettle and split profile/settings controls.
