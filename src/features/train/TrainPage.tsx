@@ -9,12 +9,9 @@ import { ExerciseDetailsOverlay } from './ExerciseDetailsOverlay';
 
 interface Props {
   database: AppDatabase;
-  onUpdateSet: (
-    sessionId: string,
-    sessionExerciseId: string,
-    setId: string,
-    patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>,
-  ) => Promise<void>;
+  onUpdateSet: (sessionId: string, sessionExerciseId: string, setId: string, patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>) => Promise<void>;
+  onAddSet: (sessionId: string, sessionExerciseId: string) => Promise<void>;
+  onRemoveSet: (sessionId: string, sessionExerciseId: string, setId: string) => Promise<void>;
   onCompleteExercise: (sessionId: string, sessionExerciseId: string) => Promise<void>;
   onCompleteSession: (sessionId: string) => Promise<void>;
   onGoBrief: () => void;
@@ -41,15 +38,7 @@ function targetSuffix(metric: string) {
   return 'reps';
 }
 
-export function TrainPage({
-  database,
-  onUpdateSet,
-  onCompleteExercise,
-  onCompleteSession,
-  onGoBrief,
-  onProgressState,
-  onStartRest,
-}: Props) {
+export function TrainPage({ database, onUpdateSet, onAddSet, onRemoveSet, onCompleteExercise, onCompleteSession, onGoBrief, onProgressState, onStartRest }: Props) {
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(null);
   const [detailsExerciseId, setDetailsExerciseId] = useState<string | null>(null);
   const [undoRecord, setUndoRecord] = useState<UndoRecord | null>(null);
@@ -64,11 +53,9 @@ export function TrainPage({
       setUndoRecord(null);
       return;
     }
-
     const expanded = session.exercises.find((exercise) => exercise.id === expandedExerciseId);
     if (!expanded || expanded.status === 'completed') {
-      const next = session.exercises.find((exercise) => exercise.status !== 'completed')
-        ?? session.exercises.at(-1);
+      const next = session.exercises.find((exercise) => exercise.status !== 'completed') ?? session.exercises.at(-1);
       setExpandedExerciseId(next?.id ?? null);
     }
   }, [session?.id, exerciseStatusKey, expandedExerciseId]);
@@ -87,17 +74,10 @@ export function TrainPage({
       onProgressState(0, false);
       return;
     }
-
     onProgressState(progress, false);
     const target = progressAnchorRef.current;
     if (!target) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry) onProgressState(progress, !entry.isIntersecting);
-      },
-      { threshold: 0.08 },
-    );
+    const observer = new IntersectionObserver(([entry]) => { if (entry) onProgressState(progress, !entry.isIntersecting); }, { threshold: 0.08 });
     observer.observe(target);
     return () => observer.disconnect();
   }, [session?.id, progress, onProgressState]);
@@ -108,45 +88,23 @@ export function TrainPage({
   }, [session]);
 
   if (!session) {
-    return (
-      <main className="page empty-page">
-        <p className="eyebrow">Train</p>
-        <h1>Nothing active.</h1>
-        <p>Pick a day in Brief.</p>
-        <button className="primary-action" onClick={onGoBrief}>Open Brief</button>
-      </main>
-    );
+    return <main className="page empty-page"><p className="eyebrow">Train</p><h1>Nothing active.</h1><p>Pick a day in Brief.</p><button className="primary-action" onClick={onGoBrief}>Open Brief</button></main>;
   }
 
-  async function updateSetWithUndo(
-    exerciseId: string,
-    set: SetRecord,
-    patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>,
-  ) {
+  async function updateSetWithUndo(exerciseId: string, set: SetRecord, patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>) {
     if (!session) return;
     const exercise = session.exercises.find((candidate) => candidate.id === exerciseId);
     if (!exercise) return;
-
     const previous: UndoRecord['previous'] = {};
     if ('load' in patch) previous.load = set.load;
     if ('reps' in patch) previous.reps = set.reps;
     if ('durationSeconds' in patch) previous.durationSeconds = set.durationSeconds;
     if ('distanceMetres' in patch) previous.distanceMetres = set.distanceMetres;
-
     const wasComplete = isSetComplete(set, exercise.trackingSnapshot);
-    const nextSet = { ...set, ...patch };
-    const willComplete = isSetComplete(nextSet, exercise.trackingSnapshot);
-
+    const willComplete = isSetComplete({ ...set, ...patch }, exercise.trackingSnapshot);
     setUndoRecord({ sessionId: session.id, exerciseId, setId: set.id, previous });
     await onUpdateSet(session.id, exerciseId, set.id, patch);
-
-    if (!wasComplete && willComplete) {
-      onStartRest({
-        exerciseId,
-        exerciseName: exercise.exerciseNameSnapshot,
-        seconds: exercise.prescription.restSeconds,
-      });
-    }
+    if (!wasComplete && willComplete) onStartRest({ exerciseId, exerciseName: exercise.exerciseNameSnapshot, seconds: exercise.prescription.restSeconds });
   }
 
   async function undoLastSetEdit() {
@@ -157,7 +115,6 @@ export function TrainPage({
   }
 
   async function completeExercise(exerciseId: string) {
-    if (!session) return;
     setUndoRecord(null);
     await onCompleteExercise(session.id, exerciseId);
   }
@@ -167,15 +124,8 @@ export function TrainPage({
   return (
     <main className="page train-page">
       <header className="session-header" ref={progressAnchorRef}>
-        <div>
-          <p className="eyebrow">Active session</p>
-          <h1>{session.day} · {MODE_PRESENTATION[session.mode].name}</h1>
-          {session.bodyweightSnapshotKg !== null && <small className="session-snapshot">Bodyweight snapshot {session.bodyweightSnapshotKg.toFixed(1)} kg</small>}
-        </div>
-        <div className="session-progress" aria-label={`${completed} of ${session.exercises.length} exercises complete`}>
-          <span>{completed}/{session.exercises.length}</span>
-          <div><i style={{ width: `${progress * 100}%` }} /></div>
-        </div>
+        <div><p className="eyebrow">Active session</p><h1>{session.day} · {MODE_PRESENTATION[session.mode].name}</h1>{session.bodyweightSnapshotKg !== null && <small className="session-snapshot">Bodyweight snapshot {session.bodyweightSnapshotKg.toFixed(1)} kg</small>}</div>
+        <div className="session-progress" aria-label={`${completed} of ${session.exercises.length} exercises complete`}><span>{completed}/{session.exercises.length}</span><div><i style={{ width: `${progress * 100}%` }} /></div></div>
       </header>
 
       <section className="exercise-stack" aria-label="Workout exercise deck">
@@ -186,93 +136,27 @@ export function TrainPage({
           const isComplete = exercise.status === 'completed';
           const presentation = getTrackingPresentation(exercise.trackingSnapshot, exercise.sets[0]?.unit ?? database.profile.units);
           const targetUnit = targetSuffix(exercise.trackingSnapshot.metric);
-
           return (
-            <article
-              className={`exercise-card ${isExpanded ? 'is-expanded' : 'is-compact'} ${isComplete ? 'is-complete' : ''}`}
-              key={exercise.id}
-              style={{ zIndex: session.exercises.length - index }}
-            >
-              <button
-                className="exercise-card-toggle"
-                type="button"
-                aria-expanded={isExpanded}
-                onClick={() => setExpandedExerciseId(exercise.id)}
-              >
-                <div>
-                  <p className="eyebrow">{index + 1} · {exercise.importanceSnapshot}</p>
-                  <h2>{exercise.exerciseNameSnapshot}</h2>
-                </div>
-                <span className="status-chip">{statusLabel(exercise.status, isExpanded)}</span>
+            <article className={`exercise-card ${isExpanded ? 'is-expanded' : 'is-compact'} ${isComplete ? 'is-complete' : ''}`} key={exercise.id} style={{ zIndex: session.exercises.length - index }}>
+              <button className="exercise-card-toggle" type="button" aria-expanded={isExpanded} onClick={() => setExpandedExerciseId(exercise.id)}>
+                <div><p className="eyebrow">{index + 1} · {exercise.importanceSnapshot}</p><h2>{exercise.exerciseNameSnapshot}</h2></div><span className="status-chip">{statusLabel(exercise.status, isExpanded)}</span>
               </button>
-
-              {!isExpanded && (
-                <div className="compact-prescription">
-                  <strong>{exercise.prescription.sets} × {exercise.prescription.repMin}–{exercise.prescription.repMax} {targetUnit}</strong>
-                  {presentation.requiresStartingValue && <span>{presentation.valueLabel} {exercise.plannedLoad} {presentation.valueSuffix}</span>}
-                  <span>{exercise.prescription.restSeconds}s rest</span>
-                </div>
-              )}
-
-              {isExpanded && (
-                <div className="exercise-card-body">
-                  <div className="prescription-row">
-                    <strong>{exercise.prescription.sets} × {exercise.prescription.repMin}–{exercise.prescription.repMax} {targetUnit}</strong>
-                    <span>{exercise.prescription.restSeconds}s rest</span>
-                    {presentation.requiresStartingValue && <span>{presentation.valueLabel} {exercise.plannedLoad} {presentation.valueSuffix}</span>}
-                  </div>
-                  {exercise.movementReason === 'active_experiment' && (
-                    <p className="experiment-notice">Lab test · temporary value.</p>
-                  )}
-                  {cue && <p className="setup-cue">{cue}</p>}
-                  <div className="set-table">
-                    {exercise.sets.map((set) => (
-                      <SetEntryRow
-                        key={set.id}
-                        set={set}
-                        tracking={exercise.trackingSnapshot}
-                        bodyweightKg={exercise.bodyweightSnapshotKg}
-                        onChange={(patch) => { void updateSetWithUndo(exercise.id, set, patch); }}
-                      />
-                    ))}
-                  </div>
-
-                  {performance.repDropWarning && (
-                    <p className="warning-card">
-                      Reps dropped by more than three at the same load. Rest longer; if it repeats, reduce load by 5–10%.
-                    </p>
-                  )}
-                  <footer>
-                    <span>{Math.round(performance.primaryTotal)} {performance.primaryUnit} logged</span>
-                    <div className="exercise-footer-actions">
-                      <button className="text-button details-button" type="button" onClick={() => setDetailsExerciseId(exercise.id)}>Details</button>
-                      <button
-                        className="secondary-action"
-                        disabled={exercise.status === 'completed'}
-                        onClick={() => { void completeExercise(exercise.id); }}
-                      >
-                        {exercise.status === 'completed' ? 'Completed' : 'Complete exercise'}
-                      </button>
-                    </div>
-                  </footer>
-                </div>
-              )}
+              {!isExpanded && <div className="compact-prescription"><strong>{exercise.prescription.sets} × {exercise.prescription.repMin}–{exercise.prescription.repMax} {targetUnit}</strong>{presentation.requiresStartingValue && <span>{presentation.valueLabel} {exercise.plannedLoad} {presentation.valueSuffix}</span>}<span>{exercise.prescription.restSeconds}s rest</span></div>}
+              {isExpanded && <div className="exercise-card-body">
+                <div className="prescription-row"><strong>{exercise.prescription.sets} × {exercise.prescription.repMin}–{exercise.prescription.repMax} {targetUnit}</strong><span>{exercise.prescription.restSeconds}s rest</span>{presentation.requiresStartingValue && <span>{presentation.valueLabel} {exercise.plannedLoad} {presentation.valueSuffix}</span>}</div>
+                {exercise.movementReason === 'active_experiment' && <p className="experiment-notice">Lab test · temporary value.</p>}
+                {cue && <p className="setup-cue">{cue}</p>}
+                <div className="set-table">{exercise.sets.map((set) => <SetEntryRow key={set.id} set={set} tracking={exercise.trackingSnapshot} bodyweightKg={exercise.bodyweightSnapshotKg} onChange={(patch) => { void updateSetWithUndo(exercise.id, set, patch); }} onRemove={set.kind === 'additional' ? () => { void onRemoveSet(session.id, exercise.id, set.id); } : undefined} />)}</div>
+                <button className="add-set-button" type="button" onClick={() => { void onAddSet(session.id, exercise.id); }}>＋ Add set</button>
+                {performance.repDropWarning && <p className="warning-card">Reps dropped by more than three at the same load. Rest longer; if it repeats, reduce load by 5–10%.</p>}
+                <footer><span>{Math.round(performance.primaryTotal)} {performance.primaryUnit} logged</span><div className="exercise-footer-actions"><button className="text-button details-button" type="button" onClick={() => setDetailsExerciseId(exercise.id)}>Details</button><button className="secondary-action" disabled={exercise.status === 'completed'} onClick={() => { void completeExercise(exercise.id); }}>{exercise.status === 'completed' ? 'Completed' : 'Complete exercise'}</button></div></footer>
+              </div>}
             </article>
           );
         })}
       </section>
-
-      <button className="completion-action" onClick={() => onCompleteSession(session.id)}>
-        Complete session
-      </button>
-
-      {undoRecord && (
-        <div className="undo-toast" role="status">
-          <span>Set updated</span>
-          <button type="button" onClick={() => { void undoLastSetEdit(); }}>Undo</button>
-        </div>
-      )}
-
+      <button className="completion-action" onClick={() => onCompleteSession(session.id)}>Complete session</button>
+      {undoRecord && <div className="undo-toast" role="status"><span>Set updated</span><button type="button" onClick={() => { void undoLastSetEdit(); }}>Undo</button></div>}
       <ExerciseDetailsOverlay database={database} exercise={detailsExercise} onClose={() => setDetailsExerciseId(null)} />
     </main>
   );
