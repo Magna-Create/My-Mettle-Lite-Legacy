@@ -25,8 +25,13 @@ describe('vertical slice', () => {
       name: 'Cable fly',
       day: 'ψ',
       importance: 'accessory',
-      plannedLoad: 10,
-      targetReps: 8,
+      tracking: {
+        metric: 'load_reps',
+        loadRelationship: 'external',
+        entryBasis: 'total',
+      },
+      startingValue: 10,
+      targetValue: 8,
       progressionStep: 1,
     });
     expect(database.routineVersions).toHaveLength(2);
@@ -73,6 +78,43 @@ it('carries a micro-load experiment through tested exposure and explicit routine
     .flatMap((day) => day.slots)
     .find((slot) => slot.exerciseId === principal.exerciseId);
   expect(promotedSlot?.plannedLoad).toBe(proposal.proposedLoad);
+});
+
+it('reduces assistance when an assisted bodyweight experiment is proposed', async () => {
+  const service = new GymAppService(new InMemoryGymRepository());
+  let database = await service.initialise();
+  database = await service.addBodyMeasurement(database, {
+    recordedAt: new Date('2026-07-20T09:00:00Z').toISOString(),
+    weightKg: 80,
+    heightCm: 168,
+  });
+  database = await service.addExerciseToRoutine(database, {
+    name: 'Assisted pull-up',
+    day: 'ψ',
+    importance: 'accessory',
+    tracking: {
+      metric: 'load_reps',
+      loadRelationship: 'assistance',
+      entryBasis: 'total',
+    },
+    startingValue: 30,
+    targetValue: 6,
+    progressionStep: 2.5,
+  });
+  database = await service.beginSession(database, 'ψ', 'A');
+  const session = database.sessions.at(-1);
+  const assisted = session?.exercises.find((exercise) => exercise.exerciseNameSnapshot === 'Assisted pull-up');
+  if (!session || !assisted) throw new Error('Assisted exercise missing');
+
+  expect(session.bodyweightSnapshotKg).toBe(80);
+  for (const set of assisted.sets) {
+    database = await service.updateSet(database, session.id, assisted.id, set.id, { reps: 6 });
+  }
+  database = await service.completeSession(database, session.id);
+
+  const proposal = database.experiments.find((experiment) => experiment.exerciseId === assisted.exerciseId);
+  expect(proposal?.baselineLoad).toBe(30);
+  expect(proposal?.proposedLoad).toBe(27.5);
 });
 
 it('opens a new cycle when a core day begins after ψ, φ and π are complete', async () => {
