@@ -1,30 +1,45 @@
-import { useRef, useState, type TouchEvent } from 'react';
-import type { AppDatabase, DaySymbol, Importance } from '../../domain/model';
+import { useMemo, useRef, useState, type TouchEvent } from 'react';
+import type { AddExerciseInput } from '../../application/GymAppService';
+import type { AppDatabase, DaySymbol, EntryBasis, ExerciseTrackingProfile, Importance } from '../../domain/model';
+import {
+  entryBasisLabel,
+  getTrackingPresentation,
+  presetFromTracking,
+  relationshipLabel,
+  TRACKING_PRESET_LABELS,
+  trackingFromPreset,
+  type TrackingPreset,
+} from '../../domain/tracking';
 
-interface ExerciseDraft {
+interface WizardDraft {
   name: string;
   day: DaySymbol;
   importance: Importance;
-  plannedLoad: number;
-  targetReps: number;
+  preset: TrackingPreset;
+  entryBasis: EntryBasis;
+  startingValue: number;
+  targetValue: number;
   progressionStep: number;
 }
 
 interface Props {
   database: AppDatabase;
-  onAddExercise: (input: ExerciseDraft) => Promise<void>;
+  onAddExercise: (input: AddExerciseInput) => Promise<void>;
 }
 
-const emptyDraft: ExerciseDraft = {
+const emptyDraft: WizardDraft = {
   name: '',
   day: 'ψ',
   importance: 'core',
-  plannedLoad: 10,
-  targetReps: 6,
+  preset: 'external_load',
+  entryBasis: 'total',
+  startingValue: 10,
+  targetValue: 6,
   progressionStep: 1,
 };
 
 const guidedSteps = ['Movement', 'Place', 'Dose', 'Review'] as const;
+const presets = Object.keys(TRACKING_PRESET_LABELS) as TrackingPreset[];
 
 function isDaySymbol(value: unknown): value is DaySymbol {
   return value === 'ψ' || value === 'φ' || value === 'π' || value === '&';
@@ -34,10 +49,39 @@ function isImportance(value: unknown): value is Importance {
   return value === 'principal' || value === 'core' || value === 'accessory';
 }
 
-function parseImport(value: string): ExerciseDraft {
-  const candidate = JSON.parse(value) as Partial<ExerciseDraft>;
-  const plannedLoad = Number(candidate.plannedLoad);
-  const targetReps = Number(candidate.targetReps);
+function isEntryBasis(value: unknown): value is EntryBasis {
+  return value === 'total' || value === 'per_hand' || value === 'per_side';
+}
+
+function isTracking(value: unknown): value is ExerciseTrackingProfile {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<ExerciseTrackingProfile>;
+  return ['load_reps', 'reps', 'duration', 'distance'].includes(candidate.metric ?? '')
+    && ['external', 'assistance', 'bodyweight', 'bodyweight_plus_external', 'none'].includes(candidate.loadRelationship ?? '')
+    && isEntryBasis(candidate.entryBasis);
+}
+
+function defaultsForPreset(preset: TrackingPreset): Pick<WizardDraft, 'startingValue' | 'targetValue' | 'progressionStep'> {
+  if (preset === 'duration') return { startingValue: 0, targetValue: 60, progressionStep: 15 };
+  if (preset === 'distance') return { startingValue: 0, targetValue: 1000, progressionStep: 100 };
+  if (preset === 'reps_only' || preset === 'bodyweight') {
+    return { startingValue: 0, targetValue: 6, progressionStep: 1 };
+  }
+  return { startingValue: 10, targetValue: 6, progressionStep: 1 };
+}
+
+function parseImport(value: string): AddExerciseInput {
+  const candidate = JSON.parse(value) as Partial<AddExerciseInput> & {
+    trackingPreset?: TrackingPreset;
+    entryBasis?: EntryBasis;
+    plannedLoad?: number;
+    targetReps?: number;
+  };
+  const tracking = isTracking(candidate.tracking)
+    ? candidate.tracking
+    : trackingFromPreset(candidate.trackingPreset ?? 'external_load', candidate.entryBasis ?? 'total');
+  const startingValue = Number(candidate.startingValue ?? candidate.plannedLoad ?? 0);
+  const targetValue = Number(candidate.targetValue ?? candidate.targetReps);
   const progressionStep = Number(candidate.progressionStep);
 
   if (
@@ -45,10 +89,10 @@ function parseImport(value: string): ExerciseDraft {
     || candidate.name.trim().length === 0
     || !isDaySymbol(candidate.day)
     || !isImportance(candidate.importance)
-    || !Number.isFinite(plannedLoad)
-    || plannedLoad < 0
-    || !Number.isInteger(targetReps)
-    || targetReps < 1
+    || !Number.isFinite(startingValue)
+    || startingValue < 0
+    || !Number.isFinite(targetValue)
+    || targetValue <= 0
     || !Number.isFinite(progressionStep)
     || progressionStep <= 0
   ) {
@@ -59,23 +103,57 @@ function parseImport(value: string): ExerciseDraft {
     name: candidate.name.trim(),
     day: candidate.day,
     importance: candidate.importance,
-    plannedLoad,
-    targetReps,
+    tracking,
+    startingValue,
+    targetValue,
     progressionStep,
   };
+}
+
+interface SuffixInputProps {
+  label: string;
+  suffix: string;
+  value: number;
+  step: number;
+  onChange: (value: number) => void;
+}
+
+function SuffixInput({ label, suffix, value, step, onChange }: SuffixInputProps) {
+  return (
+    <label>
+      {label}
+      <span className="input-with-suffix">
+        <input
+          type="number"
+          inputMode={step % 1 === 0 ? 'numeric' : 'decimal'}
+          min="0"
+          step={step}
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+        <i>{suffix}</i>
+      </span>
+    </label>
+  );
 }
 
 export function LibraryPage({ database, onAddExercise }: Props) {
   const [open, setOpen] = useState(false);
   const [method, setMethod] = useState<'guided' | 'json'>('guided');
   const [step, setStep] = useState(0);
-  const [draft, setDraft] = useState<ExerciseDraft>(emptyDraft);
+  const [draft, setDraft] = useState<WizardDraft>(emptyDraft);
   const [jsonValue, setJsonValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const touchStart = useRef<number | null>(null);
   const routine = database.routineVersions.find((item) => item.id === database.currentRoutineVersionId);
   if (!routine) return null;
+
+  const tracking = useMemo(
+    () => trackingFromPreset(draft.preset, draft.entryBasis),
+    [draft.preset, draft.entryBasis],
+  );
+  const presentation = getTrackingPresentation(tracking, database.profile.units);
 
   function close() {
     setOpen(false);
@@ -86,17 +164,45 @@ export function LibraryPage({ database, onAddExercise }: Props) {
     setError(null);
   }
 
-  function updateDraft<K extends keyof ExerciseDraft>(key: K, value: ExerciseDraft[K]) {
+  function updateDraft<K extends keyof WizardDraft>(key: K, value: WizardDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function choosePreset(preset: TrackingPreset) {
+    const defaults = defaultsForPreset(preset);
+    setDraft((current) => ({
+      ...current,
+      preset,
+      entryBasis: preset === 'assisted_bodyweight' || preset === 'bodyweight' || preset === 'reps_only' || preset === 'duration' || preset === 'distance'
+        ? 'total'
+        : current.entryBasis,
+      ...defaults,
+    }));
   }
 
   function canContinue() {
     if (step === 0) return draft.name.trim().length > 0;
-    if (step === 2) return draft.plannedLoad >= 0 && draft.targetReps > 0 && draft.progressionStep > 0;
+    if (step === 2) {
+      return (!presentation.requiresStartingValue || draft.startingValue >= 0)
+        && draft.targetValue > 0
+        && draft.progressionStep > 0;
+    }
     return true;
   }
 
-  async function save(input: ExerciseDraft) {
+  function buildInput(): AddExerciseInput {
+    return {
+      name: draft.name.trim(),
+      day: draft.day,
+      importance: draft.importance,
+      tracking,
+      startingValue: presentation.requiresStartingValue ? draft.startingValue : 0,
+      targetValue: draft.targetValue,
+      progressionStep: draft.progressionStep,
+    };
+  }
+
+  async function save(input: AddExerciseInput) {
     try {
       setSaving(true);
       setError(null);
@@ -159,12 +265,17 @@ export function LibraryPage({ database, onAddExercise }: Props) {
             {day.slots.length === 0 && <p className="muted">No permanent slots.</p>}
             {day.slots.map((slot) => {
               const exercise = database.exercises.find((item) => item.id === slot.exerciseId);
+              if (!exercise) return null;
+              const exercisePresentation = getTrackingPresentation(exercise.tracking, exercise.defaultUnit);
+              const starting = exercisePresentation.requiresStartingValue
+                ? `${exercisePresentation.valueLabel} ${slot.plannedLoad} ${exercisePresentation.valueSuffix}`
+                : TRACKING_PRESET_LABELS[presetFromTracking(exercise.tracking)];
               return (
                 <div className="routine-slot" key={slot.id}>
                   <span className="importance-dot" data-importance={slot.importance} />
                   <div>
-                    <strong>{exercise?.name ?? 'Missing exercise'}</strong>
-                    <small>{slot.importance} · {slot.plannedLoad} kg · A {slot.prescriptions.A.sets}×{slot.prescriptions.A.repMin}–{slot.prescriptions.A.repMax}</small>
+                    <strong>{exercise.name}</strong>
+                    <small>{slot.importance} · {starting} · A {slot.prescriptions.A.sets}×{slot.prescriptions.A.repMin}–{slot.prescriptions.A.repMax}</small>
                   </div>
                 </div>
               );
@@ -207,7 +318,12 @@ export function LibraryPage({ database, onAddExercise }: Props) {
                       <>
                         <p className="eyebrow">1 · Movement</p>
                         <h3>What are we adding?</h3>
-                        <label>Name<input value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} autoFocus placeholder="e.g. Bayesian bicep curl" /></label>
+                        <label>Name<input value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} autoFocus placeholder="e.g. Assisted pull-up" /></label>
+                        <label>Track by
+                          <select value={draft.preset} onChange={(event) => choosePreset(event.target.value as TrackingPreset)}>
+                            {presets.map((preset) => <option key={preset} value={preset}>{TRACKING_PRESET_LABELS[preset]}</option>)}
+                          </select>
+                        </label>
                       </>
                     )}
 
@@ -217,6 +333,15 @@ export function LibraryPage({ database, onAddExercise }: Props) {
                         <h3>Where does it live?</h3>
                         <label>Day<select value={draft.day} onChange={(event) => updateDraft('day', event.target.value as DaySymbol)}><option>ψ</option><option>φ</option><option>π</option><option>&</option></select></label>
                         <label>Importance<select value={draft.importance} onChange={(event) => updateDraft('importance', event.target.value as Importance)}><option value="principal">Principal</option><option value="core">Core</option><option value="accessory">Accessory</option></select></label>
+                        {presentation.supportsEntryBasis && (
+                          <label>Load is entered
+                            <select value={draft.entryBasis} onChange={(event) => updateDraft('entryBasis', event.target.value as EntryBasis)}>
+                              <option value="total">Total</option>
+                              <option value="per_hand">Per hand</option>
+                              <option value="per_side">Per side</option>
+                            </select>
+                          </label>
+                        )}
                       </>
                     )}
 
@@ -225,9 +350,29 @@ export function LibraryPage({ database, onAddExercise }: Props) {
                         <p className="eyebrow">3 · Dose</p>
                         <h3>Set the starting point.</h3>
                         <div className="form-grid">
-                          <label>Planned load<input type="number" inputMode="decimal" step="0.5" min="0" value={draft.plannedLoad} onChange={(event) => updateDraft('plannedLoad', Number(event.target.value))} /></label>
-                          <label>Target reps<input type="number" inputMode="numeric" min="1" value={draft.targetReps} onChange={(event) => updateDraft('targetReps', Number(event.target.value))} /></label>
-                          <label>Progression step<input type="number" inputMode="decimal" step="0.5" min="0.5" value={draft.progressionStep} onChange={(event) => updateDraft('progressionStep', Number(event.target.value))} /></label>
+                          {presentation.requiresStartingValue && (
+                            <SuffixInput
+                              label={presentation.valueLabel}
+                              suffix={presentation.valueSuffix}
+                              value={draft.startingValue}
+                              step={0.5}
+                              onChange={(value) => updateDraft('startingValue', value)}
+                            />
+                          )}
+                          <SuffixInput
+                            label={presentation.targetLabel}
+                            suffix={presentation.targetSuffix}
+                            value={draft.targetValue}
+                            step={tracking.metric === 'distance' ? 10 : 1}
+                            onChange={(value) => updateDraft('targetValue', value)}
+                          />
+                          <SuffixInput
+                            label={presentation.progressionLabel}
+                            suffix={presentation.progressionSuffix}
+                            value={draft.progressionStep}
+                            step={tracking.metric === 'distance' ? 10 : tracking.metric === 'load_reps' ? 0.5 : 1}
+                            onChange={(value) => updateDraft('progressionStep', value)}
+                          />
                         </div>
                       </>
                     )}
@@ -239,8 +384,11 @@ export function LibraryPage({ database, onAddExercise }: Props) {
                         <dl className="exercise-review">
                           <div><dt>Day</dt><dd>{draft.day}</dd></div>
                           <div><dt>Role</dt><dd>{draft.importance}</dd></div>
-                          <div><dt>Start</dt><dd>{draft.plannedLoad} kg × {draft.targetReps}</dd></div>
-                          <div><dt>Step</dt><dd>+{draft.progressionStep} kg</dd></div>
+                          <div><dt>Tracking</dt><dd>{TRACKING_PRESET_LABELS[draft.preset]}</dd></div>
+                          <div><dt>Entry</dt><dd>{presentation.supportsEntryBasis ? entryBasisLabel(draft.entryBasis) : relationshipLabel(tracking.loadRelationship)}</dd></div>
+                          {presentation.requiresStartingValue && <div><dt>{presentation.valueLabel}</dt><dd>{draft.startingValue} {presentation.valueSuffix}</dd></div>}
+                          <div><dt>{presentation.targetLabel}</dt><dd>{draft.targetValue} {presentation.targetSuffix}</dd></div>
+                          <div><dt>{presentation.progressionLabel}</dt><dd>{draft.progressionStep} {presentation.progressionSuffix}</dd></div>
                         </dl>
                         <p className="muted">Creating this slot makes routine v{routine.version + 1}.</p>
                       </>
@@ -254,7 +402,7 @@ export function LibraryPage({ database, onAddExercise }: Props) {
                   {step < guidedSteps.length - 1 ? (
                     <button className="primary-action compact" type="button" onClick={() => moveStep(1)}>Next</button>
                   ) : (
-                    <button className="primary-action compact" type="button" disabled={saving} onClick={() => save({ ...draft, name: draft.name.trim() })}>{saving ? 'Creating…' : 'Create routine version'}</button>
+                    <button className="primary-action compact" type="button" disabled={saving} onClick={() => save(buildInput())}>{saving ? 'Creating…' : 'Create routine version'}</button>
                   )}
                 </footer>
               </>
@@ -264,7 +412,7 @@ export function LibraryPage({ database, onAddExercise }: Props) {
                 <textarea
                   value={jsonValue}
                   onChange={(event) => setJsonValue(event.target.value)}
-                  placeholder={'{"name":"Cable fly","day":"ψ","importance":"accessory","plannedLoad":10,"targetReps":8,"progressionStep":1}'}
+                  placeholder={'{"name":"Assisted pull-up","day":"π","importance":"principal","trackingPreset":"assisted_bodyweight","startingValue":35,"targetValue":6,"progressionStep":2.5}'}
                   spellCheck={false}
                   autoCapitalize="off"
                 />
