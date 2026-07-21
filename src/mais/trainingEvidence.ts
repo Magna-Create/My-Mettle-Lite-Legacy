@@ -5,7 +5,7 @@ import type { AppDatabase, Experiment, Exercise, RoutineVersion, Session, Sessio
 import { deriveComparableExposure } from './comparableExposureEngine';
 import type { MaisRoleRequest } from './contracts';
 import { NativeMaisEmbeddingRuntime } from './embeddingRuntime';
-import { buildInvestigationCandidates, type MaisInvestigationCandidate } from './investigationSelector';
+import { selectMaisInvestigationCandidates, type MaisInvestigationCandidate } from './investigationSelector';
 import { resolveExerciseMuscleContributions } from './muscleOntology';
 import { buildTrainingSemanticDocuments } from './semanticDocuments';
 import { MaisSemanticRetrievalService, semanticDocumentSetFingerprint } from './semanticRetrievalService';
@@ -249,7 +249,7 @@ export function compileTrainingEvidence(database: AppDatabase, request: MaisRole
       || exerciseIds.has(experiment.exerciseId)
       || sessions.some((session) => experiment.testedSessionId === session.id)).map(experimentEvidence),
     recentBodyMeasurements: database.bodyMeasurements.slice(-3),
-    investigationCandidates: buildInvestigationCandidates(database).slice(0, 6),
+    investigationCandidates: selectMaisInvestigationCandidates(database).slice(0, 6),
     semanticContext: null,
     warnings,
   };
