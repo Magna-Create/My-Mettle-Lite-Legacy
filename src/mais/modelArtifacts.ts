@@ -67,6 +67,8 @@ interface MaisModelImportPlugin {
   pickAndImport(options: {
     artifactId: string;
     fileName: string;
+    displayName: string;
+    expectedExtension: string;
     minimumBytes: number;
     maximumBytes: number;
   }): Promise<MaisModelArtifactStatus>;
@@ -88,12 +90,40 @@ const nativePlugin = registerPlugin<MaisModelRuntimePlugin>('MaisModelRuntime');
 const importPlugin = registerPlugin<MaisModelImportPlugin>('MaisModelImport');
 const registry = artifactsJson as MaisModelArtifactDefinition[];
 
+const embeddingGemmaTokenizer: MaisModelArtifactDefinition = {
+  artifactId: 'google.embeddinggemma.sentencepiece-tokenizer',
+  modelId: 'google.embeddinggemma',
+  displayName: 'EmbeddingGemma tokenizer',
+  runtime: 'sentencepiece',
+  runtimeVersion: 'model-file',
+  backendCandidates: [],
+  defaultBackend: 'none',
+  roleSlots: ['tokenizer'],
+  contextTokens: 0,
+  sourceRepository: 'litert-community/embeddinggemma-300m',
+  sourceRevision: 'main',
+  downloadUrl: '',
+  fileName: 'sentencepiece.model',
+  format: '.model',
+  approximateBytes: 4_700_000,
+  integrityMode: 'manual',
+  sha256: '',
+  licence: 'Gemma licence — user acceptance required on Hugging Face',
+  downloadPolicy: 'manual',
+  status: 'access_required',
+  notes: 'Tokenizer required to convert text into the token IDs consumed by the imported EmbeddingGemma TFLite model.',
+};
+
 export function getMaisModelArtifacts(): MaisModelArtifactDefinition[] {
   return structuredClone(registry);
 }
 
 export function getMaisGenerativeArtifacts(): MaisModelArtifactDefinition[] {
   return getMaisModelArtifacts().filter((artifact) => artifact.runtime === 'litert-lm');
+}
+
+export function getEmbeddingGemmaTokenizerArtifact(): MaisModelArtifactDefinition {
+  return structuredClone(embeddingGemmaTokenizer);
 }
 
 export function getFirstMaisRuntimeArtifact(): MaisModelArtifactDefinition {
@@ -170,14 +200,18 @@ export async function importMaisModelArtifact(
   artifact: MaisModelArtifactDefinition,
 ): Promise<MaisModelArtifactStatus> {
   requireNative();
-  if (artifact.downloadPolicy !== 'manual' || artifact.format !== '.tflite') {
+  if (artifact.downloadPolicy !== 'manual' || !['.tflite', '.model', '.litertlm'].includes(artifact.format)) {
     throw new Error(`${artifact.displayName} is not configured for local-file import.`);
   }
-  const minimumBytes = Math.max(32 * 1024 * 1024, Math.floor(artifact.approximateBytes * 0.5));
-  const maximumBytes = Math.ceil(artifact.approximateBytes * 2);
+  const minimumRatio = artifact.format === '.model' ? 0.2 : 0.5;
+  const minimumFloor = artifact.format === '.model' ? 512 * 1024 : 32 * 1024 * 1024;
+  const minimumBytes = Math.max(minimumFloor, Math.floor(artifact.approximateBytes * minimumRatio));
+  const maximumBytes = Math.max(minimumBytes, Math.ceil(artifact.approximateBytes * 2.5));
   return importPlugin.pickAndImport({
     artifactId: artifact.artifactId,
     fileName: artifact.fileName,
+    displayName: artifact.displayName,
+    expectedExtension: artifact.format,
     minimumBytes,
     maximumBytes,
   });
