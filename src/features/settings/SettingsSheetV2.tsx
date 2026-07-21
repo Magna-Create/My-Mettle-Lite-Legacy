@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import type { AppDatabase, AppSettings } from '../../domain/model';
+import type { MaisResourceMode } from '../../mais/contracts';
+import type { MaisSystemSnapshot } from '../../mais/systemState';
+import { MaisActivityPanel } from '../lab/MaisActivityPanel';
 import { MaisRuntimeLabPanel } from '../lab/MaisRuntimeLabPanel';
 import { DataSettingsPanel } from './DataSettingsPanel';
 import { EmbeddingGemmaImportPanel } from './EmbeddingGemmaImportPanel';
@@ -8,12 +11,18 @@ import './intelligence-settings.css';
 
 interface Props {
   database: AppDatabase;
+  maisSnapshot: MaisSystemSnapshot | null;
+  maisResourceMode: MaisResourceMode;
   onClose: () => void;
   onReset: () => Promise<void>;
   onUpdateSettings: (patch: { restTimer?: Partial<AppSettings['restTimer']> }) => Promise<void>;
+  onRunMaisDemo: () => Promise<void>;
+  onPulseMais: () => Promise<void>;
+  onClearMais: () => Promise<void>;
+  onExportMaisReport: () => void;
 }
 
-type Screen = 'root' | 'workout' | 'timer' | 'intelligence' | 'models' | 'data';
+type Screen = 'root' | 'workout' | 'timer' | 'intelligence' | 'models' | 'activity' | 'data';
 
 const titles: Record<Screen, string> = {
   root: 'Settings',
@@ -21,6 +30,7 @@ const titles: Record<Screen, string> = {
   timer: 'Rest timer',
   intelligence: 'Intelligence',
   models: 'Local models',
+  activity: 'Activity & diagnostics',
   data: 'Data',
 };
 
@@ -29,6 +39,7 @@ const parentScreen: Record<Exclude<Screen, 'root'>, Screen> = {
   timer: 'workout',
   intelligence: 'root',
   models: 'intelligence',
+  activity: 'intelligence',
   data: 'root',
 };
 
@@ -36,9 +47,20 @@ function Row({ title, detail, onClick }: { title: string; detail: string; onClic
   return <button className="settings-navigation-row" type="button" onClick={onClick}><span><strong>{title}</strong><small>{detail}</small></span><i>›</i></button>;
 }
 
-export function SettingsSheetV2({ database, onClose, onReset, onUpdateSettings }: Props) {
+export function SettingsSheetV2({
+  database,
+  maisSnapshot,
+  maisResourceMode,
+  onClose,
+  onReset,
+  onUpdateSettings,
+  onRunMaisDemo,
+  onPulseMais,
+  onClearMais,
+  onExportMaisReport,
+}: Props) {
   const [screen, setScreen] = useState<Screen>('root');
-  const wide = screen === 'models';
+  const wide = screen === 'models' || screen === 'activity';
 
   return <div className="modal-backdrop settings-backdrop" onMouseDown={onClose}>
     <aside className={`settings-sheet ${wide ? 'is-intelligence-wide' : ''}`} onMouseDown={(event) => event.stopPropagation()}>
@@ -46,7 +68,7 @@ export function SettingsSheetV2({ database, onClose, onReset, onUpdateSettings }
 
       {screen === 'root' && <nav className="settings-navigation">
         <Row title="Workout" detail="Rest timer and workout behaviour" onClick={() => setScreen('workout')} />
-        <Row title="Intelligence" detail="Local models, imports and runtime diagnostics" onClick={() => setScreen('intelligence')} />
+        <Row title="Intelligence" detail="Local models, routing and diagnostics" onClick={() => setScreen('intelligence')} />
         <Row title="Data" detail="Export, restore and reset" onClick={() => setScreen('data')} />
       </nav>}
 
@@ -56,10 +78,12 @@ export function SettingsSheetV2({ database, onClose, onReset, onUpdateSettings }
 
       {screen === 'intelligence' && <nav className="settings-navigation">
         <Row title="Local models" detail="Install, import, benchmark and remove model artefacts" onClick={() => setScreen('models')} />
+        <Row title="Activity & diagnostics" detail="Heartbeat, role execution, task ledger and report export" onClick={() => setScreen('activity')} />
       </nav>}
 
       {screen === 'timer' && <TimerSettingsPanel timer={database.settings.restTimer} onUpdate={(patch) => onUpdateSettings({ restTimer: patch })} />}
       {screen === 'models' && <div className="intelligence-settings-stack"><EmbeddingGemmaImportPanel /><MaisRuntimeLabPanel /></div>}
+      {screen === 'activity' && <MaisActivityPanel snapshot={maisSnapshot} resourceMode={maisResourceMode} onRunDemo={onRunMaisDemo} onPulse={onPulseMais} onClear={onClearMais} onExportReport={onExportMaisReport} />}
       {screen === 'data' && <DataSettingsPanel database={database} onReset={onReset} />}
     </aside>
   </div>;
