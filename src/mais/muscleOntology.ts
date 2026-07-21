@@ -1,6 +1,6 @@
 import type { Exercise } from '../domain/model';
 
-export const MAIS_MUSCLE_ONTOLOGY_VERSION = 1;
+export const MAIS_MUSCLE_ONTOLOGY_VERSION = 1 as const;
 
 export type MaisBodyRegion = 'chest' | 'back' | 'shoulders' | 'arms' | 'core' | 'hips' | 'legs' | 'calves';
 export type MaisMuscleNodeKind = 'region_group' | 'muscle_group' | 'muscle';
@@ -107,9 +107,12 @@ export function normaliseMuscleContributions(
   const values = [...merged.values()].filter((contribution) => contribution.weight > 0);
   const total = values.reduce((sum, contribution) => sum + contribution.weight, 0);
   if (total <= 0) return [];
-  return values
-    .map((contribution) => ({ ...contribution, weight: contribution.weight / total, ontologyVersion: MAIS_MUSCLE_ONTOLOGY_VERSION }))
-    .sort((left, right) => right.weight - left.weight || left.muscleId.localeCompare(right.muscleId));
+  const normalisedContributions: MaisExerciseMuscleContribution[] = values.map((contribution) => ({
+    ...contribution,
+    weight: contribution.weight / total,
+    ontologyVersion: MAIS_MUSCLE_ONTOLOGY_VERSION,
+  }));
+  return normalisedContributions.sort((left, right) => right.weight - left.weight || left.muscleId.localeCompare(right.muscleId));
 }
 
 export function resolveExerciseMuscleContributions(exercise: Exercise): MaisResolvedExerciseMuscles {
