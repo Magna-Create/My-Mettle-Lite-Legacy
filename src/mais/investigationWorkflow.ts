@@ -44,6 +44,12 @@ function completeWithoutFurtherAnalysis(state: MaisState, taskId: string, now: s
   task.status = 'completed';
   task.checkpointId = undefined;
   task.updatedAt = now;
+  const episode = [...state.episodes].reverse().find((candidate) => candidate.taskId === taskId && candidate.status === 'running');
+  if (episode) {
+    episode.status = 'completed';
+    episode.endedAt = now;
+    episode.terminationReason = 'task_complete';
+  }
   for (const event of taskEvents(state, taskId)) {
     if (!event.processedByTaskIds.includes(taskId)) event.processedByTaskIds.push(taskId);
   }
