@@ -3,6 +3,7 @@ import type { MaisArtifactDraft, MaisArtifactKind, MaisRole, MaisRoleRequest, Ma
 import { runMaisLiteRtPrompt, type MaisLiteRtBackend, type MaisLiteRtRunResult } from './liteRtRuntime';
 import { getMaisGenerativeArtifacts, readMaisModelArtifactStatus, type MaisModelArtifactDefinition, type MaisModelArtifactStatus } from './modelArtifacts';
 import { selectMaisModel } from './modelLeases';
+import { IndexedDbMaisTrainingEvidenceProvider, type MaisTrainingEvidencePacket, type MaisTrainingEvidenceProvider } from './trainingEvidence';
 
 const artifactKindByRole: Record<MaisRole, MaisArtifactKind> = {
   governor: 'plan',
@@ -48,6 +49,8 @@ const defaultRuntime: MaisNativeRoleRuntime = {
   run: runMaisLiteRtPrompt,
 };
 
+const defaultEvidenceProvider = new IndexedDbMaisTrainingEvidenceProvider();
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -64,8 +67,8 @@ function normaliseJsonText(value: string): string {
   return withoutFence.slice(first, last + 1);
 }
 
-function knownProvenanceRefs(request: MaisRoleRequest): Set<string> {
-  const refs = new Set<string>([request.task.id, request.step.id]);
+function knownProvenanceRefs(request: MaisRoleRequest, additionalRefs: string[] = []): Set<string> {
+  const refs = new Set<string>([request.task.id, request.step.id, ...additionalRefs]);
   if (request.checkpoint) refs.add(request.checkpoint.id);
   for (const event of request.triggerEvents) {
     refs.add(event.id);
@@ -78,7 +81,28 @@ function knownProvenanceRefs(request: MaisRoleRequest): Set<string> {
   return refs;
 }
 
-export function parseMaisNativeRoleOutput(raw: string, request: MaisRoleRequest): ParsedRoleOutput {
+function trainingEvidenceRefs(evidence: MaisTrainingEvidencePacket | null): string[] {
+  if (!evidence) return [];
+  return [...new Set([
+    ...evidence.directRefs,
+    ...evidence.sessions.flatMap((session) => [
+      session.id,
+      session.cycleId,
+      session.routineVersionId,
+      ...session.exercises.flatMap((exercise) => [exercise.sessionExerciseId, exercise.exerciseId, exercise.slotId, ...exercise.sets.map((set) => set.id)]),
+    ]),
+    ...evidence.exercises.map((exercise) => exercise.id),
+    ...evidence.routines.flatMap((routine) => [routine.id, ...routine.days.flatMap((day) => day.slots.map((slot) => slot.id))]),
+    ...evidence.experiments.map((experiment) => experiment.id),
+    ...evidence.recentBodyMeasurements.map((measurement) => measurement.id),
+  ])];
+}
+
+export function parseMaisNativeRoleOutput(
+  raw: string,
+  request: MaisRoleRequest,
+  additionalProvenanceRefs: string[] = [],
+): ParsedRoleOutput {
   const parsed = JSON.parse(normaliseJsonText(raw)) as unknown;
   if (!isPlainRecord(parsed)) throw new Error('The local model output is not an object.');
 
@@ -99,7 +123,7 @@ export function parseMaisNativeRoleOutput(raw: string, request: MaisRoleRequest)
   }
   if (!isPlainRecord(artifact.content)) throw new Error('The local model artefact content is invalid.');
 
-  const allowedRefs = knownProvenanceRefs(request);
+  const allowedRefs = knownProvenanceRefs(request, additionalProvenanceRefs);
   const requestedRefs = Array.isArray(artifact.provenanceRefs)
     ? artifact.provenanceRefs.filter((ref): ref is string => typeof ref === 'string')
     : [];
@@ -117,8 +141,68 @@ export function parseMaisNativeRoleOutput(raw: string, request: MaisRoleRequest)
   };
 }
 
-function compactRolePacket(request: MaisRoleRequest, maximumCharacters: number): string {
-  const base = {
+function reducedTrainingEvidence(evidence: MaisTrainingEvidencePacket | null): unknown {
+  if (!evidence) return null;
+  return {
+    generatedAt: evidence.generatedAt,
+    sourceDatabaseUpdatedAt: evidence.sourceDatabaseUpdatedAt,
+    directRefs: evidence.directRefs,
+    sessions: evidence.sessions.map((session) => ({
+      id: session.id,
+      day: session.day,
+      mode: session.mode,
+      status: session.status,
+      startedAt: session.startedAt,
+      completedAt: session.completedAt,
+      excludedFromInsights: session.excludedFromInsights,
+      bodyweightSnapshotKg: session.bodyweightSnapshotKg,
+      exercises: session.exercises.map((exercise) => ({
+        exerciseId: exercise.exerciseId,
+        name: exercise.name,
+        importance: exercise.importance,
+        tracking: exercise.tracking,
+        plannedLoad: exercise.plannedLoad,
+        status: exercise.status,
+        sets: exercise.sets,
+        reflection: exercise.reflection,
+      })),
+    })),
+    comparableExposures: Object.fromEntries(Object.entries(evidence.comparableExposures)
+      .map(([exerciseId, exposures]) => [exerciseId, exposures.slice(-3)])),
+    experiments: evidence.experiments,
+    warnings: evidence.warnings,
+  };
+}
+
+function minimalTrainingEvidence(evidence: MaisTrainingEvidencePacket | null): unknown {
+  if (!evidence) return null;
+  return {
+    sourceDatabaseUpdatedAt: evidence.sourceDatabaseUpdatedAt,
+    directRefs: evidence.directRefs,
+    sessions: evidence.sessions.map((session) => ({
+      id: session.id,
+      day: session.day,
+      mode: session.mode,
+      status: session.status,
+      completedAt: session.completedAt,
+      exercises: session.exercises.map((exercise) => ({
+        exerciseId: exercise.exerciseId,
+        name: exercise.name,
+        status: exercise.status,
+        completedWorkSets: exercise.sets.filter((set) => !set.warmUp).map((set) => ({ load: set.load, reps: set.reps, durationSeconds: set.durationSeconds, distanceMetres: set.distanceMetres })),
+        reflection: exercise.reflection,
+      })),
+    })),
+    warnings: evidence.warnings,
+  };
+}
+
+function compactRolePacket(
+  request: MaisRoleRequest,
+  evidence: MaisTrainingEvidencePacket | null,
+  maximumCharacters: number,
+): string {
+  const common = {
     task: {
       id: request.task.id,
       goal: request.task.goal,
@@ -146,35 +230,36 @@ function compactRolePacket(request: MaisRoleRequest, maximumCharacters: number):
       entityRefs: event.entityRefs,
       payload: event.payload,
     })),
-    priorArtifacts: request.taskArtifacts.slice(-8).map((artifact) => ({
-      id: artifact.id,
-      kind: artifact.kind,
-      createdBy: artifact.createdBy,
-      content: artifact.content,
-      provenanceRefs: artifact.provenanceRefs,
-    })),
   };
+  const priorArtifacts = request.taskArtifacts.slice(-8).map((artifact) => ({
+    id: artifact.id,
+    kind: artifact.kind,
+    createdBy: artifact.createdBy,
+    content: artifact.content,
+    provenanceRefs: artifact.provenanceRefs,
+  }));
 
-  let packet = JSON.stringify(base);
-  if (packet.length <= maximumCharacters) return packet;
+  const candidates = [
+    { ...common, priorArtifacts, trainingEvidence: evidence },
+    { ...common, priorArtifacts: priorArtifacts.slice(-3), trainingEvidence: reducedTrainingEvidence(evidence) },
+    {
+      ...common,
+      priorArtifacts: priorArtifacts.slice(-3).map((artifact) => ({ id: artifact.id, kind: artifact.kind, createdBy: artifact.createdBy, provenanceRefs: artifact.provenanceRefs })),
+      trainingEvidence: minimalTrainingEvidence(evidence),
+    },
+    {
+      ...common,
+      triggerEvents: common.triggerEvents.map((event) => ({ id: event.id, type: event.type, occurredAt: event.occurredAt, entityRefs: event.entityRefs })),
+      priorArtifacts: [],
+      trainingEvidence: evidence ? { directRefs: evidence.directRefs, warnings: [...evidence.warnings, 'Training evidence exceeded this model context and was reduced to references.'] } : null,
+    },
+  ];
 
-  const reduced = {
-    ...base,
-    priorArtifacts: base.priorArtifacts.slice(-3).map((artifact) => ({
-      id: artifact.id,
-      kind: artifact.kind,
-      createdBy: artifact.createdBy,
-      provenanceRefs: artifact.provenanceRefs,
-    })),
-    triggerEvents: base.triggerEvents.map((event) => ({
-      id: event.id,
-      type: event.type,
-      occurredAt: event.occurredAt,
-      entityRefs: event.entityRefs,
-    })),
-  };
-  packet = JSON.stringify(reduced);
-  return packet.length <= maximumCharacters ? packet : packet.slice(0, maximumCharacters);
+  for (const candidate of candidates) {
+    const packet = JSON.stringify(candidate);
+    if (packet.length <= maximumCharacters) return packet;
+  }
+  return JSON.stringify(candidates[candidates.length - 1]);
 }
 
 function roleSystemInstruction(role: MaisRole, artifactKind: MaisArtifactKind): string {
@@ -183,16 +268,21 @@ function roleSystemInstruction(role: MaisRole, artifactKind: MaisArtifactKind): 
     'Use only the supplied packet. Never invent training records, measurements, scientific claims or user approval.',
     'Do not execute changes. You may only create a typed Workbench artefact.',
     'Preserve uncertainty. A missing fact stays missing.',
+    'Separate observations from hypotheses and proposed next actions.',
     'Do not output hidden reasoning, chain-of-thought or a chat response.',
     `Return only one compact JSON object using this exact shape: {"status":"completed","summary":"...","artifact":{"kind":"${artifactKind}","content":{},"provenanceRefs":[]}}.`,
     'Provenance references must be copied exactly from IDs present in the packet.',
   ].join(' ');
 }
 
-function rolePrompt(request: MaisRoleRequest, artifact: MaisModelArtifactDefinition): { prompt: string; systemInstruction: string; maxNumTokens: number } {
+function rolePrompt(
+  request: MaisRoleRequest,
+  artifact: MaisModelArtifactDefinition,
+  evidence: MaisTrainingEvidencePacket | null,
+): { prompt: string; systemInstruction: string; maxNumTokens: number } {
   const artifactKind = artifactKindByRole[request.step.role];
   const maximumCharacters = Math.max(1_200, Math.floor(artifact.contextTokens * 4 * 0.55));
-  const packet = compactRolePacket(request, maximumCharacters);
+  const packet = compactRolePacket(request, evidence, maximumCharacters);
   return {
     systemInstruction: roleSystemInstruction(request.step.role, artifactKind),
     prompt: `Complete the current bounded role step. Required output schema: ${request.step.outputSchema}. Packet:\n${packet}`,
@@ -254,6 +344,7 @@ function toRoleResult(parsed: ParsedRoleOutput, runtime: MaisLiteRtRunResult): M
 export function createNativeMaisRoleRunner(
   fallback: MaisRoleRunner,
   runtime: MaisNativeRoleRuntime = defaultRuntime,
+  evidenceProvider: MaisTrainingEvidenceProvider = defaultEvidenceProvider,
 ): MaisRoleRunner {
   return {
     async run(request): Promise<MaisRoleResult> {
@@ -271,10 +362,11 @@ export function createNativeMaisRoleRunner(
         if (status.state !== 'ready') {
           return decorateFallback(await fallback.run(request), `${artifact.displayName} is not installed and verified.`, model.modelId);
         }
+        const evidence = await evidenceProvider.read(request);
         const backend = artifact.defaultBackend as MaisLiteRtBackend;
-        const result = await runtime.run(artifact, backend, rolePrompt(request, artifact));
+        const result = await runtime.run(artifact, backend, rolePrompt(request, artifact, evidence));
         if (!result.success) throw new Error(result.error ?? `${artifact.displayName} did not complete.`);
-        return toRoleResult(parseMaisNativeRoleOutput(result.output, request), result);
+        return toRoleResult(parseMaisNativeRoleOutput(result.output, request, trainingEvidenceRefs(evidence)), result);
       } catch (reason) {
         const message = reason instanceof Error ? reason.message : String(reason);
         return decorateFallback(await fallback.run(request), message, model.modelId);
