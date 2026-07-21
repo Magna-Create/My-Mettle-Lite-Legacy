@@ -39,6 +39,7 @@ export interface MaisModelArtifactStatus {
   availableBytes: number;
   modelPath?: string | null | undefined;
   actualSha256?: string | null | undefined;
+  sourceFileName?: string | null | undefined;
   cancelled?: boolean | undefined;
 }
 
@@ -62,6 +63,15 @@ interface MaisModelRuntimePlugin {
   ): Promise<PluginListenerHandle>;
 }
 
+interface MaisModelImportPlugin {
+  pickAndImport(options: {
+    artifactId: string;
+    fileName: string;
+    minimumBytes: number;
+    maximumBytes: number;
+  }): Promise<MaisModelArtifactStatus>;
+}
+
 interface ArtifactCall {
   artifactId: string;
   fileName: string;
@@ -75,6 +85,7 @@ interface DownloadCall extends ArtifactCall {
 }
 
 const nativePlugin = registerPlugin<MaisModelRuntimePlugin>('MaisModelRuntime');
+const importPlugin = registerPlugin<MaisModelImportPlugin>('MaisModelImport');
 const registry = artifactsJson as MaisModelArtifactDefinition[];
 
 export function getMaisModelArtifacts(): MaisModelArtifactDefinition[] {
@@ -152,6 +163,23 @@ export async function downloadMaisModelArtifact(
     ...callFor(artifact),
     downloadUrl: artifact.downloadUrl,
     approximateBytes: artifact.approximateBytes,
+  });
+}
+
+export async function importMaisModelArtifact(
+  artifact: MaisModelArtifactDefinition,
+): Promise<MaisModelArtifactStatus> {
+  requireNative();
+  if (artifact.downloadPolicy !== 'manual' || artifact.format !== '.tflite') {
+    throw new Error(`${artifact.displayName} is not configured for local-file import.`);
+  }
+  const minimumBytes = Math.max(32 * 1024 * 1024, Math.floor(artifact.approximateBytes * 0.5));
+  const maximumBytes = Math.ceil(artifact.approximateBytes * 2);
+  return importPlugin.pickAndImport({
+    artifactId: artifact.artifactId,
+    fileName: artifact.fileName,
+    minimumBytes,
+    maximumBytes,
   });
 }
 
