@@ -2,6 +2,7 @@ import { IndexedDbGymRepository } from '../adapters/storage/IndexedDbGymReposito
 import type { AppDatabase, Experiment, Exercise, RoutineVersion, Session, SessionExercise } from '../domain/model';
 import { deriveComparableExposure } from './comparableExposureEngine';
 import type { MaisRoleRequest } from './contracts';
+import { resolveExerciseMuscleContributions } from './muscleOntology';
 
 export interface MaisTrainingEvidenceProvider {
   read(request: MaisRoleRequest): Promise<MaisTrainingEvidencePacket | null>;
@@ -103,6 +104,7 @@ function exposureEvidence(session: Session, exercise: SessionExercise) {
 }
 
 function exerciseEvidence(exercise: Exercise) {
+  const muscles = resolveExerciseMuscleContributions(exercise);
   return {
     id: exercise.id,
     name: exercise.name,
@@ -112,6 +114,8 @@ function exerciseEvidence(exercise: Exercise) {
     progressionStep: exercise.progressionStep,
     essentialCue: exercise.essentialCue ?? null,
     memory: exercise.memory ?? null,
+    muscleContributions: muscles.contributions,
+    unresolvedMuscleLabels: muscles.unresolvedLabels,
     updatedAt: exercise.updatedAt,
   };
 }
