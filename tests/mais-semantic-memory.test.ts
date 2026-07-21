@@ -32,6 +32,10 @@ function document(): MaisSemanticDocument {
   };
 }
 
+function vector(first: number, second: number): number[] {
+  return [first, second, ...new Array(126).fill(0)];
+}
+
 describe('MAIS semantic memory', () => {
   it('creates stable provenance-linked chunks within the requested token budget', () => {
     const first = chunkSemanticDocument(document(), 64);
@@ -57,11 +61,10 @@ describe('MAIS semantic memory', () => {
     const allChunks = [...firstChunks, ...secondChunks];
     const embeddings = new Map(allChunks.map((chunk, index) => [
       chunk.id,
-      createEmbeddingRecord(chunk, index < firstChunks.length ? [1, 0] : [0.8, 0.2], 128),
+      createEmbeddingRecord(chunk, index < firstChunks.length ? vector(1, 0) : vector(0.8, 0.2), 128),
     ]));
-    for (const record of embeddings.values()) record.vector = Float32Array.from([record.vector[0] ?? 0, record.vector[1] ?? 0, ...new Array(126).fill(0)]);
 
-    const query = Float32Array.from([1, 0, ...new Array(126).fill(0)]);
+    const query = Float32Array.from(vector(1, 0));
     expect(cosineSimilarity(query, query)).toBeCloseTo(1);
     const ranked = rankSemanticChunks(query, allChunks, embeddings, { topK: 4, maximumPerDocument: 1 });
     expect(ranked).toHaveLength(2);
