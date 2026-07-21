@@ -1,4 +1,4 @@
-import type { MaisAnalysisRun } from './analysisSandbox';
+import type { MaisAnalysisInputSnapshot, MaisAnalysisProgram, MaisAnalysisRun } from './analysisSandbox';
 import { createMaisBeliefGraphState, type MaisBeliefGraphState } from './beliefGraph';
 import { createMaisCapabilityState, type MaisCapabilityState } from './capabilityProtocol';
 import type { MaisContextManifest } from './contextCompiler';
@@ -24,6 +24,8 @@ export interface MaisSystemSnapshot {
   beliefs: MaisBeliefGraphState;
   contextManifests: MaisContextManifest[];
   semanticManifests: MaisSemanticIndexManifest[];
+  analysisInputs: MaisAnalysisInputSnapshot[];
+  analysisPrograms: MaisAnalysisProgram[];
   analysisRuns: MaisAnalysisRun[];
   diagnostics: MaisDiagnosticRecord[];
   parentReviews: MaisParentReview[];
@@ -44,6 +46,8 @@ export function createMaisSystemSnapshot(now = new Date().toISOString()): MaisSy
     beliefs: createMaisBeliefGraphState(),
     contextManifests: [],
     semanticManifests: [],
+    analysisInputs: [],
+    analysisPrograms: [],
     analysisRuns: [],
     diagnostics: [],
     parentReviews: [],
@@ -71,6 +75,8 @@ export function normaliseMaisSystemSnapshot(value: unknown, now = new Date().toI
     beliefs: structuredClone(stored.beliefs ?? base.beliefs),
     contextManifests: structuredClone(stored.contextManifests ?? []),
     semanticManifests: structuredClone(stored.semanticManifests ?? []),
+    analysisInputs: structuredClone(stored.analysisInputs ?? []),
+    analysisPrograms: structuredClone(stored.analysisPrograms ?? []),
     analysisRuns: structuredClone(stored.analysisRuns ?? []),
     diagnostics: structuredClone(stored.diagnostics ?? []),
     parentReviews: structuredClone(stored.parentReviews ?? []),
