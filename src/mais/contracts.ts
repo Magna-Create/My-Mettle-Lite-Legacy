@@ -165,7 +165,7 @@ export interface MaisResourceSnapshot {
   isCharging: boolean;
   activeWorkoutInteraction: boolean;
   userPaused?: boolean | undefined;
-  availableMemoryMb?: number;
+  availableMemoryMb?: number | undefined;
   /** Retained for compatibility and telemetry only. Android/runtime throttling owns thermal policy in Phase 3A. */
   thermalState?: MaisThermalState | undefined;
   capturedAt: string;
