@@ -1,5 +1,4 @@
 import type { MaisArtifactKind, MaisRole, MaisRoleRunner } from './contracts';
-import { createNativeMaisRoleRunner } from './nativeRoleRunner';
 
 const artifactKindByRole: Record<MaisRole, MaisArtifactKind> = {
   governor: 'plan',
@@ -36,10 +35,10 @@ function createDeterministicFallbackRunner(): MaisRoleRunner {
 }
 
 /**
- * Historical name retained while Phase 3B transitions the Heart from simulation to installed local
- * models. Android uses a verified role model when available; tests, web and missing-model roles use
- * the deterministic fallback with the reason written into the resulting artefact.
+ * Model-free fallback used by web/tests and whenever an installed native model
+ * is unavailable or returns invalid output. Native inference is composed around
+ * this runner by AppV2; keeping this function pure prevents recursive retries.
  */
 export function createDeterministicMaisRoleRunner(): MaisRoleRunner {
-  return createNativeMaisRoleRunner(createDeterministicFallbackRunner());
+  return createDeterministicFallbackRunner();
 }
