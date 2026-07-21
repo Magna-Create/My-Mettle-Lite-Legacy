@@ -4,6 +4,8 @@ import { createMaisBeliefGraphState, type MaisBeliefGraphState } from './beliefG
 import type { MaisCapabilityState } from './capabilityProtocol';
 import type { MaisContextManifest } from './contextCompiler';
 import type { MaisState } from './contracts';
+import { createMaisLabProposalState, type MaisLabProposalState } from './labProposalState';
+import { createMaisMemoryLedgerState, type MaisMemoryLedgerState } from './memoryLedger';
 import type { MaisModelLeaseState } from './modelLeases';
 import type { MaisReinforcementState } from './reinforcementLedger';
 import type { MaisResearchState } from './researchBroker';
@@ -30,6 +32,8 @@ export interface MaisReportCard {
   research: MaisResearchState;
   reinforcement: MaisReinforcementState;
   beliefs: MaisBeliefGraphState;
+  memories: MaisMemoryLedgerState;
+  labProposals: MaisLabProposalState;
   contextManifests: MaisContextManifest[];
   analysisInputs: MaisAnalysisInputSnapshot[];
   analysisPrograms: MaisAnalysisProgram[];
@@ -50,6 +54,9 @@ export interface MaisReportCard {
     contestedBeliefCount: number;
     unresolvedQuestionCount: number;
     rejectionMemoryCount: number;
+    activeMemoryCount: number;
+    readyLabProposalCount: number;
+    materialisedLabProposalCount: number;
     analysisInputCount: number;
     analysisProgramCount: number;
     analysisRunCount: number;
@@ -98,6 +105,8 @@ export function buildMaisReportCard(input: {
   research: MaisResearchState;
   reinforcement: MaisReinforcementState;
   beliefs?: MaisBeliefGraphState | undefined;
+  memories?: MaisMemoryLedgerState | undefined;
+  labProposals?: MaisLabProposalState | undefined;
   contextManifests: MaisContextManifest[];
   analysisInputs?: MaisAnalysisInputSnapshot[] | undefined;
   analysisPrograms?: MaisAnalysisProgram[] | undefined;
@@ -107,6 +116,8 @@ export function buildMaisReportCard(input: {
 }): MaisReportCard {
   const generatedAt = input.now ?? new Date().toISOString();
   const beliefs = input.beliefs ?? createMaisBeliefGraphState();
+  const memories = input.memories ?? createMaisMemoryLedgerState();
+  const labProposals = input.labProposals ?? createMaisLabProposalState();
   const analysisInputs = input.analysisInputs ?? [];
   const analysisPrograms = input.analysisPrograms ?? [];
   const card: MaisReportCard = {
@@ -120,6 +131,8 @@ export function buildMaisReportCard(input: {
     research: structuredClone(input.research),
     reinforcement: structuredClone(input.reinforcement),
     beliefs: structuredClone(beliefs),
+    memories: structuredClone(memories),
+    labProposals: structuredClone(labProposals),
     contextManifests: structuredClone(input.contextManifests),
     analysisInputs: structuredClone(analysisInputs),
     analysisPrograms: structuredClone(analysisPrograms),
@@ -140,6 +153,9 @@ export function buildMaisReportCard(input: {
       contestedBeliefCount: beliefs.beliefs.filter((belief) => belief.status === 'contested').length,
       unresolvedQuestionCount: beliefs.unresolvedQuestions.filter((question) => ['open', 'research_requested'].includes(question.status)).length,
       rejectionMemoryCount: beliefs.rejections.length,
+      activeMemoryCount: memories.records.filter((memory) => memory.status === 'active').length,
+      readyLabProposalCount: labProposals.proposals.filter((proposal) => proposal.status === 'ready').length,
+      materialisedLabProposalCount: labProposals.proposals.filter((proposal) => proposal.status === 'materialised').length,
       analysisInputCount: analysisInputs.length,
       analysisProgramCount: analysisPrograms.length,
       analysisRunCount: input.analysisRuns.length,
