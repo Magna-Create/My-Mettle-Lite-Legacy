@@ -32,9 +32,11 @@ import { SettingsSheet } from '../features/settings/SettingsSheet';
 import { ProfileSheetV2 } from '../features/settings/ProfileSheetV2';
 import { RestTimerOverlay, formatRestTime } from '../features/timer/RestTimerOverlay';
 import { useRestTimer } from '../features/timer/useRestTimer';
+import '../features/phase3-functional.css';
 import { MaisCoordinator } from '../mais/coordinator';
 import type { MaisResourceSnapshot } from '../mais/contracts';
 import { readMaisResourceSnapshot, subscribeMaisDeviceState } from '../mais/deviceState';
+import { materialiseMaisLabProposals } from '../mais/labProposalMaterialiser';
 import { createNativeMaisRoleRunner } from '../mais/nativeRoleRunner';
 import { deriveMaisResourceMode } from '../mais/resourceGovernor';
 import { exportMaisReportCard } from '../mais/reportCard';
@@ -100,8 +102,9 @@ export function AppV2() {
         maisReadyRef.current = true;
         const resources = await readMaisResourceSnapshot({ activeWorkoutInteraction: Boolean(databaseRef.current?.activeSessionId) });
         const foregrounded = await mais.ingest({ type: resources.appVisibility === 'foreground' ? 'app_foregrounded' : 'app_backgrounded' }, resources.capturedAt);
+        const reconciled = await reconcileMaisSnapshot(foregrounded);
         if (!cancelled) {
-          setMaisSnapshot(foregrounded);
+          setMaisSnapshot(reconciled);
           setMaisResources(resources);
         }
         dispose = await subscribeMaisDeviceState((state) => {
@@ -114,7 +117,7 @@ export function AppV2() {
             const next = await mais.ingest({ type: state.appVisibility === 'foreground' ? 'app_foregrounded' : 'app_backgrounded' }, state.capturedAt);
             if (!cancelled) {
               setMaisResources(nextResources);
-              setMaisSnapshot(next);
+              setMaisSnapshot(await reconcileMaisSnapshot(next));
             }
           })();
         });
@@ -145,7 +148,7 @@ export function AppV2() {
         try {
           const resources = await readMaisResourceSnapshot({ activeWorkoutInteraction: Boolean(databaseRef.current?.activeSessionId) });
           setMaisResources(resources);
-          setMaisSnapshot(await mais.pulse(resources));
+          setMaisSnapshot(await reconcileMaisSnapshot(await mais.pulse(resources)));
         } catch (reason) {
           setError(reason instanceof Error ? reason.message : 'The MAIS heartbeat failed.');
         }
@@ -174,6 +177,34 @@ export function AppV2() {
     return run((current) => service.persist(transform(current)));
   }
 
+  async function reconcileMaisSnapshot(next: MaisSystemSnapshot): Promise<MaisSystemSnapshot> {
+    let materialised: Array<{ proposalId: string; experimentId: string }> = [];
+    let diagnostics: string[] = [];
+    await run(async (current) => {
+      const result = materialiseMaisLabProposals(current, next.labProposals);
+      materialised = result.materialised;
+      diagnostics = result.diagnostics;
+      return result.database === current ? current : service.persist(result.database);
+    });
+
+    let reconciled = next;
+    if (materialised.length > 0) reconciled = await mais.markLabProposalsMaterialised(materialised);
+    if (diagnostics.length > 0) {
+      const known = new Set(reconciled.diagnostics.map((diagnostic) => diagnostic.message));
+      for (const message of diagnostics.filter((candidate) => !known.has(candidate))) {
+        reconciled = await mais.addDiagnostic({
+          category: 'capability',
+          severity: 'warning',
+          message,
+          refs: [],
+          recordedAt: new Date().toISOString(),
+          data: { source: 'lab_proposal_materialiser' },
+        });
+      }
+    }
+    return reconciled;
+  }
+
   const handleProgressState = useCallback((progress: number, condensed: boolean) => {
     setTrainProgress((current) => current.progress === progress && current.condensed === condensed ? current : { progress, condensed });
   }, []);
@@ -186,7 +217,7 @@ export function AppV2() {
 
   async function pulseMaisOnce(): Promise<void> {
     const resources = await currentMaisResources();
-    setMaisSnapshot(await mais.pulse(resources));
+    setMaisSnapshot(await reconcileMaisSnapshot(await mais.pulse(resources)));
   }
 
   async function runMaisDemo(): Promise<void> {
@@ -197,7 +228,7 @@ export function AppV2() {
       payload: { synthetic: true, purpose: 'Phase 3 native role verification' },
     }, eventTime);
     const resources = await currentMaisResources();
-    setMaisSnapshot(await mais.runUntilSettled(resources, 8));
+    setMaisSnapshot(await reconcileMaisSnapshot(await mais.runUntilSettled(resources, 12)));
   }
 
   async function clearMais(): Promise<void> {
@@ -233,9 +264,9 @@ export function AppV2() {
 
   async function importResearchReport(content: string): Promise<void> {
     try {
-      setMaisSnapshot(await mais.importResearchReport(content));
+      await mais.importResearchReport(content);
       const resources = await currentMaisResources();
-      setMaisSnapshot(await mais.runUntilSettled(resources, 8));
+      setMaisSnapshot(await reconcileMaisSnapshot(await mais.runUntilSettled(resources, 12)));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'The cited research report could not be imported.');
       throw reason;
@@ -255,7 +286,47 @@ export function AppV2() {
     const occurredAt = new Date().toISOString();
     await mais.ingest({ type: 'session_completed', entityRefs: [sessionId], payload: { sessionId } }, occurredAt);
     const resources = await currentMaisResources();
-    setMaisSnapshot(await mais.pulse(resources));
+    setMaisSnapshot(await reconcileMaisSnapshot(await mais.pulse(resources)));
+  }
+
+  async function rejectExperiment(experimentId: string): Promise<void> {
+    const currentDatabase = databaseRef.current;
+    const experiment = currentDatabase?.experiments.find((candidate) => candidate.id === experimentId);
+    const sourceProposal = maisSnapshot?.labProposals.proposals.find((proposal) => proposal.materialisedExperimentId === experimentId || `experiment_${proposal.id}` === experimentId);
+    await run((current) => service.rejectExperiment(current, experimentId));
+    const next = await mais.ingest({
+      type: 'user_rejected_proposal',
+      entityRefs: [experimentId, ...(sourceProposal?.provenanceRefs ?? [])],
+      payload: {
+        proposalId: sourceProposal?.id,
+        domain: 'training_experiment',
+        scope: sourceProposal?.exerciseId ?? experiment?.exerciseId ?? experimentId,
+        reason: experiment?.status === 'ready_for_decision' ? 'Kept the current baseline after the completed experiment.' : 'Dismissed in Lab before activation.',
+        proposal: sourceProposal ?? experiment ?? { experimentId },
+        requiredNewEvidence: sourceProposal?.successCriteria ?? [],
+        evidenceRefsAtRejection: sourceProposal?.provenanceRefs ?? [],
+      },
+    });
+    setMaisSnapshot(await reconcileMaisSnapshot(next));
+  }
+
+  async function rejectPendingProposal(proposalId: string): Promise<void> {
+    const proposal = maisSnapshot?.labProposals.proposals.find((candidate) => candidate.id === proposalId);
+    if (!proposal) return;
+    const next = await mais.ingest({
+      type: 'user_rejected_proposal',
+      entityRefs: [proposal.id, ...proposal.provenanceRefs],
+      payload: {
+        proposalId: proposal.id,
+        domain: 'training_experiment',
+        scope: proposal.exerciseId,
+        reason: 'Dismissed before a Lab experiment was created.',
+        proposal,
+        requiredNewEvidence: proposal.successCriteria,
+        evidenceRefsAtRejection: proposal.provenanceRefs,
+      },
+    });
+    setMaisSnapshot(next);
   }
 
   function navigate(nextTab: Tab) {
@@ -281,10 +352,10 @@ export function AppV2() {
     <header className={`top-bar ${showHeaderProgress ? 'has-session-progress' : ''}`} style={headerStyle}><span className="top-progress-fill" aria-hidden="true" /><button className="wordmark" onClick={() => navigate('brief')} aria-label="Open Brief"><span>MY METTLE</span></button><div className="header-context">{restTimer.state?.minimized ? <button className={`header-rest-pill ${restTimer.state.completed ? 'is-complete' : ''}`} type="button" onClick={restTimer.expand}><span>{restTimer.state.completed ? 'Ready' : restTimer.state.paused ? 'Paused' : 'Rest'}</span><strong>{formatRestTime(restTimer.state.remainingSeconds)}</strong></button> : <span className="header-page-title">{headerLabel}</span>}</div><div className="top-actions"><button className="header-icon-button" aria-label="Open settings" onClick={() => setSettingsOpen(true)}><span aria-hidden="true">⚙</span></button><button className="profile-button" aria-label="Open profile" onClick={() => setProfileOpen(true)}>{database.profile.displayName.slice(0, 1).toUpperCase()}</button></div></header>
     {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError(null)}>Dismiss</button></div>}
     <div className="page-stack">
-      <section hidden={tab !== 'brief'}><BriefPage database={database} onBeginSession={async (day: DaySymbol, mode: Mode) => { await run((current) => service.beginSession(current, day, mode)); setTab('train'); }} /></section>
+      <section hidden={tab !== 'brief'}><BriefPage database={database} maisSnapshot={maisSnapshot} onBeginSession={async (day: DaySymbol, mode: Mode) => { await run((current) => service.beginSession(current, day, mode)); setTab('train'); }} /></section>
       <section hidden={tab !== 'train'}><TrainPage database={database} onGoBrief={() => navigate('brief')} onProgressState={handleProgressState} onStartRest={restTimer.start} onAddSet={(sessionId, exerciseId) => apply((current) => addSessionSet(current, sessionId, exerciseId))} onRemoveSet={(sessionId, exerciseId, setId) => apply((current) => removeSessionSet(current, sessionId, exerciseId, setId))} onUpdateExercise={(exerciseId, patch) => apply((current) => updateExerciseRecord(current, exerciseId, patch))} onSaveReflection={(sessionId, exerciseId, input) => apply((current) => saveExerciseReflection(current, sessionId, exerciseId, input))} onUpdateSet={(sessionId, exerciseId, setId, patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>) => run((current) => service.updateSet(current, sessionId, exerciseId, setId, patch))} onCompleteExercise={(sessionId, exerciseId) => run((current) => service.completeExercise(current, sessionId, exerciseId))} onCompleteSession={async (sessionId) => { restTimer.dismiss(); await run((current) => service.completeSession(current, sessionId)); await recordCompletedSession(sessionId); setTab('progress'); }} /></section>
-      <section hidden={tab !== 'progress'}><ProgressPage database={database} /></section>
-      <section hidden={tab !== 'lab'}><LabPage database={database} onActivate={(id) => run((current) => service.activateExperiment(current, id))} onReject={async (id) => { await run((current) => service.rejectExperiment(current, id)); setMaisSnapshot(await mais.ingest({ type: 'user_rejected_proposal', entityRefs: [id] })); }} onPromote={async (id) => { await run((current) => service.promoteExperiment(current, id)); const routineId = databaseRef.current?.currentRoutineVersionId; if (routineId) setMaisSnapshot(await mais.ingest({ type: 'routine_version_created', entityRefs: [routineId], payload: { sourceExperimentId: id } })); }} /></section>
+      <section hidden={tab !== 'progress'}><ProgressPage database={database} maisSnapshot={maisSnapshot} /></section>
+      <section hidden={tab !== 'lab'}><LabPage database={database} maisSnapshot={maisSnapshot} onActivate={(id) => run((current) => service.activateExperiment(current, id))} onReject={rejectExperiment} onRejectPendingProposal={rejectPendingProposal} onPromote={async (id) => { await run((current) => service.promoteExperiment(current, id)); const routineId = databaseRef.current?.currentRoutineVersionId; if (routineId) setMaisSnapshot(await mais.ingest({ type: 'routine_version_created', entityRefs: [routineId], payload: { sourceExperimentId: id } })); }} /></section>
       <section hidden={tab !== 'library'}><LibraryPage database={database} externalDiscardToken={routineEditDiscardToken} onEditStateChange={setRoutineEditState} onCommitRoutineEdit={(draft: RoutineEditDraft) => apply((current) => commitRoutineEditDraft(current, draft))} onAddExercise={(input: AddExerciseInput) => run((current) => service.addExerciseToRoutine(current, input))} onReorderSlot={(slotId, direction) => apply((current) => reorderRoutineSlot(current, slotId, direction))} onMoveSlot={(slotId, day) => apply((current) => moveRoutineSlot(current, slotId, day))} onRemoveSlot={(slotId) => apply((current) => removeRoutineSlotWithArchive(current, slotId))} onUpdateSlot={(slotId, patch: RoutineSlotPatch) => apply((current) => updateRoutineSlot(current, slotId, patch))} onUpdateExercise={(exerciseId, patch: ExerciseRecordPatch) => apply((current) => updateExerciseRecord(current, exerciseId, patch))} onArchiveExercise={(exerciseId) => apply((current) => archiveExercise(current, exerciseId))} onRestoreExercise={(exerciseId) => apply((current) => restoreArchivedExercise(current, exerciseId))} /></section>
     </div>
     <nav className="bottom-nav" aria-label="Primary navigation">{tabs.map((item) => <button key={item} data-active={tab === item} aria-label={tabLabels[item]} title={tabLabels[item]} onClick={() => navigate(item)}><NavIcon name={item} /></button>)}</nav>
