@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(RestTimerNotificationsPlugin.class);
+        registerPlugin(MaisDeviceStatePlugin.class);
         super.onCreate(savedInstanceState);
     }
 
@@ -15,11 +16,13 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         AppVisibility.setForeground(true);
+        MaisDeviceStatePlugin.notifyVisibilityChanged();
     }
 
     @Override
     public void onPause() {
         AppVisibility.setForeground(false);
+        MaisDeviceStatePlugin.notifyVisibilityChanged();
         super.onPause();
     }
 }
