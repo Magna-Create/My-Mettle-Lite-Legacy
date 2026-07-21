@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MaisDeviceStatePlugin.class);
         registerPlugin(MaisModelRuntimePlugin.class);
         registerPlugin(MaisReportExportPlugin.class);
+        registerPlugin(MaisLiteRtRuntimePlugin.class);
         super.onCreate(savedInstanceState);
     }
 
