@@ -1,16 +1,27 @@
 import { createId } from '../domain/ids';
 import { reduceMaisAnalysisArtifact } from './analysisArtifactReducer';
 import { reduceMaisBeliefArtifact } from './beliefArtifactReducer';
+import { addMaisUnresolvedQuestion } from './beliefGraph';
 import type { MaisEventInput, MaisResourceSnapshot, MaisRoleRunner } from './contracts';
 import { ingestMaisEvent, pulseMais } from './heart';
-import { MaisModelLeaseManager, SimulatedMaisModelRuntime, type MaisModelRuntimeAdapter } from './modelLeases';
-import { reduceMaisResearchArtifact } from './researchArtifactReducer';
 import {
-  MaisResearchBroker,
-  type MaisResearchReportEnvelope,
-} from './researchBroker';
+  markMaisLabProposalMaterialised,
+  markMaisLabProposalRejected,
+  reduceMaisLabProposalArtifact,
+} from './labProposalState';
+import { reduceMaisMemoryArtifact } from './memoryLedger';
+import { MaisModelLeaseManager, SimulatedMaisModelRuntime, type MaisModelRuntimeAdapter } from './modelLeases';
+import { reduceMaisRejectionEvent } from './rejectionEventReducer';
+import { reduceMaisResearchArtifact } from './researchArtifactReducer';
+import { MaisResearchBroker, type MaisResearchReportEnvelope } from './researchBroker';
 import type { MaisRepository } from './repository';
-import { buildMaisReportCard, parseMaisParentReview, type MaisDiagnosticRecord, type MaisParentReview, type MaisReportCard } from './reportCard';
+import {
+  buildMaisReportCard,
+  parseMaisParentReview,
+  type MaisDiagnosticRecord,
+  type MaisParentReview,
+  type MaisReportCard,
+} from './reportCard';
 import { createMaisSystemSnapshot, type MaisSystemSnapshot } from './systemState';
 
 function timestamp(value?: string): string {
@@ -47,8 +58,30 @@ export class MaisCoordinator {
   async ingest(input: MaisEventInput, now?: string): Promise<MaisSystemSnapshot> {
     await this.enqueue(async () => {
       const current = this.requireSnapshot();
-      current.heart = ingestMaisEvent(current.heart, input, timestamp(now));
-      current.updatedAt = timestamp(now);
+      const recordedAt = timestamp(now);
+      current.heart = ingestMaisEvent(current.heart, input, recordedAt);
+      const event = current.heart.events[current.heart.events.length - 1];
+      if (event?.type === 'user_rejected_proposal') {
+        const rejection = reduceMaisRejectionEvent(current.beliefs, event);
+        current.beliefs = rejection.state;
+        const proposalId = typeof event.payload.proposalId === 'string' ? event.payload.proposalId : null;
+        if (proposalId && current.labProposals.proposals.some((proposal) => proposal.id === proposalId)) {
+          current.labProposals = markMaisLabProposalRejected(current.labProposals, proposalId, recordedAt);
+        }
+        current.diagnostics.push({
+          id: createId('mais_diagnostic'),
+          category: 'belief',
+          severity: rejection.applied ? 'info' : 'warning',
+          message: rejection.applied
+            ? 'The rejected proposal was added to durable rejection memory.'
+            : (rejection.diagnostic ?? 'The rejected proposal could not be reduced into rejection memory.'),
+          refs: [event.id, ...event.entityRefs],
+          recordedAt,
+          data: { proposalId, eventType: event.type },
+        });
+      }
+      current.updatedAt = recordedAt;
+      current.diagnostics = current.diagnostics.slice(-500);
       await this.repository.save(current);
     });
     return this.snapshot();
@@ -130,6 +163,70 @@ export class MaisCoordinator {
           });
         }
 
+        const memoryReduction = reduceMaisMemoryArtifact(current.memories, artifact);
+        current.memories = memoryReduction.state;
+        for (const question of memoryReduction.unresolvedQuestions) {
+          try {
+            current.beliefs = addMaisUnresolvedQuestion(current.beliefs, {
+              domain: question.domain,
+              question: question.question,
+              beliefIds: [],
+              priority: question.priority,
+              requiredEvidence: question.requiredEvidence,
+              createdByTaskId: artifact.taskId,
+            }, resources.capturedAt);
+          } catch (reason) {
+            memoryReduction.diagnostics.push(reason instanceof Error ? reason.message : String(reason));
+          }
+        }
+        if (memoryReduction.added.length > 0) {
+          current.diagnostics.push({
+            id: createId('mais_diagnostic'),
+            category: 'context',
+            severity: 'info',
+            message: `${memoryReduction.added.length} provenance-linked memory update${memoryReduction.added.length === 1 ? '' : 's'} stored.`,
+            refs: [artifact.id, ...memoryReduction.added.map((memory) => memory.id)],
+            recordedAt: resources.capturedAt,
+            data: { entityRefs: memoryReduction.added.map((memory) => memory.entityRef) },
+          });
+        }
+        for (const message of memoryReduction.diagnostics) {
+          current.diagnostics.push({
+            id: createId('mais_diagnostic'),
+            category: 'context',
+            severity: 'warning',
+            message,
+            refs: [artifact.id, artifact.taskId],
+            recordedAt: resources.capturedAt,
+            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+          });
+        }
+
+        const labReduction = reduceMaisLabProposalArtifact(current.labProposals, artifact);
+        current.labProposals = labReduction.state;
+        if (labReduction.proposal) {
+          current.diagnostics.push({
+            id: createId('mais_diagnostic'),
+            category: 'capability',
+            severity: 'info',
+            message: 'A validated reversible experiment proposal is ready to enter Lab.',
+            refs: [artifact.id, artifact.taskId, labReduction.proposal.id],
+            recordedAt: resources.capturedAt,
+            data: { exerciseId: labReduction.proposal.exerciseId, proposedLoad: labReduction.proposal.proposedLoad },
+          });
+        }
+        for (const message of labReduction.diagnostics) {
+          current.diagnostics.push({
+            id: createId('mais_diagnostic'),
+            category: 'capability',
+            severity: 'warning',
+            message,
+            refs: [artifact.id, artifact.taskId],
+            recordedAt: resources.capturedAt,
+            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+          });
+        }
+
         const researchReduction = reduceMaisResearchArtifact(current.research, artifact);
         current.research = researchReduction.state;
         if (researchReduction.dossier) {
@@ -159,6 +256,8 @@ export class MaisCoordinator {
       current.analysisInputs = current.analysisInputs.slice(-200);
       current.analysisPrograms = current.analysisPrograms.slice(-200);
       current.analysisRuns = current.analysisRuns.slice(-200);
+      current.memories.records = current.memories.records.slice(-2_000);
+      current.labProposals.proposals = current.labProposals.proposals.slice(-200);
       current.diagnostics.push({
         id: createId('mais_diagnostic'),
         category: 'heart',
@@ -181,6 +280,36 @@ export class MaisCoordinator {
       const action = this.requireSnapshot().lastPulseDecision?.action;
       if (!action || ['idle', 'deferred', 'waiting', 'failed'].includes(action)) break;
     }
+    return this.snapshot();
+  }
+
+  async markLabProposalsMaterialised(
+    values: Array<{ proposalId: string; experimentId: string }>,
+    now?: string,
+  ): Promise<MaisSystemSnapshot> {
+    if (values.length === 0) return this.snapshot();
+    await this.enqueue(async () => {
+      const current = this.requireSnapshot();
+      const recordedAt = timestamp(now);
+      for (const value of values) {
+        const proposal = current.labProposals.proposals.find((candidate) => candidate.id === value.proposalId);
+        if (!proposal || proposal.status === 'materialised') continue;
+        current.labProposals = markMaisLabProposalMaterialised(current.labProposals, value.proposalId, value.experimentId, recordedAt);
+      }
+      current.updatedAt = recordedAt;
+      await this.repository.save(current);
+    });
+    return this.snapshot();
+  }
+
+  async rejectLabProposal(proposalId: string, now?: string): Promise<MaisSystemSnapshot> {
+    await this.enqueue(async () => {
+      const current = this.requireSnapshot();
+      const recordedAt = timestamp(now);
+      current.labProposals = markMaisLabProposalRejected(current.labProposals, proposalId, recordedAt);
+      current.updatedAt = recordedAt;
+      await this.repository.save(current);
+    });
     return this.snapshot();
   }
 
@@ -266,6 +395,8 @@ export class MaisCoordinator {
       research: current.research,
       reinforcement: current.reinforcement,
       beliefs: current.beliefs,
+      memories: current.memories,
+      labProposals: current.labProposals,
       contextManifests: current.contextManifests,
       analysisInputs: current.analysisInputs,
       analysisPrograms: current.analysisPrograms,
