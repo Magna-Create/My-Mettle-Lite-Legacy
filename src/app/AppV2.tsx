@@ -284,7 +284,26 @@ export function AppV2() {
 
   async function recordCompletedSession(sessionId: string): Promise<void> {
     const occurredAt = new Date().toISOString();
-    await mais.ingest({ type: 'session_completed', entityRefs: [sessionId], payload: { sessionId } }, occurredAt);
+    let next = await mais.ingest({ type: 'session_completed', entityRefs: [sessionId], payload: { sessionId } }, occurredAt);
+    const completedExperiments = (databaseRef.current?.experiments ?? []).filter((experiment) =>
+      experiment.status === 'ready_for_decision' && experiment.testedSessionId === sessionId);
+    for (const experiment of completedExperiments) {
+      next = await mais.ingest({
+        type: 'experiment_threshold_reached',
+        entityRefs: [experiment.id, experiment.exerciseId, sessionId],
+        payload: {
+          experimentId: experiment.id,
+          exerciseId: experiment.exerciseId,
+          sessionId,
+          hypothesis: experiment.hypothesis,
+          baselineLoad: experiment.baselineLoad,
+          proposedLoad: experiment.proposedLoad,
+          targetRepMin: experiment.targetRepMin,
+          evidenceSummary: experiment.evidenceSummary ?? null,
+        },
+      }, occurredAt);
+    }
+    setMaisSnapshot(next);
     const resources = await currentMaisResources();
     setMaisSnapshot(await reconcileMaisSnapshot(await mais.pulse(resources)));
   }
