@@ -108,7 +108,7 @@ export function normaliseMuscleContributions(
   const total = values.reduce((sum, contribution) => sum + contribution.weight, 0);
   if (total <= 0) return [];
   return values
-    .map((contribution) => ({ ...contribution, weight: contribution.weight / total, ontologyVersion: MAIS_MUSCLE_ONTOLOGY_VERSION as const }))
+    .map((contribution) => ({ ...contribution, weight: contribution.weight / total, ontologyVersion: MAIS_MUSCLE_ONTOLOGY_VERSION }))
     .sort((left, right) => right.weight - left.weight || left.muscleId.localeCompare(right.muscleId));
 }
 
