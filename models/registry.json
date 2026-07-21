@@ -19,7 +19,7 @@
       "maisDefaultTokens": 512
     },
     "status": "approved",
-    "notes": "Semantic retrieval and memory-index model. Prefer the Qualcomm SM8750 AOT artefact on the target phone; CPU remains the compatibility fallback. Chunking and hierarchical retrieval handle evidence structures larger than one embedding window."
+    "notes": "Semantic retrieval only. It indexes and retrieves provenance-linked evidence; it does not reason, recommend or write user-facing copy. Prefer the Qualcomm SM8750 artefact with CPU fallback."
   },
   {
     "modelId": "google.gemma-4-e2b-it",
@@ -28,12 +28,12 @@
     "source": "https://developers.google.com/edge/litert-lm/models/gemma-4",
     "revision": "litert-community/gemma-4-E2B-it-litert-lm:6e5c4f1",
     "licence": "Apache-2.0",
-    "roles": ["governor", "coach", "memory_curator", "multimodal"],
+    "roles": ["governor", "analyst", "auditor", "coach", "memory_curator", "multimodal"],
     "runtimeCandidates": [
       {
         "runtime": "litert-lm",
         "format": ".litertlm",
-        "backends": ["cpu", "gpu", "npu"]
+        "backends": ["cpu", "gpu"]
       }
     ],
     "context": {
@@ -41,7 +41,7 @@
       "maisDefaultTokens": 4096
     },
     "status": "approved",
-    "notes": "Fast Governor and frequent foreground-work model. CPU is the default from measured S25 Ultra cold-load behaviour; GPU remains available for longer E2B jobs."
+    "notes": "Everyday intelligence and language model. It handles bounded evidence integration, triage, extraction, summaries and presentation. CPU is the default from measured S25 Ultra cold-load behaviour. It escalates recognised deep work rather than replacing the deep thinker."
   },
   {
     "modelId": "google.gemma-4-e4b-it",
@@ -55,19 +55,19 @@
       {
         "runtime": "litert-lm",
         "format": ".litertlm",
-        "backends": ["gpu", "cpu", "npu"]
+        "backends": ["gpu", "cpu"]
       }
     ],
     "context": {
       "nativeTokens": 32768,
       "maisDefaultTokens": 8192
     },
-    "status": "approved",
-    "notes": "Normal Analyst, Auditor and richer coaching model. GPU is the default because standard reasoning episodes amortise model load and benefit from faster prefill."
+    "status": "disabled",
+    "notes": "Retained as a benchmark artefact only. It no longer owns a production MAIS capability because its intended role overlaps with E2B and the dedicated Qwen deep thinker."
   },
   {
     "modelId": "qwen.qwen3-8b",
-    "displayName": "Qwen3-8B",
+    "displayName": "Qwen3-8B · temporary deep thinker",
     "provider": "Qwen",
     "source": "https://huggingface.co/Qwen/Qwen3-8B",
     "revision": "litert-community/Qwen3-8B:71ff705 mixed-int4",
@@ -77,12 +77,7 @@
       {
         "runtime": "litert-lm",
         "format": ".litertlm",
-        "backends": ["gpu", "cpu"]
-      },
-      {
-        "runtime": "executorch",
-        "format": ".pte",
-        "backends": ["vulkan", "xnnpack", "qualcomm"]
+        "backends": ["cpu", "gpu"]
       }
     ],
     "context": {
@@ -90,6 +85,6 @@
       "maisDefaultTokens": 2048
     },
     "status": "approved",
-    "notes": "Deep Lab reasoning, coding and experiment-design candidate. The selected LiteRT-LM mixed-INT4 artefact has a 2K context ceiling, so it depends on retrieval-compiled evidence rather than raw history dumps. ExecuTorch/QNN remains a later Qualcomm NPU comparison path."
+    "notes": "Temporary 2K development stand-in for the future Qwen3-4B Thinking 12K artefact. It owns recognised deep analysis, experiment design, generated widget code and research-request drafting. CPU is selected because repeated GPU runs crashed the target phone."
   }
 ]
