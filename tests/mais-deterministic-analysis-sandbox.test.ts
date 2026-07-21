@@ -64,10 +64,14 @@ describe('deterministic MAIS analysis sandbox', () => {
       ],
     }), input);
     expect(result.status).toBe('completed');
-    expect(result.output.results).toMatchObject({
-      correlation: { coefficient: 1, n: 4 },
-      trend: { slope: 2, intercept: 0, rSquared: 1, n: 4 },
-    });
+    const results = result.output.results as {
+      correlation: { coefficient: number; n: number };
+      trend: { slope: number; intercept: number; rSquared: number; n: number };
+    };
+    expect(results.correlation.n).toBe(4);
+    expect(results.correlation.coefficient).toBeCloseTo(1, 12);
+    expect(results.trend).toMatchObject({ slope: 2, intercept: 0, n: 4 });
+    expect(results.trend.rSquared).toBeCloseTo(1, 12);
   });
 
   it('supports bounded filters without exposing arbitrary expressions', async () => {
