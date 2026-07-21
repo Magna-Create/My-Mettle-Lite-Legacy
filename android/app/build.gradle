@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
 
 android {
     namespace = "dev.kian.gymapp"
@@ -16,6 +17,13 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+    kotlinOptions {
+        jvmTarget = '21'
+    }
     buildTypes {
         release {
             minifyEnabled false
@@ -30,12 +38,20 @@ repositories {
     }
 }
 
+configurations.configureEach {
+    resolutionStrategy.force 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0'
+    resolutionStrategy.force 'org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.11.0'
+    resolutionStrategy.force 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
+}
+
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    implementation 'com.google.ai.edge.litertlm:litertlm-android:0.14.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
