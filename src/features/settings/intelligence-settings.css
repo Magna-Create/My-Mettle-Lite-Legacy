@@ -1,0 +1,59 @@
+.settings-sheet.is-intelligence-wide {
+  width: min(980px, calc(100vw - 24px));
+  max-width: 980px;
+}
+
+.intelligence-settings-stack {
+  display: grid;
+  gap: 16px;
+  overflow: auto;
+  padding-bottom: 8px;
+}
+
+.intelligence-model-import {
+  display: grid;
+  gap: 14px;
+}
+
+.intelligence-model-import code {
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+}
+
+.settings-fact-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.settings-fact-list div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.45fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.settings-fact-list dt {
+  color: var(--ink-muted, #6d6861);
+}
+
+.settings-fact-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .settings-sheet.is-intelligence-wide {
+    width: calc(100vw - 12px);
+  }
+
+  .settings-fact-list div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .settings-fact-list dd {
+    text-align: left;
+  }
+}
