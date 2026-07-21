@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { GymAppService, type AddExerciseInput } from '../application/GymAppService';
-import { addSessionSet, amendHistoricalSet, archiveExercise, discardSession, moveRoutineSlot, removeSessionSet, reorderRoutineSlot, restoreDiscardedSession, setSessionExcluded, updateExerciseRecord, updateRoutineSlot, type ExerciseRecordPatch, type RoutineSlotPatch } from '../application/Phase2Management';
+import {
+  addSessionSet,
+  amendHistoricalSet,
+  archiveExercise,
+  discardSession,
+  moveRoutineSlot,
+  removeSessionSet,
+  reorderRoutineSlot,
+  restoreDiscardedSession,
+  setSessionExcluded,
+  updateExerciseRecord,
+  updateRoutineSlot,
+  type ExerciseRecordPatch,
+  type RoutineSlotPatch,
+} from '../application/Phase2Management';
 import { saveExerciseReflection } from '../application/ExerciseReflectionManagement';
 import { commitRoutineEditDraft, type RoutineEditDraft } from '../application/RoutineEditDraft';
 import { removeRoutineSlotWithArchive } from '../application/removeRoutineSlotWithArchive';
@@ -31,7 +45,13 @@ import type { MaisSystemSnapshot } from '../mais/systemState';
 const tabs = ['brief', 'train', 'progress', 'lab', 'library'] as const;
 type Tab = (typeof tabs)[number];
 const tabLabels: Record<Tab, string> = { brief: 'Brief', train: 'Train', progress: 'Progress', lab: 'Lab', library: 'Library' };
-const fallbackTimerSettings: AppSettings['restTimer'] = { autoStart: true, vibrationEnabled: true, vibrationStrength: 'strong', chimeEnabled: false, backgroundNotificationEnabled: true };
+const fallbackTimerSettings: AppSettings['restTimer'] = {
+  autoStart: true,
+  vibrationEnabled: true,
+  vibrationStrength: 'strong',
+  chimeEnabled: false,
+  backgroundNotificationEnabled: true,
+};
 const MAIS_HEARTBEAT_INTERVAL_MS = 15_000;
 
 export function AppV2() {
@@ -193,6 +213,41 @@ export function AppV2() {
       window.alert(`MAIS report saved to ${result.location}/${result.fileName}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'The MAIS report could not be exported.');
+      throw reason;
+    }
+  }
+
+  async function exportResearchRequest(requestId: string): Promise<void> {
+    try {
+      const exported = await mais.exportResearchRequest(requestId);
+      setMaisSnapshot(exported.snapshot);
+      const createdAt = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-');
+      const fileName = `my-mettle-research-request-${createdAt}.json`;
+      const result = await saveMaisReportCard(fileName, exported.document);
+      window.alert(`Research dossier saved to ${result.location}/${result.fileName}`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The research dossier could not be exported.');
+      throw reason;
+    }
+  }
+
+  async function importResearchReport(content: string): Promise<void> {
+    try {
+      setMaisSnapshot(await mais.importResearchReport(content));
+      const resources = await currentMaisResources();
+      setMaisSnapshot(await mais.runUntilSettled(resources, 8));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The cited research report could not be imported.');
+      throw reason;
+    }
+  }
+
+  async function rejectResearchRequest(requestId: string): Promise<void> {
+    try {
+      setMaisSnapshot(await mais.rejectResearchRequest(requestId));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The research request could not be rejected.');
+      throw reason;
     }
   }
 
@@ -233,7 +288,7 @@ export function AppV2() {
       <section hidden={tab !== 'library'}><LibraryPage database={database} externalDiscardToken={routineEditDiscardToken} onEditStateChange={setRoutineEditState} onCommitRoutineEdit={(draft: RoutineEditDraft) => apply((current) => commitRoutineEditDraft(current, draft))} onAddExercise={(input: AddExerciseInput) => run((current) => service.addExerciseToRoutine(current, input))} onReorderSlot={(slotId, direction) => apply((current) => reorderRoutineSlot(current, slotId, direction))} onMoveSlot={(slotId, day) => apply((current) => moveRoutineSlot(current, slotId, day))} onRemoveSlot={(slotId) => apply((current) => removeRoutineSlotWithArchive(current, slotId))} onUpdateSlot={(slotId, patch: RoutineSlotPatch) => apply((current) => updateRoutineSlot(current, slotId, patch))} onUpdateExercise={(exerciseId, patch: ExerciseRecordPatch) => apply((current) => updateExerciseRecord(current, exerciseId, patch))} onArchiveExercise={(exerciseId) => apply((current) => archiveExercise(current, exerciseId))} onRestoreExercise={(exerciseId) => apply((current) => restoreArchivedExercise(current, exerciseId))} /></section>
     </div>
     <nav className="bottom-nav" aria-label="Primary navigation">{tabs.map((item) => <button key={item} data-active={tab === item} aria-label={tabLabels[item]} title={tabLabels[item]} onClick={() => navigate(item)}><NavIcon name={item} /></button>)}</nav>
-    {settingsOpen && <SettingsSheet database={database} maisSnapshot={maisSnapshot} maisResourceMode={maisResourceMode} onRunMaisDemo={runMaisDemo} onPulseMais={pulseMaisOnce} onClearMais={clearMais} onExportMaisReport={exportMaisReport} onClose={() => setSettingsOpen(false)} onUpdateSettings={(patch) => run((current) => service.updateSettings(current, patch))} onReset={async () => { restTimer.dismiss(); const reset = await service.reset(); databaseRef.current = reset; setDatabase(reset); setTab('brief'); setSettingsOpen(false); }} />}
+    {settingsOpen && <SettingsSheet database={database} maisSnapshot={maisSnapshot} maisResourceMode={maisResourceMode} onRunMaisDemo={runMaisDemo} onPulseMais={pulseMaisOnce} onClearMais={clearMais} onExportMaisReport={exportMaisReport} onExportResearchRequest={exportResearchRequest} onImportResearchReport={importResearchReport} onRejectResearchRequest={rejectResearchRequest} onClose={() => setSettingsOpen(false)} onUpdateSettings={(patch) => run((current) => service.updateSettings(current, patch))} onReset={async () => { restTimer.dismiss(); const reset = await service.reset(); databaseRef.current = reset; setDatabase(reset); setTab('brief'); setSettingsOpen(false); }} />}
     {profileOpen && <ProfileSheetV2 database={database} onClose={() => setProfileOpen(false)} onAddMeasurement={(input) => run((current) => service.addBodyMeasurement(current, input))} onAmendSet={(sessionId, exerciseId, setId, patch) => apply((current) => amendHistoricalSet(current, sessionId, exerciseId, setId, patch))} onAddSet={(sessionId, exerciseId) => apply((current) => addSessionSet(current, sessionId, exerciseId))} onRemoveSet={(sessionId, exerciseId, setId) => apply((current) => removeSessionSet(current, sessionId, exerciseId, setId))} onSaveReflection={(sessionId, exerciseId, input) => apply((current) => saveExerciseReflection(current, sessionId, exerciseId, input))} onSetExcluded={(sessionId, excluded) => apply((current) => setSessionExcluded(current, sessionId, excluded))} onDiscardSession={(sessionId) => apply((current) => discardSession(current, sessionId))} onRestoreSession={(sessionId) => apply((current) => restoreDiscardedSession(current, sessionId))} />}
     <RestTimerOverlay state={restTimer.presentationReady ? restTimer.state : null} onPause={restTimer.pause} onResume={restTimer.resume} onAddSeconds={restTimer.addSeconds} onMinimise={restTimer.minimize} onDismiss={restTimer.dismiss} />
   </div>;
