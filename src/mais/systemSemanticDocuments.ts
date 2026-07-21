@@ -1,8 +1,12 @@
-import type { MaisSystemSnapshot } from './systemState';
 import type { MaisSemanticDocument } from './semanticMemory';
+import type { MaisSystemSnapshot } from './systemState';
 
 function text(value: unknown): string {
   return JSON.stringify(value, null, 0);
+}
+
+function refs(values: Array<string | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
 }
 
 function beliefDocuments(snapshot: MaisSystemSnapshot): MaisSemanticDocument[] {
@@ -13,20 +17,21 @@ function beliefDocuments(snapshot: MaisSystemSnapshot): MaisSemanticDocument[] {
       id: `semantic_belief_${belief.id}`,
       kind: 'belief',
       title: belief.claim,
-      summary: `${belief.status} belief in ${belief.domain} with confidence ${belief.confidence.toFixed(2)}.`,
+      summary: `${belief.status} belief in ${belief.domain} with ${belief.confidence} confidence and a ${Math.round(belief.probability * 100)}% current estimate.`,
       updatedAt: belief.updatedAt,
       metadata: {
         beliefId: belief.id,
         domain: belief.domain,
         status: belief.status,
         confidence: belief.confidence,
+        probability: belief.probability,
       },
       sections: [
         {
           key: 'claim',
           heading: 'Belief and uncertainty',
-          text: `Claim: ${belief.claim}. Status: ${belief.status}. Confidence: ${belief.confidence}. Created by task ${belief.createdByTaskId}.`,
-          provenanceRefs: [belief.id, belief.createdByTaskId],
+          text: `Claim: ${belief.claim}. Status: ${belief.status}. Confidence: ${belief.confidence}. Probability estimate: ${belief.probability}. Created by task ${belief.createdByTaskId ?? 'unknown'}.`,
+          provenanceRefs: refs([belief.id, belief.createdByTaskId]),
         },
         {
           key: 'evidence',
@@ -34,7 +39,7 @@ function beliefDocuments(snapshot: MaisSystemSnapshot): MaisSemanticDocument[] {
           text: evidence.length
             ? evidence.map((link) => `${link.polarity}: ${link.summary}. Weight ${link.weight}. Observed ${link.observedAt ?? 'unknown'}.`).join('\n\n')
             : 'No linked evidence has been stored.',
-          provenanceRefs: evidence.flatMap((link) => [link.id, link.sourceArtifactId, ...link.provenanceRefs]),
+          provenanceRefs: refs(evidence.flatMap((link) => [link.id, link.sourceArtifactId, ...link.provenanceRefs])),
         },
         {
           key: 'questions',
@@ -45,7 +50,7 @@ function beliefDocuments(snapshot: MaisSystemSnapshot): MaisSemanticDocument[] {
           provenanceRefs: questions.map((question) => question.id),
         },
       ],
-    };
+    } satisfies MaisSemanticDocument;
   });
 }
 
@@ -70,7 +75,7 @@ function memoryDocuments(snapshot: MaisSystemSnapshot): MaisSemanticDocument[] {
         text: `${memory.summary}. Confidence type ${memory.confidence}. Tags ${memory.tags.join(', ') || 'none'}.`,
         provenanceRefs: [memory.id, memory.entityRef, memory.sourceArtifactId, ...memory.provenanceRefs],
       }],
-    }));
+    } satisfies MaisSemanticDocument));
 }
 
 function researchDocuments(snapshot: MaisSystemSnapshot): MaisSemanticDocument[] {
@@ -100,7 +105,7 @@ function researchDocuments(snapshot: MaisSystemSnapshot): MaisSemanticDocument[]
         provenanceRefs: [report.id],
       },
     ],
-  }));
+  } satisfies MaisSemanticDocument));
 }
 
 function analysisDocuments(snapshot: MaisSystemSnapshot): MaisSemanticDocument[] {
