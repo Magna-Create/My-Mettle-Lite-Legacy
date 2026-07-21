@@ -1,5 +1,5 @@
 import { createId } from '../domain/ids';
-import type { MaisAnalysisRun } from './analysisSandbox';
+import type { MaisAnalysisInputSnapshot, MaisAnalysisProgram, MaisAnalysisRun } from './analysisSandbox';
 import { createMaisBeliefGraphState, type MaisBeliefGraphState } from './beliefGraph';
 import type { MaisCapabilityState } from './capabilityProtocol';
 import type { MaisContextManifest } from './contextCompiler';
@@ -31,6 +31,8 @@ export interface MaisReportCard {
   reinforcement: MaisReinforcementState;
   beliefs: MaisBeliefGraphState;
   contextManifests: MaisContextManifest[];
+  analysisInputs: MaisAnalysisInputSnapshot[];
+  analysisPrograms: MaisAnalysisProgram[];
   analysisRuns: MaisAnalysisRun[];
   diagnostics: MaisDiagnosticRecord[];
   summary: {
@@ -48,6 +50,9 @@ export interface MaisReportCard {
     contestedBeliefCount: number;
     unresolvedQuestionCount: number;
     rejectionMemoryCount: number;
+    analysisInputCount: number;
+    analysisProgramCount: number;
+    analysisRunCount: number;
   };
 }
 
@@ -94,12 +99,16 @@ export function buildMaisReportCard(input: {
   reinforcement: MaisReinforcementState;
   beliefs?: MaisBeliefGraphState | undefined;
   contextManifests: MaisContextManifest[];
+  analysisInputs?: MaisAnalysisInputSnapshot[] | undefined;
+  analysisPrograms?: MaisAnalysisProgram[] | undefined;
   analysisRuns: MaisAnalysisRun[];
   diagnostics: MaisDiagnosticRecord[];
   now?: string | undefined;
 }): MaisReportCard {
   const generatedAt = input.now ?? new Date().toISOString();
   const beliefs = input.beliefs ?? createMaisBeliefGraphState();
+  const analysisInputs = input.analysisInputs ?? [];
+  const analysisPrograms = input.analysisPrograms ?? [];
   const card: MaisReportCard = {
     schema: 'MaisReportCardV1',
     id: createId('mais_report_card'),
@@ -112,6 +121,8 @@ export function buildMaisReportCard(input: {
     reinforcement: structuredClone(input.reinforcement),
     beliefs: structuredClone(beliefs),
     contextManifests: structuredClone(input.contextManifests),
+    analysisInputs: structuredClone(analysisInputs),
+    analysisPrograms: structuredClone(analysisPrograms),
     analysisRuns: structuredClone(input.analysisRuns),
     diagnostics: structuredClone(input.diagnostics),
     summary: {
@@ -129,6 +140,9 @@ export function buildMaisReportCard(input: {
       contestedBeliefCount: beliefs.beliefs.filter((belief) => belief.status === 'contested').length,
       unresolvedQuestionCount: beliefs.unresolvedQuestions.filter((question) => ['open', 'research_requested'].includes(question.status)).length,
       rejectionMemoryCount: beliefs.rejections.length,
+      analysisInputCount: analysisInputs.length,
+      analysisProgramCount: analysisPrograms.length,
+      analysisRunCount: input.analysisRuns.length,
     },
   };
   return sanitise(card) as MaisReportCard;
