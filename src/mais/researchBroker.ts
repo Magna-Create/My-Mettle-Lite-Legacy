@@ -49,6 +49,21 @@ export interface MaisResearchReport {
   importedAt: string;
 }
 
+export interface MaisResearchDossierEnvelope {
+  schema: 'MaisResearchDossierV1';
+  request: MaisResearchDossier;
+  instructions: string[];
+  responseTemplate: {
+    schema: 'MaisResearchReportV1';
+    report: Omit<MaisResearchReport, 'id' | 'importedAt'>;
+  };
+}
+
+export interface MaisResearchReportEnvelope {
+  schema: 'MaisResearchReportV1';
+  report: Omit<MaisResearchReport, 'id' | 'importedAt'>;
+}
+
 export interface MaisResearchState {
   requests: MaisResearchDossier[];
   reports: MaisResearchReport[];
@@ -84,14 +99,33 @@ function normaliseTopic(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ');
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 export function createMaisResearchState(): MaisResearchState {
   return {
     requests: [],
     reports: [],
     rollingWindowDays: 30,
-    maxRequestsPerWindow: 2,
-    cooldownDays: 7,
+    maxRequestsPerWindow: 3,
+    cooldownDays: 0,
   };
+}
+
+export function parseMaisResearchReportEnvelope(value: string | MaisResearchReportEnvelope): MaisResearchReportEnvelope {
+  const parsed = typeof value === 'string' ? JSON.parse(value) as unknown : value;
+  if (!isRecord(parsed) || parsed.schema !== 'MaisResearchReportV1' || !isRecord(parsed.report)) {
+    throw new Error('Unsupported MAIS research-report schema.');
+  }
+  const report = parsed.report;
+  if (typeof report.requestId !== 'string' || typeof report.summary !== 'string' || !Array.isArray(report.claims) || !Array.isArray(report.sources)) {
+    throw new Error('Incomplete MAIS research report.');
+  }
+  if (typeof report.producedAt !== 'string' || typeof report.expiresAt !== 'string') {
+    throw new Error('MAIS research report requires production and expiry timestamps.');
+  }
+  return structuredClone(parsed as unknown as MaisResearchReportEnvelope);
 }
 
 export class MaisResearchBroker {
@@ -125,7 +159,7 @@ export class MaisResearchBroker {
     if (duplicate) throw new Error('A matching research topic already exists in MAIS memory.');
 
     const mostRecent = [...this.state.requests].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
-    if (mostRecent && new Date(createdAt) < new Date(addDays(mostRecent.createdAt, this.state.cooldownDays))) {
+    if (this.state.cooldownDays > 0 && mostRecent && new Date(createdAt) < new Date(addDays(mostRecent.createdAt, this.state.cooldownDays))) {
       throw new Error('Research Broker cooldown is still active.');
     }
 
@@ -153,7 +187,29 @@ export class MaisResearchBroker {
     if (request.status !== 'awaiting_user_export') throw new Error(`Research request cannot export from ${request.status}.`);
     request.status = 'exported';
     request.exportedAt = timestamp(now);
-    return JSON.stringify({ schema: 'MaisResearchDossierV1', request }, null, 2);
+    const producedAt = request.exportedAt;
+    const envelope: MaisResearchDossierEnvelope = {
+      schema: 'MaisResearchDossierV1',
+      request: structuredClone(request),
+      instructions: [
+        'Research the questions using current, trustworthy sources and cite every material claim.',
+        'Do not infer private user facts beyond the supplied local context.',
+        'Return only a MaisResearchReportV1 JSON object matching responseTemplate.',
+        'Use the exact requestId and citation strings consistently across claims and sources.',
+      ],
+      responseTemplate: {
+        schema: 'MaisResearchReportV1',
+        report: {
+          requestId: request.id,
+          summary: '',
+          claims: [],
+          sources: [],
+          producedAt,
+          expiresAt: request.expiresAt,
+        },
+      },
+    };
+    return JSON.stringify(envelope, null, 2);
   }
 
   importReport(report: Omit<MaisResearchReport, 'id' | 'importedAt'>, now?: string): MaisResearchReport {
@@ -162,8 +218,13 @@ export class MaisResearchBroker {
       throw new Error(`Research report cannot fulfil request from ${request.status}.`);
     }
     if (report.sources.length === 0) throw new Error('Research report must include cited sources.');
+    if (new Date(report.expiresAt) <= new Date(report.producedAt)) throw new Error('Research report expiry must be later than production time.');
     const citations = new Set(report.sources.map((source) => source.citation));
+    for (const source of report.sources) {
+      if (!source.title.trim() || !source.publisher.trim() || !source.citation.trim()) throw new Error('Every research source requires title, publisher and citation.');
+    }
     for (const claim of report.claims) {
+      if (!claim.claim.trim()) throw new Error('Research claims cannot be empty.');
       if (claim.sourceCitations.length === 0) throw new Error('Every imported research claim requires at least one citation.');
       if (claim.sourceCitations.some((citation) => !citations.has(citation))) {
         throw new Error('Research claim references a citation not present in the source list.');
@@ -180,6 +241,10 @@ export class MaisResearchBroker {
     request.fulfilledAt = importedAt;
     this.state.reports.push(stored);
     return structuredClone(stored);
+  }
+
+  importEnvelope(value: string | MaisResearchReportEnvelope, now?: string): MaisResearchReport {
+    return this.importReport(parseMaisResearchReportEnvelope(value).report, now);
   }
 
   reject(requestId: string): MaisResearchDossier {
