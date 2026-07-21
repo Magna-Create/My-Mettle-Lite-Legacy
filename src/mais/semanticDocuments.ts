@@ -1,5 +1,5 @@
 import type { AppDatabase, Exercise, RoutineVersion, Session } from '../domain/model';
-import { stableSemanticHash, type MaisSemanticDocument, type MaisSemanticIndexManifest } from './semanticMemory';
+import { chunkSemanticDocument, stableSemanticHash, type MaisSemanticDocument, type MaisSemanticIndexManifest } from './semanticMemory';
 
 function asText(value: unknown): string {
   return JSON.stringify(value, null, 0);
@@ -142,15 +142,8 @@ export interface MaisSemanticIndexDiff {
 }
 
 function documentHash(document: MaisSemanticDocument): string {
-  return stableSemanticHash(JSON.stringify({
-    id: document.id,
-    kind: document.kind,
-    title: document.title,
-    summary: document.summary,
-    sections: document.sections,
-    updatedAt: document.updatedAt,
-    metadata: document.metadata,
-  }));
+  const chunks = chunkSemanticDocument(document);
+  return stableSemanticHash(`${document.id}\n${document.updatedAt}\n${chunks.map((chunk) => chunk.contentHash).join('\n')}`);
 }
 
 export function diffSemanticDocuments(
