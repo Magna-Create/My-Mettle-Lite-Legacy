@@ -1,4 +1,5 @@
 import type { MaisAnalysisRun } from './analysisSandbox';
+import { createMaisBeliefGraphState, type MaisBeliefGraphState } from './beliefGraph';
 import { createMaisCapabilityState, type MaisCapabilityState } from './capabilityProtocol';
 import type { MaisContextManifest } from './contextCompiler';
 import type { MaisPulseDecision, MaisState } from './contracts';
@@ -20,6 +21,7 @@ export interface MaisSystemSnapshot {
   widgets: MaisWidgetState;
   research: MaisResearchState;
   reinforcement: MaisReinforcementState;
+  beliefs: MaisBeliefGraphState;
   contextManifests: MaisContextManifest[];
   semanticManifests: MaisSemanticIndexManifest[];
   analysisRuns: MaisAnalysisRun[];
@@ -39,6 +41,7 @@ export function createMaisSystemSnapshot(now = new Date().toISOString()): MaisSy
     widgets: createMaisWidgetState(),
     research: createMaisResearchState(),
     reinforcement: createMaisReinforcementState(),
+    beliefs: createMaisBeliefGraphState(),
     contextManifests: [],
     semanticManifests: [],
     analysisRuns: [],
@@ -65,6 +68,7 @@ export function normaliseMaisSystemSnapshot(value: unknown, now = new Date().toI
     widgets: structuredClone(stored.widgets ?? base.widgets),
     research: structuredClone(stored.research ?? base.research),
     reinforcement: structuredClone(stored.reinforcement ?? base.reinforcement),
+    beliefs: structuredClone(stored.beliefs ?? base.beliefs),
     contextManifests: structuredClone(stored.contextManifests ?? []),
     semanticManifests: structuredClone(stored.semanticManifests ?? []),
     analysisRuns: structuredClone(stored.analysisRuns ?? []),
