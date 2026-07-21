@@ -4,29 +4,30 @@
     "displayName": "EmbeddingGemma",
     "provider": "Google",
     "source": "https://ai.google.dev/gemma/docs/embeddinggemma",
-    "revision": "unselected",
-    "licence": "Gemma licence — verify exact artefact before download",
+    "revision": "litert-community/embeddinggemma-300m:main",
+    "licence": "Gemma licence — user acceptance required before artefact download",
     "roles": ["retrieval"],
     "runtimeCandidates": [
       {
         "runtime": "litert",
-        "format": "unselected",
-        "backends": ["cpu", "gpu"]
+        "format": ".tflite",
+        "backends": ["npu", "cpu"]
       }
     ],
     "context": {
-      "maisDefaultTokens": 2048
+      "nativeTokens": 2048,
+      "maisDefaultTokens": 512
     },
-    "status": "candidate",
-    "notes": "Always-available semantic retrieval candidate. No artefact is approved or stored in Git."
+    "status": "approved",
+    "notes": "Semantic retrieval and memory-index model. Prefer the Qualcomm SM8750 AOT artefact on the target phone; CPU remains the compatibility fallback. Chunking and hierarchical retrieval handle evidence structures larger than one embedding window."
   },
   {
     "modelId": "google.gemma-4-e2b-it",
     "displayName": "Gemma 4 E2B IT",
     "provider": "Google",
     "source": "https://developers.google.com/edge/litert-lm/models/gemma-4",
-    "revision": "unselected",
-    "licence": "Apache-2.0 — verify model terms and exact artefact before download",
+    "revision": "litert-community/gemma-4-E2B-it-litert-lm:6e5c4f1",
+    "licence": "Apache-2.0",
     "roles": ["governor", "coach", "memory_curator", "multimodal"],
     "runtimeCandidates": [
       {
@@ -36,60 +37,59 @@
       }
     ],
     "context": {
-      "nativeTokens": 131072,
+      "nativeTokens": 32768,
       "maisDefaultTokens": 4096
     },
-    "status": "candidate",
-    "notes": "Fast governor and frequent foreground-work candidate."
+    "status": "approved",
+    "notes": "Fast Governor and frequent foreground-work model. CPU is the default from measured S25 Ultra cold-load behaviour; GPU remains available for longer E2B jobs."
   },
   {
     "modelId": "google.gemma-4-e4b-it",
     "displayName": "Gemma 4 E4B IT",
     "provider": "Google",
     "source": "https://developers.google.com/edge/litert-lm/models/gemma-4",
-    "revision": "unselected",
-    "licence": "Apache-2.0 — verify model terms and exact artefact before download",
+    "revision": "litert-community/gemma-4-E4B-it-litert-lm:28299f3",
+    "licence": "Apache-2.0",
     "roles": ["analyst", "auditor", "coach", "memory_curator", "multimodal"],
     "runtimeCandidates": [
       {
         "runtime": "litert-lm",
         "format": ".litertlm",
-        "backends": ["cpu", "gpu", "npu"]
+        "backends": ["gpu", "cpu", "npu"]
       }
     ],
     "context": {
-      "nativeTokens": 131072,
+      "nativeTokens": 32768,
       "maisDefaultTokens": 8192
     },
-    "status": "candidate",
-    "notes": "General reasoning and cross-family audit candidate."
+    "status": "approved",
+    "notes": "Normal Analyst, Auditor and richer coaching model. GPU is the default because standard reasoning episodes amortise model load and benefit from faster prefill."
   },
   {
     "modelId": "qwen.qwen3-8b",
     "displayName": "Qwen3-8B",
     "provider": "Qwen",
     "source": "https://huggingface.co/Qwen/Qwen3-8B",
-    "revision": "unselected",
-    "licence": "Apache-2.0 — verify selected revision before download",
+    "revision": "litert-community/Qwen3-8B:71ff705 mixed-int4",
+    "licence": "Apache-2.0",
     "roles": ["analyst", "coding_analyst", "auditor", "research_broker"],
     "runtimeCandidates": [
       {
         "runtime": "litert-lm",
         "format": ".litertlm",
-        "backends": ["cpu", "gpu", "npu"]
+        "backends": ["gpu", "cpu"]
       },
       {
         "runtime": "executorch",
         "format": ".pte",
-        "backends": ["xnnpack", "vulkan", "qualcomm"]
+        "backends": ["vulkan", "xnnpack", "qualcomm"]
       }
     ],
     "context": {
-      "nativeTokens": 32768,
-      "extendedTokens": 131072,
-      "maisDefaultTokens": 8192
+      "nativeTokens": 2048,
+      "maisDefaultTokens": 2048
     },
-    "status": "candidate",
-    "notes": "Deep Lab reasoning, coding and experiment-design candidate."
+    "status": "approved",
+    "notes": "Deep Lab reasoning, coding and experiment-design candidate. The selected LiteRT-LM mixed-INT4 artefact has a 2K context ceiling, so it depends on retrieval-compiled evidence rather than raw history dumps. ExecuTorch/QNN remains a later Qualcomm NPU comparison path."
   }
 ]
