@@ -1,4 +1,5 @@
 import { createId } from '../domain/ids';
+import { reduceMaisBeliefArtifact } from './beliefArtifactReducer';
 import type { MaisEventInput, MaisResourceSnapshot, MaisRoleRunner } from './contracts';
 import { ingestMaisEvent, pulseMais } from './heart';
 import { MaisModelLeaseManager, SimulatedMaisModelRuntime, type MaisModelRuntimeAdapter } from './modelLeases';
@@ -48,6 +49,7 @@ export class MaisCoordinator {
   async pulse(resources: MaisResourceSnapshot): Promise<MaisSystemSnapshot> {
     await this.enqueue(async () => {
       const current = this.requireSnapshot();
+      const existingArtifactIds = new Set(current.heart.artifacts.map((artifact) => artifact.id));
       let runner = this.roleRunner;
       if (this.leaseManager) {
         const manager = this.leaseManager;
@@ -63,6 +65,34 @@ export class MaisCoordinator {
       current.lastPulseDecision = result.decision;
       if (this.leaseManager) current.models = this.leaseManager.snapshot();
       current.updatedAt = resources.capturedAt;
+
+      for (const artifact of current.heart.artifacts.filter((candidate) => !existingArtifactIds.has(candidate.id))) {
+        const reduction = reduceMaisBeliefArtifact(current.beliefs, artifact);
+        current.beliefs = reduction.state;
+        if (reduction.applied) {
+          current.diagnostics.push({
+            id: createId('mais_diagnostic'),
+            category: 'belief',
+            severity: 'info',
+            message: `${artifact.kind.replaceAll('_', ' ')} updated the persistent belief graph.`,
+            refs: [artifact.id, artifact.taskId],
+            recordedAt: resources.capturedAt,
+            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+          });
+        }
+        for (const message of reduction.diagnostics) {
+          current.diagnostics.push({
+            id: createId('mais_diagnostic'),
+            category: 'belief',
+            severity: 'warning',
+            message,
+            refs: [artifact.id, artifact.taskId],
+            recordedAt: resources.capturedAt,
+            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+          });
+        }
+      }
+
       current.diagnostics.push({
         id: createId('mais_diagnostic'),
         category: 'heart',
