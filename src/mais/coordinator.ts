@@ -4,6 +4,11 @@ import { reduceMaisBeliefArtifact } from './beliefArtifactReducer';
 import type { MaisEventInput, MaisResourceSnapshot, MaisRoleRunner } from './contracts';
 import { ingestMaisEvent, pulseMais } from './heart';
 import { MaisModelLeaseManager, SimulatedMaisModelRuntime, type MaisModelRuntimeAdapter } from './modelLeases';
+import { reduceMaisResearchArtifact } from './researchArtifactReducer';
+import {
+  MaisResearchBroker,
+  type MaisResearchReportEnvelope,
+} from './researchBroker';
 import type { MaisRepository } from './repository';
 import { buildMaisReportCard, parseMaisParentReview, type MaisDiagnosticRecord, type MaisParentReview, type MaisReportCard } from './reportCard';
 import { createMaisSystemSnapshot, type MaisSystemSnapshot } from './systemState';
@@ -28,6 +33,8 @@ export class MaisCoordinator {
     this.snapshotValue = stored ?? createMaisSystemSnapshot(timestamp(now));
     this.leaseManager = new MaisModelLeaseManager(this.modelRuntime, this.snapshotValue.models);
     this.snapshotValue.models = this.leaseManager.snapshot();
+    const broker = new MaisResearchBroker(this.snapshotValue.research);
+    this.snapshotValue.research = broker.expireDue(timestamp(now));
     await this.repository.save(this.snapshotValue);
     return this.snapshot();
   }
@@ -51,6 +58,8 @@ export class MaisCoordinator {
     await this.enqueue(async () => {
       const current = this.requireSnapshot();
       const existingArtifactIds = new Set(current.heart.artifacts.map((artifact) => artifact.id));
+      const expiryBroker = new MaisResearchBroker(current.research);
+      current.research = expiryBroker.expireDue(resources.capturedAt);
       let runner = this.roleRunner;
       if (this.leaseManager) {
         const manager = this.leaseManager;
@@ -120,6 +129,31 @@ export class MaisCoordinator {
             data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
           });
         }
+
+        const researchReduction = reduceMaisResearchArtifact(current.research, artifact);
+        current.research = researchReduction.state;
+        if (researchReduction.dossier) {
+          current.diagnostics.push({
+            id: createId('mais_diagnostic'),
+            category: 'research',
+            severity: 'info',
+            message: 'A manual external-research dossier is ready for user review and export.',
+            refs: [artifact.id, artifact.taskId, researchReduction.dossier.id],
+            recordedAt: resources.capturedAt,
+            data: { topic: researchReduction.dossier.topic, expectedValue: researchReduction.dossier.expectedValue },
+          });
+        }
+        for (const message of researchReduction.diagnostics) {
+          current.diagnostics.push({
+            id: createId('mais_diagnostic'),
+            category: 'research',
+            severity: 'warning',
+            message,
+            refs: [artifact.id, artifact.taskId],
+            recordedAt: resources.capturedAt,
+            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+          });
+        }
       }
 
       current.analysisInputs = current.analysisInputs.slice(-200);
@@ -147,6 +181,67 @@ export class MaisCoordinator {
       const action = this.requireSnapshot().lastPulseDecision?.action;
       if (!action || ['idle', 'deferred', 'waiting', 'failed'].includes(action)) break;
     }
+    return this.snapshot();
+  }
+
+  async exportResearchRequest(requestId: string, now?: string): Promise<{ snapshot: MaisSystemSnapshot; document: string }> {
+    let document = '';
+    await this.enqueue(async () => {
+      const current = this.requireSnapshot();
+      const broker = new MaisResearchBroker(current.research);
+      document = broker.export(requestId, timestamp(now));
+      current.research = broker.snapshot();
+      current.updatedAt = timestamp(now);
+      await this.repository.save(current);
+    });
+    return { snapshot: this.snapshot(), document };
+  }
+
+  async importResearchReport(value: string | MaisResearchReportEnvelope, now?: string): Promise<MaisSystemSnapshot> {
+    await this.enqueue(async () => {
+      const current = this.requireSnapshot();
+      const importedAt = timestamp(now);
+      const broker = new MaisResearchBroker(current.research);
+      const report = broker.importEnvelope(value, importedAt);
+      current.research = broker.snapshot();
+      current.heart = ingestMaisEvent(current.heart, {
+        type: 'external_research_imported',
+        entityRefs: [report.id, report.requestId],
+        payload: { reportId: report.id, requestId: report.requestId },
+      }, importedAt);
+      current.updatedAt = importedAt;
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'research',
+        severity: 'info',
+        message: 'A cited external research report was imported and queued for local integration.',
+        refs: [report.id, report.requestId],
+        recordedAt: importedAt,
+        data: { sourceCount: report.sources.length, claimCount: report.claims.length },
+      });
+      await this.repository.save(current);
+    });
+    return this.snapshot();
+  }
+
+  async rejectResearchRequest(requestId: string, now?: string): Promise<MaisSystemSnapshot> {
+    await this.enqueue(async () => {
+      const current = this.requireSnapshot();
+      const broker = new MaisResearchBroker(current.research);
+      const request = broker.reject(requestId);
+      current.research = broker.snapshot();
+      current.updatedAt = timestamp(now);
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'research',
+        severity: 'info',
+        message: 'The manual research request was rejected by the user.',
+        refs: [request.id],
+        recordedAt: current.updatedAt,
+        data: { topic: request.topic },
+      });
+      await this.repository.save(current);
+    });
     return this.snapshot();
   }
 
