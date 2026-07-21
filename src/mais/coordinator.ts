@@ -1,6 +1,7 @@
 import { createId } from '../domain/ids';
 import type { MaisEventInput, MaisResourceSnapshot, MaisRoleRunner } from './contracts';
 import { ingestMaisEvent, pulseMais } from './heart';
+import { MaisModelLeaseManager, type MaisModelRuntimeAdapter } from './modelLeases';
 import type { MaisRepository } from './repository';
 import { buildMaisReportCard, parseMaisParentReview, type MaisDiagnosticRecord, type MaisParentReview, type MaisReportCard } from './reportCard';
 import { createMaisSystemSnapshot, type MaisSystemSnapshot } from './systemState';
@@ -12,16 +13,22 @@ function timestamp(value?: string): string {
 export class MaisCoordinator {
   private snapshotValue: MaisSystemSnapshot | null = null;
   private operation: Promise<void> = Promise.resolve();
+  private leaseManager: MaisModelLeaseManager | null = null;
 
   constructor(
     private readonly repository: MaisRepository,
     private readonly roleRunner: MaisRoleRunner,
+    private readonly modelRuntime?: MaisModelRuntimeAdapter | undefined,
   ) {}
 
   async initialise(now?: string): Promise<MaisSystemSnapshot> {
     const stored = await this.repository.load();
     this.snapshotValue = stored ?? createMaisSystemSnapshot(timestamp(now));
-    if (!stored) await this.repository.save(this.snapshotValue);
+    if (this.modelRuntime) {
+      this.leaseManager = new MaisModelLeaseManager(this.modelRuntime, this.snapshotValue.models);
+      this.snapshotValue.models = this.leaseManager.snapshot();
+    }
+    await this.repository.save(this.snapshotValue);
     return this.snapshot();
   }
 
@@ -43,9 +50,20 @@ export class MaisCoordinator {
   async pulse(resources: MaisResourceSnapshot): Promise<MaisSystemSnapshot> {
     await this.enqueue(async () => {
       const current = this.requireSnapshot();
-      const result = await pulseMais(current.heart, resources, this.roleRunner);
+      let runner = this.roleRunner;
+      if (this.leaseManager) {
+        const manager = this.leaseManager;
+        runner = {
+          run: (request) => manager.withLease(
+            { taskId: request.task.id, role: request.step.role, tier: request.step.requiredTier, now: resources.capturedAt },
+            async () => this.roleRunner.run(request),
+          ),
+        };
+      }
+      const result = await pulseMais(current.heart, resources, runner);
       current.heart = result.state;
       current.lastPulseDecision = result.decision;
+      if (this.leaseManager) current.models = this.leaseManager.snapshot();
       current.updatedAt = resources.capturedAt;
       current.diagnostics.push({
         id: createId('mais_diagnostic'),
@@ -115,6 +133,7 @@ export class MaisCoordinator {
     await this.enqueue(async () => {
       await this.repository.clear();
       this.snapshotValue = createMaisSystemSnapshot(timestamp(now));
+      if (this.modelRuntime) this.leaseManager = new MaisModelLeaseManager(this.modelRuntime, this.snapshotValue.models);
       await this.repository.save(this.snapshotValue);
     });
     return this.snapshot();
