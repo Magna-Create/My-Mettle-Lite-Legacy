@@ -6,7 +6,8 @@
 
 .mais-runtime-header,
 .mais-inference-lab > header,
-.mais-runtime-result > header {
+.mais-runtime-result > header,
+.mais-model-card > header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -18,6 +19,11 @@
   margin: 0.15rem 0 0;
 }
 
+.mais-model-pack {
+  display: grid;
+  gap: 0.85rem;
+}
+
 .mais-runtime-model {
   display: grid;
   gap: 1rem;
@@ -27,6 +33,11 @@
   background: color-mix(in srgb, var(--paper, #f7f3eb) 82%, transparent);
 }
 
+.mais-model-card.is-selected {
+  border-color: color-mix(in srgb, currentColor 32%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 8%, transparent);
+}
+
 .mais-runtime-model p,
 .mais-runtime-note,
 .mais-runtime-model dd,
@@ -34,17 +45,27 @@
 .mais-runtime-result dd,
 .mais-runtime-result dt,
 .mais-runtime-live,
-.mais-runtime-result blockquote {
+.mais-runtime-result blockquote,
+.mais-model-digest {
   margin: 0;
 }
 
 .mais-runtime-model > div > p,
+.mais-model-card > header p,
 .mais-runtime-note,
 .mais-runtime-model dt,
 .mais-runtime-result dt,
 .mais-runtime-result > header span,
-.mais-runtime-live span {
+.mais-runtime-live span,
+.mais-model-roles {
   color: var(--muted, #756f66);
+}
+
+.mais-model-roles {
+  font-size: 0.76rem;
+  letter-spacing: 0.045em;
+  line-height: 1.45;
+  text-transform: uppercase;
 }
 
 .mais-runtime-model dl,
@@ -86,6 +107,21 @@
   border-radius: inherit;
   background: currentColor;
   transition: width 180ms linear;
+}
+
+.mais-model-digest {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  font-size: 0.72rem;
+}
+
+.mais-model-digest span {
+  overflow-wrap: anywhere;
+  color: var(--muted, #756f66);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .mais-runtime-actions {
@@ -153,7 +189,8 @@
 @media (max-width: 620px) {
   .mais-runtime-header,
   .mais-inference-lab > header,
-  .mais-runtime-result > header {
+  .mais-runtime-result > header,
+  .mais-model-card > header {
     align-items: flex-start;
   }
 
