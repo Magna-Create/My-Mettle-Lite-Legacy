@@ -1,8 +1,10 @@
 import { Capacitor } from '@capacitor/core';
+import type { MaisAnalysisInputSnapshot } from './analysisSandbox';
 import type { MaisArtifactDraft, MaisArtifactKind, MaisRole, MaisRoleRequest, MaisRoleResult, MaisRoleResultStatus, MaisRoleRunner } from './contracts';
 import { runMaisLiteRtPrompt, type MaisLiteRtBackend, type MaisLiteRtRunResult } from './liteRtRuntime';
 import { getMaisGenerativeArtifacts, readMaisModelArtifactStatus, type MaisModelArtifactDefinition, type MaisModelArtifactStatus } from './modelArtifacts';
 import { selectMaisModel } from './modelLeases';
+import { codingAnalystInputPacket, createCodingAnalystInput, executeCodingAnalystContent, type MaisNativeAnalysisExecution } from './nativeAnalysisExecution';
 import { expectedArtifactKindForRole, formatMaisRoleContentContract, validateMaisRoleContent } from './roleOutputContracts';
 import { IndexedDbMaisTrainingEvidenceProvider, type MaisTrainingEvidencePacket, type MaisTrainingEvidenceProvider } from './trainingEvidence';
 
@@ -202,6 +204,7 @@ function minimalTrainingEvidence(evidence: MaisTrainingEvidencePacket | null): u
 function compactRolePacket(
   request: MaisRoleRequest,
   evidence: MaisTrainingEvidencePacket | null,
+  analysisInput: MaisAnalysisInputSnapshot | null,
   maximumCharacters: number,
 ): string {
   const common = {
@@ -225,6 +228,7 @@ function compactRolePacket(
       nextRole: request.checkpoint.nextRole,
     } : null,
     resourceMode: request.resourceMode,
+    analysisInput: analysisInput ? codingAnalystInputPacket(analysisInput) : null,
     triggerEvents: request.triggerEvents.map((event) => ({
       id: event.id,
       type: event.type,
@@ -282,10 +286,11 @@ function rolePrompt(
   request: MaisRoleRequest,
   artifact: MaisModelArtifactDefinition,
   evidence: MaisTrainingEvidencePacket | null,
+  analysisInput: MaisAnalysisInputSnapshot | null,
 ): { prompt: string; systemInstruction: string; maxNumTokens: number } {
   const artifactKind = expectedArtifactKindForRole(request.step.role);
   const maximumCharacters = Math.max(1_200, Math.floor(artifact.contextTokens * 4 * 0.55));
-  const packet = compactRolePacket(request, evidence, maximumCharacters);
+  const packet = compactRolePacket(request, evidence, analysisInput, maximumCharacters);
   return {
     systemInstruction: roleSystemInstruction(request.step.role, artifactKind),
     prompt: `Complete the current bounded role step. Required named schema: ${request.step.outputSchema}. The role-specific artifact.content contract is mandatory. Packet:\n${packet}`,
@@ -315,12 +320,17 @@ function decorateFallback(
   };
 }
 
-function toRoleResult(parsed: ParsedRoleOutput, runtime: MaisLiteRtRunResult): MaisRoleResult {
+function toRoleResult(
+  parsed: ParsedRoleOutput,
+  runtime: MaisLiteRtRunResult,
+  analysisExecution: MaisNativeAnalysisExecution | null,
+): MaisRoleResult {
   const artifact: MaisArtifactDraft = {
     kind: parsed.artifact.kind,
     provenanceRefs: parsed.artifact.provenanceRefs,
     content: {
       ...parsed.artifact.content,
+      ...(analysisExecution ? { analysisExecution } : {}),
       execution: {
         source: 'local_model',
         modelId: runtime.modelId,
@@ -366,10 +376,18 @@ export function createNativeMaisRoleRunner(
           return decorateFallback(await fallback.run(request), `${artifact.displayName} is not installed and verified.`, model.modelId);
         }
         const evidence = await evidenceProvider.read(request);
+        const maximumAnalysisRecords = artifact.contextTokens >= 8_192 ? 48 : 12;
+        const analysisInput = request.step.role === 'coding_analyst'
+          ? createCodingAnalystInput(request, evidence, maximumAnalysisRecords)
+          : null;
         const backend = artifact.defaultBackend as MaisLiteRtBackend;
-        const result = await runtime.run(artifact, backend, rolePrompt(request, artifact, evidence));
+        const result = await runtime.run(artifact, backend, rolePrompt(request, artifact, evidence, analysisInput));
         if (!result.success) throw new Error(result.error ?? `${artifact.displayName} did not complete.`);
-        return toRoleResult(parseMaisNativeRoleOutput(result.output, request, trainingEvidenceRefs(evidence)), result);
+        const parsed = parseMaisNativeRoleOutput(result.output, request, trainingEvidenceRefs(evidence));
+        const analysisExecution = request.step.role === 'coding_analyst' && analysisInput
+          ? await executeCodingAnalystContent(parsed.artifact.content, analysisInput, request)
+          : null;
+        return toRoleResult(parsed, result, analysisExecution);
       } catch (reason) {
         const message = reason instanceof Error ? reason.message : String(reason);
         return decorateFallback(await fallback.run(request), message, model.modelId);
