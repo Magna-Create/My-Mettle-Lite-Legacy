@@ -112,6 +112,13 @@ const evidenceProvider: MaisTrainingEvidenceProvider = {
   },
 };
 
+const validGovernorContent = {
+  route: 'continue',
+  reasonCodes: ['direct_evidence_available'],
+  scope: { entityRefs: ['session_1'], questions: ['What changed?'] },
+  requiredTier: 'standard',
+};
+
 describe('MAIS native role runner', () => {
   it('validates a real Governor result and records measured runtime provenance', async () => {
     const output = JSON.stringify({
@@ -119,7 +126,7 @@ describe('MAIS native role runner', () => {
       summary: 'The completed session should be integrated before deeper analysis.',
       artifact: {
         kind: 'plan',
-        content: { nextStep: 'index_session' },
+        content: validGovernorContent,
         provenanceRefs: ['session_1', 'invented_ref'],
       },
     });
@@ -140,6 +147,18 @@ describe('MAIS native role runner', () => {
     });
   });
 
+  it('falls back when a model returns the right outer kind but the wrong role content contract', async () => {
+    const output = JSON.stringify({
+      status: 'completed',
+      summary: 'Malformed plan.',
+      artifact: { kind: 'plan', content: { action: 'observe' }, provenanceRefs: ['event_1'] },
+    });
+    const runner = createNativeMaisRoleRunner(fallback, runtime(output), evidenceProvider);
+    const result = await runner.run(request());
+    expect(result.summary).toBe('Deterministic fallback.');
+    expect(result.artifact?.content.execution).toMatchObject({ source: 'deterministic_fallback' });
+  });
+
   it('rejects an artefact kind belonging to another role', () => {
     const output = JSON.stringify({
       status: 'completed',
@@ -150,7 +169,11 @@ describe('MAIS native role runner', () => {
   });
 
   it('accepts compact JSON wrapped in a markdown fence but filters invented references', () => {
-    const output = '```json\n{"status":"completed","summary":"Plan accepted.","artifact":{"kind":"plan","content":{"action":"observe"},"provenanceRefs":["event_1","fake"]}}\n```';
+    const output = `\`\`\`json\n${JSON.stringify({
+      status: 'completed',
+      summary: 'Plan accepted.',
+      artifact: { kind: 'plan', content: validGovernorContent, provenanceRefs: ['event_1', 'fake'] },
+    })}\n\`\`\``;
     const parsed = parseMaisNativeRoleOutput(output, request());
     expect(parsed.artifact.provenanceRefs).toEqual(['event_1']);
   });
