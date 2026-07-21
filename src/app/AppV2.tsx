@@ -23,6 +23,7 @@ import type { MaisResourceSnapshot } from '../mais/contracts';
 import { readMaisResourceSnapshot, subscribeMaisDeviceState } from '../mais/deviceState';
 import { deriveMaisResourceMode } from '../mais/resourceGovernor';
 import { exportMaisReportCard } from '../mais/reportCard';
+import { saveMaisReportCard } from '../mais/reportExport';
 import { createDeterministicMaisRoleRunner } from '../mais/simulatedRoleRunner';
 import type { MaisSystemSnapshot } from '../mais/systemState';
 
@@ -31,15 +32,6 @@ type Tab = (typeof tabs)[number];
 const tabLabels: Record<Tab, string> = { brief: 'Brief', train: 'Train', progress: 'Progress', lab: 'Lab', library: 'Library' };
 const fallbackTimerSettings: AppSettings['restTimer'] = { autoStart: true, vibrationEnabled: true, vibrationStrength: 'strong', chimeEnabled: false, backgroundNotificationEnabled: true };
 const MAIS_HEARTBEAT_INTERVAL_MS = 15_000;
-
-function downloadText(filename: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
 
 export function AppV2() {
   const service = useMemo(() => new GymAppService(new IndexedDbGymRepository()), []);
@@ -188,9 +180,16 @@ export function AppV2() {
     setMaisSnapshot(await mais.clear());
   }
 
-  function exportMaisReport(): void {
-    const report = mais.buildReportCard();
-    downloadText(`my-mettle-mais-report-${new Date().toISOString().slice(0, 10)}.json`, exportMaisReportCard(report));
+  async function exportMaisReport(): Promise<void> {
+    try {
+      const report = mais.buildReportCard();
+      const createdAt = new Date().toISOString();
+      const fileName = `my-mettle-mais-report-${createdAt.replaceAll(':', '-').replaceAll('.', '-')}.json`;
+      const result = await saveMaisReportCard(fileName, exportMaisReportCard(report));
+      window.alert(`MAIS report saved to ${result.location}/${result.fileName}`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The MAIS report could not be exported.');
+    }
   }
 
   async function recordCompletedSession(sessionId: string): Promise<void> {
