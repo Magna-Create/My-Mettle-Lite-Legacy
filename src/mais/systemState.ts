@@ -7,6 +7,7 @@ import { createMaisModelLeaseState, type MaisModelLeaseState } from './modelLeas
 import { createMaisReinforcementState, type MaisReinforcementState } from './reinforcementLedger';
 import { createMaisResearchState, type MaisResearchState } from './researchBroker';
 import type { MaisDiagnosticRecord, MaisParentReview } from './reportCard';
+import type { MaisSemanticIndexManifest } from './semanticMemory';
 import { createMaisWidgetState, type MaisWidgetState } from './widgetFoundry';
 
 export const MAIS_SYSTEM_VERSION = 1;
@@ -20,6 +21,7 @@ export interface MaisSystemSnapshot {
   research: MaisResearchState;
   reinforcement: MaisReinforcementState;
   contextManifests: MaisContextManifest[];
+  semanticManifests: MaisSemanticIndexManifest[];
   analysisRuns: MaisAnalysisRun[];
   diagnostics: MaisDiagnosticRecord[];
   parentReviews: MaisParentReview[];
@@ -38,6 +40,7 @@ export function createMaisSystemSnapshot(now = new Date().toISOString()): MaisSy
     research: createMaisResearchState(),
     reinforcement: createMaisReinforcementState(),
     contextManifests: [],
+    semanticManifests: [],
     analysisRuns: [],
     diagnostics: [],
     parentReviews: [],
@@ -63,6 +66,7 @@ export function normaliseMaisSystemSnapshot(value: unknown, now = new Date().toI
     research: structuredClone(stored.research ?? base.research),
     reinforcement: structuredClone(stored.reinforcement ?? base.reinforcement),
     contextManifests: structuredClone(stored.contextManifests ?? []),
+    semanticManifests: structuredClone(stored.semanticManifests ?? []),
     analysisRuns: structuredClone(stored.analysisRuns ?? []),
     diagnostics: structuredClone(stored.diagnostics ?? []),
     parentReviews: structuredClone(stored.parentReviews ?? []),
