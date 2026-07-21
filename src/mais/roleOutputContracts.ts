@@ -11,6 +11,14 @@ interface RoleContract {
   requiredKeys: string[];
 }
 
+const analysisRecipeExample = JSON.stringify({
+  schema: 'MaisAnalysisRecipeV1',
+  operations: [
+    { op: 'mean', field: 'totalEffectiveVolumeKgReps', as: 'meanVolume' },
+    { op: 'linear_regression', x: 'exposureIndex', y: 'bestEstimatedOneRepMaxKg', as: 'trend' },
+  ],
+});
+
 const roleContracts: Record<MaisRole, RoleContract> = {
   governor: {
     purpose: 'Bound the next useful action. Route recognised complexity rather than answering it shallowly.',
@@ -37,11 +45,17 @@ const roleContracts: Record<MaisRole, RoleContract> = {
     requiredKeys: ['observations', 'beliefs'],
   },
   coding_analyst: {
-    purpose: 'Specify one reproducible analysis over immutable supplied snapshots. Never request network, filesystem or host access.',
+    purpose: 'Specify one reproducible analysis over the immutable supplied snapshot. Generate only a MaisAnalysisRecipeV1 JSON source; never ordinary JavaScript, network, filesystem or host access.',
     contentExample: {
       analysisPlan: { question: 'Question', inputRefs: ['snapshot_id'], method: 'bounded deterministic comparison' },
-      programme: { language: 'javascript_subset', source: 'return { result: input };', outputSchema: 'AnalysisResultV1' },
-      sensitivityChecks: ['repeat with excluded outlier'],
+      programme: {
+        language: 'javascript_subset',
+        inputSnapshotId: 'snapshot_id_from_packet',
+        source: analysisRecipeExample,
+        outputSchema: 'MaisAnalysisResultV1',
+        permittedLibraries: ['statistics'],
+      },
+      sensitivityChecks: ['repeat with a trimmed mean'],
     },
     requiredKeys: ['analysisPlan', 'programme', 'sensitivityChecks'],
   },
@@ -136,7 +150,15 @@ export function validateMaisRoleContent(role: MaisRole, content: Record<string, 
   }
   if (role === 'coding_analyst') {
     if (!isRecord(content.analysisPlan)) errors.push('artifact.content.analysisPlan must be an object.');
-    if (!isRecord(content.programme)) errors.push('artifact.content.programme must be an object.');
+    if (!isRecord(content.programme)) {
+      errors.push('artifact.content.programme must be an object.');
+    } else {
+      if (content.programme.language !== 'javascript_subset') errors.push('artifact.content.programme.language must be javascript_subset.');
+      if (typeof content.programme.inputSnapshotId !== 'string') errors.push('artifact.content.programme.inputSnapshotId is required.');
+      if (typeof content.programme.source !== 'string') errors.push('artifact.content.programme.source is required.');
+      if (typeof content.programme.outputSchema !== 'string') errors.push('artifact.content.programme.outputSchema is required.');
+      if (!Array.isArray(content.programme.permittedLibraries)) errors.push('artifact.content.programme.permittedLibraries must be an array.');
+    }
     if (!Array.isArray(content.sensitivityChecks)) errors.push('artifact.content.sensitivityChecks must be an array.');
   }
   if (role === 'coach') {
