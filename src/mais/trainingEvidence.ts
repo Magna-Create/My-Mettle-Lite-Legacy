@@ -2,6 +2,7 @@ import { IndexedDbGymRepository } from '../adapters/storage/IndexedDbGymReposito
 import type { AppDatabase, Experiment, Exercise, RoutineVersion, Session, SessionExercise } from '../domain/model';
 import { deriveComparableExposure } from './comparableExposureEngine';
 import type { MaisRoleRequest } from './contracts';
+import { selectMaisInvestigationCandidates, type MaisInvestigationCandidate } from './investigationSelector';
 import { resolveExerciseMuscleContributions } from './muscleOntology';
 
 export interface MaisTrainingEvidenceProvider {
@@ -17,6 +18,7 @@ export interface MaisTrainingEvidencePacket {
   exercises: Array<ReturnType<typeof exerciseEvidence>>;
   routines: Array<ReturnType<typeof routineEvidence>>;
   experiments: Array<ReturnType<typeof experimentEvidence>>;
+  investigationCandidates?: MaisInvestigationCandidate[] | undefined;
   recentBodyMeasurements: AppDatabase['bodyMeasurements'];
   warnings: string[];
 }
@@ -202,6 +204,10 @@ export function compileTrainingEvidence(database: AppDatabase, request: MaisRole
   if (sessions.some((session) => session.excludedFromInsights)) warnings.push('At least one direct session is excluded from insight calculations.');
   if (sessions.some((session) => session.status !== 'completed')) warnings.push('At least one direct session is not complete.');
 
+  const investigationCandidates = selectMaisInvestigationCandidates(database, { maximumCandidates: 20 })
+    .filter((candidate) => exerciseIds.has(candidate.exerciseId))
+    .slice(0, 6);
+
   return {
     generatedAt: new Date().toISOString(),
     sourceDatabaseUpdatedAt: database.updatedAt,
@@ -213,6 +219,7 @@ export function compileTrainingEvidence(database: AppDatabase, request: MaisRole
     experiments: database.experiments.filter((experiment) => refSet.has(experiment.id)
       || exerciseIds.has(experiment.exerciseId)
       || sessions.some((session) => experiment.testedSessionId === session.id)).map(experimentEvidence),
+    investigationCandidates,
     recentBodyMeasurements: database.bodyMeasurements.slice(-3),
     warnings,
   };
