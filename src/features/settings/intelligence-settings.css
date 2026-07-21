@@ -3,9 +3,14 @@
   max-width: 980px;
 }
 
-.intelligence-settings-stack {
+.intelligence-settings-stack,
+.intelligence-research-settings,
+.intelligence-research-list {
   display: grid;
   gap: 16px;
+}
+
+.intelligence-settings-stack {
   overflow: auto;
   padding-bottom: 8px;
 }
@@ -25,7 +30,8 @@
   gap: 10px;
 }
 
-.intelligence-import-file {
+.intelligence-import-file,
+.intelligence-research-request {
   display: grid;
   gap: 10px;
   padding: 14px;
@@ -34,22 +40,46 @@
   background: color-mix(in srgb, var(--paper, #fff) 72%, transparent);
 }
 
-.intelligence-import-file > header {
+.intelligence-import-file > header,
+.intelligence-research-request > header {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
 }
 
-.intelligence-import-file > header div {
+.intelligence-import-file > header div,
+.intelligence-research-request > header div {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.intelligence-import-file small {
+.intelligence-import-file small,
+.intelligence-research-request small {
   color: var(--ink-muted, #6d6861);
   overflow-wrap: anywhere;
+}
+
+.intelligence-research-request p {
+  margin: 0;
+}
+
+.intelligence-research-request summary,
+.intelligence-research-settings summary {
+  cursor: pointer;
+}
+
+.settings-empty-state {
+  display: grid;
+  gap: 5px;
+  padding: 18px;
+  border: 1px dashed color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 16px;
+}
+
+.settings-empty-state span {
+  color: var(--ink-muted, #6d6861);
 }
 
 .settings-fact-list {
@@ -80,7 +110,8 @@
     width: calc(100vw - 12px);
   }
 
-  .intelligence-import-file > header {
+  .intelligence-import-file > header,
+  .intelligence-research-request > header {
     align-items: stretch;
     flex-direction: column;
   }
