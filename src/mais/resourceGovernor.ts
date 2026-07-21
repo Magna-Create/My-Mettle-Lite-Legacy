@@ -1,11 +1,10 @@
 import type { MaisModelTier, MaisResourceMode, MaisResourceSnapshot } from './contracts';
 
 export function deriveMaisResourceMode(snapshot: MaisResourceSnapshot): MaisResourceMode {
-  if (snapshot.appVisibility === 'closed' || snapshot.thermalState === 'critical') return 'paused';
+  if (snapshot.appVisibility === 'closed' || snapshot.userPaused) return 'paused';
 
   if (
     snapshot.batterySaver
-    || snapshot.thermalState === 'serious'
     || snapshot.activeWorkoutInteraction
     || snapshot.appVisibility === 'background'
     || (snapshot.availableMemoryMb !== undefined && snapshot.availableMemoryMb < 1_500)
@@ -13,10 +12,7 @@ export function deriveMaisResourceMode(snapshot: MaisResourceSnapshot): MaisReso
     return 'light';
   }
 
-  if (
-    snapshot.thermalState === 'fair'
-    || (snapshot.availableMemoryMb !== undefined && snapshot.availableMemoryMb < 3_000)
-  ) {
+  if (snapshot.availableMemoryMb !== undefined && snapshot.availableMemoryMb < 3_000) {
     return 'standard';
   }
 
