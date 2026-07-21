@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  readNativeMaisEmbeddingStatus,
+  runNativeMaisEmbeddingProbe,
+  type MaisEmbeddingProbeResult,
+  type MaisEmbeddingRuntimeStatus,
+} from '../../mais/embeddingRuntime';
+import {
   deleteMaisModelArtifact,
   formatModelBytes,
   getEmbeddingGemmaTokenizerArtifact,
@@ -57,18 +63,26 @@ export function EmbeddingGemmaImportPanel() {
   const tokenizerArtifact = useMemo(() => getEmbeddingGemmaTokenizerArtifact(), []);
   const [modelStatus, setModelStatus] = useState<MaisModelArtifactStatus | null>(null);
   const [tokenizerStatus, setTokenizerStatus] = useState<MaisModelArtifactStatus | null>(null);
+  const [runtimeStatus, setRuntimeStatus] = useState<MaisEmbeddingRuntimeStatus | null>(null);
+  const [probe, setProbe] = useState<MaisEmbeddingProbeResult | null>(null);
   const [busyArtifactId, setBusyArtifactId] = useState<string | null>(null);
+  const [probing, setProbing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  async function refreshStatus(): Promise<void> {
     if (!modelArtifact) return;
-    void Promise.all([
+    const [model, tokenizer, runtime] = await Promise.all([
       readMaisModelArtifactStatus(modelArtifact),
       readMaisModelArtifactStatus(tokenizerArtifact),
-    ]).then(([model, tokenizer]) => {
-      setModelStatus(model);
-      setTokenizerStatus(tokenizer);
-    }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'EmbeddingGemma status could not be read.'));
+      readNativeMaisEmbeddingStatus(),
+    ]);
+    setModelStatus(model);
+    setTokenizerStatus(tokenizer);
+    setRuntimeStatus(runtime);
+  }
+
+  useEffect(() => {
+    void refreshStatus().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'EmbeddingGemma status could not be read.'));
   }, [modelArtifact, tokenizerArtifact]);
 
   if (!modelArtifact) return null;
@@ -80,8 +94,10 @@ export function EmbeddingGemmaImportPanel() {
   ): Promise<void> {
     setBusyArtifactId(artifact.artifactId);
     setError(null);
+    setProbe(null);
     try {
       setStatus(await operation());
+      await refreshStatus();
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : 'The model operation failed.';
       if (message !== 'Model import cancelled.') setError(message);
@@ -90,10 +106,24 @@ export function EmbeddingGemmaImportPanel() {
     }
   }
 
+  async function runProbe(): Promise<void> {
+    setProbing(true);
+    setError(null);
+    try {
+      const result = await runNativeMaisEmbeddingProbe();
+      setProbe(result);
+      setRuntimeStatus(await readNativeMaisEmbeddingStatus());
+      if (!result.success) setError(result.error ?? 'EmbeddingGemma did not complete the probe.');
+    } finally {
+      setProbing(false);
+    }
+  }
+
   const modelReady = modelStatus?.state === 'ready';
   const tokenizerReady = tokenizerStatus?.state === 'ready';
+  const runtimeReady = runtimeStatus?.ready ?? false;
   const overallLabel = modelReady && tokenizerReady
-    ? 'Ready for runtime integration'
+    ? runtimeReady ? 'Runtime ready' : 'Files ready'
     : modelReady
       ? 'Tokenizer required'
       : 'Setup incomplete';
@@ -113,8 +143,10 @@ export function EmbeddingGemmaImportPanel() {
       </p>
 
       <dl className="settings-fact-list">
-        <div><dt>Model backend</dt><dd>NPU · CPU fallback</dd></div>
+        <div><dt>Runtime path</dt><dd>{runtimeStatus?.backend ?? 'LiteRT AOT-precompiled'}</dd></div>
+        <div><dt>Accelerator claim</dt><dd>{runtimeStatus?.acceleratorClaim ?? 'Unverified until device probe'}</dd></div>
         <div><dt>Embedding window</dt><dd>512 tokens</dd></div>
+        <div><dt>Stored dimensions</dt><dd>256 of {runtimeStatus?.sourceDimensions ?? 768}</dd></div>
         <div><dt>Files ready</dt><dd>{Number(modelReady) + Number(tokenizerReady)}/2</dd></div>
       </dl>
 
@@ -148,6 +180,12 @@ export function EmbeddingGemmaImportPanel() {
           }}
         />
       </div>
+
+      <section className="intelligence-import-file">
+        <header><div><strong>Semantic retrieval probe</strong><small>Embeds two documents and one query, then verifies that the matching training passage ranks above an unrelated nutrition passage.</small></div>{probe && <span className={`status-chip ${probe.success && probe.margin > 0 ? 'is-ready' : 'is-failed'}`}>{probe.success && probe.margin > 0 ? 'Passed' : 'Review'}</span>}</header>
+        {probe && <dl className="settings-fact-list"><div><dt>Matching score</dt><dd>{probe.matchingScore.toFixed(4)}</dd></div><div><dt>Unrelated score</dt><dd>{probe.unrelatedScore.toFixed(4)}</dd></div><div><dt>Margin</dt><dd>{probe.margin.toFixed(4)}</dd></div><div><dt>Document pass</dt><dd>{probe.documentTotalMs} ms</dd></div><div><dt>Query pass</dt><dd>{probe.queryTotalMs} ms</dd></div></dl>}
+        <div className="mais-runtime-actions"><button className="primary-action compact" type="button" disabled={!runtimeReady || probing} onClick={() => void runProbe()}>{probing ? 'Running probe…' : 'Run retrieval probe'}</button></div>
+      </section>
     </section>
   );
 }
