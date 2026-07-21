@@ -3,17 +3,8 @@ import type { MaisArtifactDraft, MaisArtifactKind, MaisRole, MaisRoleRequest, Ma
 import { runMaisLiteRtPrompt, type MaisLiteRtBackend, type MaisLiteRtRunResult } from './liteRtRuntime';
 import { getMaisGenerativeArtifacts, readMaisModelArtifactStatus, type MaisModelArtifactDefinition, type MaisModelArtifactStatus } from './modelArtifacts';
 import { selectMaisModel } from './modelLeases';
+import { expectedArtifactKindForRole, formatMaisRoleContentContract, validateMaisRoleContent } from './roleOutputContracts';
 import { IndexedDbMaisTrainingEvidenceProvider, type MaisTrainingEvidencePacket, type MaisTrainingEvidenceProvider } from './trainingEvidence';
-
-const artifactKindByRole: Record<MaisRole, MaisArtifactKind> = {
-  governor: 'plan',
-  analyst: 'belief_update',
-  coding_analyst: 'analysis_result',
-  auditor: 'audit',
-  coach: 'lab_proposal_draft',
-  memory_curator: 'memory_update',
-  research_broker: 'research_request',
-};
 
 const allowedStatuses = new Set<MaisRoleResultStatus>([
   'completed',
@@ -117,11 +108,15 @@ export function parseMaisNativeRoleOutput(
   }
   if (!isPlainRecord(artifact)) throw new Error('The local model did not return an artefact.');
 
-  const expectedKind = artifactKindByRole[request.step.role];
+  const expectedKind = expectedArtifactKindForRole(request.step.role);
   if (artifact.kind !== expectedKind) {
     throw new Error(`The local model returned ${String(artifact.kind)} instead of ${expectedKind}.`);
   }
   if (!isPlainRecord(artifact.content)) throw new Error('The local model artefact content is invalid.');
+  const contentValidation = validateMaisRoleContent(request.step.role, artifact.content);
+  if (!contentValidation.valid) {
+    throw new Error(`The local model returned an invalid ${request.step.role} content contract: ${contentValidation.errors.join(' ')}`);
+  }
 
   const allowedRefs = knownProvenanceRefs(request, additionalProvenanceRefs);
   const requestedRefs = Array.isArray(artifact.provenanceRefs)
@@ -169,6 +164,7 @@ function reducedTrainingEvidence(evidence: MaisTrainingEvidencePacket | null): u
     })),
     comparableExposures: Object.fromEntries(Object.entries(evidence.comparableExposures)
       .map(([exerciseId, exposures]) => [exerciseId, exposures.slice(-3)])),
+    exercises: evidence.exercises,
     experiments: evidence.experiments,
     warnings: evidence.warnings,
   };
@@ -193,6 +189,12 @@ function minimalTrainingEvidence(evidence: MaisTrainingEvidencePacket | null): u
         reflection: exercise.reflection,
       })),
     })),
+    comparableExposures: Object.fromEntries(Object.entries(evidence.comparableExposures)
+      .map(([exerciseId, exposures]) => [exerciseId, exposures.slice(-2).map((exposure) => ({
+        sessionId: exposure.sessionId,
+        mode: exposure.mode,
+        derivedMetrics: exposure.derivedMetrics,
+      }))])),
     warnings: evidence.warnings,
   };
 }
@@ -270,7 +272,8 @@ function roleSystemInstruction(role: MaisRole, artifactKind: MaisArtifactKind): 
     'Preserve uncertainty. A missing fact stays missing.',
     'Separate observations from hypotheses and proposed next actions.',
     'Do not output hidden reasoning, chain-of-thought or a chat response.',
-    `Return only one compact JSON object using this exact shape: {"status":"completed","summary":"...","artifact":{"kind":"${artifactKind}","content":{},"provenanceRefs":[]}}.`,
+    formatMaisRoleContentContract(role),
+    `Return only one compact JSON object using this exact outer shape: {"status":"completed","summary":"...","artifact":{"kind":"${artifactKind}","content":{},"provenanceRefs":[]}}.`,
     'Provenance references must be copied exactly from IDs present in the packet.',
   ].join(' ');
 }
@@ -280,12 +283,12 @@ function rolePrompt(
   artifact: MaisModelArtifactDefinition,
   evidence: MaisTrainingEvidencePacket | null,
 ): { prompt: string; systemInstruction: string; maxNumTokens: number } {
-  const artifactKind = artifactKindByRole[request.step.role];
+  const artifactKind = expectedArtifactKindForRole(request.step.role);
   const maximumCharacters = Math.max(1_200, Math.floor(artifact.contextTokens * 4 * 0.55));
   const packet = compactRolePacket(request, evidence, maximumCharacters);
   return {
     systemInstruction: roleSystemInstruction(request.step.role, artifactKind),
-    prompt: `Complete the current bounded role step. Required output schema: ${request.step.outputSchema}. Packet:\n${packet}`,
+    prompt: `Complete the current bounded role step. Required named schema: ${request.step.outputSchema}. The role-specific artifact.content contract is mandatory. Packet:\n${packet}`,
     maxNumTokens: artifact.contextTokens,
   };
 }
