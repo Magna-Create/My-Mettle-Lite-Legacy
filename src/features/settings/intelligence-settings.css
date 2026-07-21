@@ -20,6 +20,38 @@
   overflow-wrap: anywhere;
 }
 
+.intelligence-import-files {
+  display: grid;
+  gap: 10px;
+}
+
+.intelligence-import-file {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--paper, #fff) 72%, transparent);
+}
+
+.intelligence-import-file > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.intelligence-import-file > header div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.intelligence-import-file small {
+  color: var(--ink-muted, #6d6861);
+  overflow-wrap: anywhere;
+}
+
 .settings-fact-list {
   display: grid;
   gap: 8px;
@@ -46,6 +78,11 @@
 @media (max-width: 640px) {
   .settings-sheet.is-intelligence-wide {
     width: calc(100vw - 12px);
+  }
+
+  .intelligence-import-file > header {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .settings-fact-list div {
