@@ -5,9 +5,9 @@
     "displayName": "Gemma 4 E2B IT",
     "runtime": "litert-lm",
     "runtimeVersion": "0.14.0",
-    "backendCandidates": ["cpu", "gpu", "npu"],
+    "backendCandidates": ["cpu", "gpu"],
     "defaultBackend": "cpu",
-    "roleSlots": ["governor", "coach", "memory_curator"],
+    "roleSlots": ["everyday_language", "triage", "coach", "memory_curator"],
     "contextTokens": 4096,
     "sourceRepository": "litert-community/gemma-4-E2B-it-litert-lm",
     "sourceRevision": "6e5c4f1",
@@ -20,17 +20,17 @@
     "licence": "Apache-2.0",
     "downloadPolicy": "direct",
     "status": "approved",
-    "notes": "Frequent Governor, Coach and memory-curation model. CPU is the default because the measured cold-load cost is substantially lower than GPU on the target phone."
+    "notes": "Everyday language and bounded triage model. CPU is the default because measured cold-load cost is substantially lower than GPU on the target phone."
   },
   {
     "artifactId": "google.gemma-4-e4b-it.litertlm.default",
     "modelId": "google.gemma-4-e4b-it",
-    "displayName": "Gemma 4 E4B IT",
+    "displayName": "Gemma 4 E4B IT · benchmark only",
     "runtime": "litert-lm",
     "runtimeVersion": "0.14.0",
-    "backendCandidates": ["gpu", "cpu", "npu"],
+    "backendCandidates": ["gpu", "cpu"],
     "defaultBackend": "gpu",
-    "roleSlots": ["analyst", "auditor", "coach", "memory_curator"],
+    "roleSlots": ["benchmark_only"],
     "contextTokens": 8192,
     "sourceRepository": "litert-community/gemma-4-E4B-it-litert-lm",
     "sourceRevision": "28299f3",
@@ -42,18 +42,18 @@
     "sha256": "0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0",
     "licence": "Apache-2.0",
     "downloadPolicy": "direct",
-    "status": "approved",
-    "notes": "Normal Analyst and Auditor model. GPU is the default because deeper tasks amortise load time and benefit from faster prefill/generation."
+    "status": "benchmark_only",
+    "notes": "Retained only for comparison during development. MAIS does not route production work to this model."
   },
   {
     "artifactId": "qwen.qwen3-8b.litertlm.mixed-int4",
     "modelId": "qwen.qwen3-8b",
-    "displayName": "Qwen3-8B · mixed INT4",
+    "displayName": "Qwen3-8B · temporary deep thinker",
     "runtime": "litert-lm",
     "runtimeVersion": "0.14.0",
-    "backendCandidates": ["gpu", "cpu"],
-    "defaultBackend": "gpu",
-    "roleSlots": ["coding_analyst", "analyst", "auditor", "research_broker"],
+    "backendCandidates": ["cpu", "gpu"],
+    "defaultBackend": "cpu",
+    "roleSlots": ["deep_reasoning", "coding_analyst", "auditor", "research_request"],
     "contextTokens": 2048,
     "sourceRepository": "litert-community/Qwen3-8B",
     "sourceRevision": "71ff705",
@@ -65,8 +65,8 @@
     "sha256": "",
     "licence": "Apache-2.0",
     "downloadPolicy": "direct",
-    "status": "approved_for_device_validation",
-    "notes": "Deep Lab reasoning, code generation and experiment design. The official LiteRT Community file does not publish a stable checksum in the indexed model card, so the development installer pins the first complete HTTPS download and re-verifies it on later launches."
+    "status": "temporary_development_standin",
+    "notes": "Temporary 2K stand-in for the planned Qwen3-4B Thinking 12K artefact. CPU is the safe backend because repeated GPU runs crashed the target phone."
   },
   {
     "artifactId": "google.embeddinggemma-300m.qualcomm-sm8750.seq512",
@@ -89,6 +89,6 @@
     "licence": "Gemma licence — user acceptance required on Hugging Face",
     "downloadPolicy": "manual",
     "status": "access_required",
-    "notes": "Preferred semantic-retrieval artefact for the Snapdragon 8 Elite generation. The repository is gated, so My Mettle will not attempt an unauthenticated background download."
+    "notes": "Semantic-retrieval artefact for Snapdragon 8 Elite. It is imported through Android's document picker after the user accepts the source licence."
   }
 ]
