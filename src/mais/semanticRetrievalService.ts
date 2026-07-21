@@ -18,6 +18,7 @@ export interface MaisSemanticSyncResult {
   embeddedChunkCount: number;
   reusedChunkCount: number;
   removedChunkCount: number;
+  remainingChunkCount: number;
 }
 
 export interface MaisSemanticSearchResult {
@@ -52,6 +53,7 @@ export class MaisSemanticRetrievalService {
     private readonly runtime: MaisEmbeddingRuntime,
     private readonly dimensions: MaisEmbeddingRecord['dimensions'] = 256,
     private readonly batchSize = 8,
+    private readonly maximumNewChunksPerSync = 48,
   ) {}
 
   async synchronise(documents: MaisSemanticDocument[]): Promise<MaisSemanticSyncResult> {
@@ -62,9 +64,10 @@ export class MaisSemanticRetrievalService {
       const existing = existingById.get(chunk.id);
       return !existing || !vectorIsCompatible(existing, this.dimensions, chunk.contentHash);
     });
+    const selectedPending = pending.slice(0, this.maximumNewChunksPerSync);
 
     let embeddedChunkCount = 0;
-    for (const group of batches(pending, this.batchSize)) {
+    for (const group of batches(selectedPending, this.batchSize)) {
       const vectors = await this.runtime.embed({
         texts: group.map((chunk) => chunk.text),
         purpose: 'document',
@@ -99,6 +102,7 @@ export class MaisSemanticRetrievalService {
       embeddedChunkCount,
       reusedChunkCount: chunks.length - pending.length,
       removedChunkCount: staleChunkIds.length,
+      remainingChunkCount: Math.max(0, pending.length - selectedPending.length),
     };
   }
 
