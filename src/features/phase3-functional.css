@@ -1,0 +1,143 @@
+.brief-intelligence-grid,
+.progress-belief-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.brief-intelligence-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.brief-intelligence-card {
+  min-height: 170px;
+}
+
+.progress-belief-card > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.progress-belief-card h2 {
+  max-width: 760px;
+}
+
+.compact-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.compact-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .42);
+}
+
+.compact-metrics dt {
+  color: var(--muted);
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 800;
+}
+
+.compact-metrics dd {
+  margin: 0;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.progress-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.progress-evidence-column {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .34);
+}
+
+.progress-evidence-column h3 {
+  margin-bottom: 10px;
+}
+
+.progress-evidence-column ul,
+.progress-question-card ul,
+.progress-analysis-card ul {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.progress-evidence-column li,
+.progress-question-card li,
+.progress-analysis-card li {
+  display: grid;
+  gap: 3px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.progress-evidence-column li:first-child,
+.progress-question-card li:first-child,
+.progress-analysis-card li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.progress-evidence-column li p {
+  margin: 0;
+}
+
+.progress-evidence-column small,
+.progress-question-card span,
+.progress-analysis-card span,
+.provenance-line,
+.muted-copy {
+  color: var(--muted);
+}
+
+.provenance-line {
+  display: block;
+  margin-top: 16px;
+  overflow-wrap: anywhere;
+}
+
+.progress-question-card,
+.progress-analysis-card {
+  margin-top: 16px;
+}
+
+.experiment-card details {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.experiment-card summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .brief-intelligence-grid,
+  .progress-evidence-grid,
+  .compact-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-belief-card > header {
+    flex-direction: column;
+  }
+}
