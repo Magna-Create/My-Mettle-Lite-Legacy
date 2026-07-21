@@ -1,5 +1,6 @@
 import { createId } from '../domain/ids';
 import type { MaisAnalysisRun } from './analysisSandbox';
+import type { MaisBeliefGraphState } from './beliefGraph';
 import type { MaisCapabilityState } from './capabilityProtocol';
 import type { MaisContextManifest } from './contextCompiler';
 import type { MaisState } from './contracts';
@@ -10,7 +11,7 @@ import type { MaisWidgetState } from './widgetFoundry';
 
 export interface MaisDiagnosticRecord {
   id: string;
-  category: 'heart' | 'model' | 'capability' | 'context' | 'analysis' | 'storage' | 'device' | 'research' | 'widget';
+  category: 'heart' | 'model' | 'capability' | 'context' | 'analysis' | 'storage' | 'device' | 'research' | 'widget' | 'belief';
   severity: 'info' | 'warning' | 'error';
   message: string;
   refs: string[];
@@ -28,6 +29,7 @@ export interface MaisReportCard {
   widgets: MaisWidgetState;
   research: MaisResearchState;
   reinforcement: MaisReinforcementState;
+  beliefs: MaisBeliefGraphState;
   contextManifests: MaisContextManifest[];
   analysisRuns: MaisAnalysisRun[];
   diagnostics: MaisDiagnosticRecord[];
@@ -42,6 +44,10 @@ export interface MaisReportCard {
     failedModelLeaseCount: number;
     researchRequestCount: number;
     installedWidgetCount: number;
+    activeBeliefCount: number;
+    contestedBeliefCount: number;
+    unresolvedQuestionCount: number;
+    rejectionMemoryCount: number;
   };
 }
 
@@ -86,6 +92,7 @@ export function buildMaisReportCard(input: {
   widgets: MaisWidgetState;
   research: MaisResearchState;
   reinforcement: MaisReinforcementState;
+  beliefs: MaisBeliefGraphState;
   contextManifests: MaisContextManifest[];
   analysisRuns: MaisAnalysisRun[];
   diagnostics: MaisDiagnosticRecord[];
@@ -102,6 +109,7 @@ export function buildMaisReportCard(input: {
     widgets: structuredClone(input.widgets),
     research: structuredClone(input.research),
     reinforcement: structuredClone(input.reinforcement),
+    beliefs: structuredClone(input.beliefs),
     contextManifests: structuredClone(input.contextManifests),
     analysisRuns: structuredClone(input.analysisRuns),
     diagnostics: structuredClone(input.diagnostics),
@@ -116,6 +124,10 @@ export function buildMaisReportCard(input: {
       failedModelLeaseCount: input.models.leases.filter((lease) => lease.status === 'failed').length,
       researchRequestCount: input.research.requests.length,
       installedWidgetCount: input.widgets.widgets.filter((widget) => widget.status === 'installed').length,
+      activeBeliefCount: input.beliefs.beliefs.filter((belief) => !['superseded', 'archived'].includes(belief.status)).length,
+      contestedBeliefCount: input.beliefs.beliefs.filter((belief) => belief.status === 'contested').length,
+      unresolvedQuestionCount: input.beliefs.unresolvedQuestions.filter((question) => ['open', 'research_requested'].includes(question.status)).length,
+      rejectionMemoryCount: input.beliefs.rejections.length,
     },
   };
   return sanitise(card) as MaisReportCard;
