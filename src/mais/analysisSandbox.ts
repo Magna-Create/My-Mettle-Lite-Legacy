@@ -105,7 +105,7 @@ function finiteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-function namedResult(value: unknown): value is { as: string } {
+function namedResult(value: unknown): value is Record<string, unknown> & { as: string } {
   return isRecord(value) && typeof value.as === 'string' && value.as.trim().length > 0;
 }
 
@@ -117,29 +117,48 @@ function parseRecipe(source: string): { recipe: MaisAnalysisRecipeV1 | null; err
     }
     if (parsed.operations.length === 0) return { recipe: null, errors: ['Analysis recipe requires at least one operation.'] };
     if (parsed.operations.length > 32) return { recipe: null, errors: ['Analysis recipe exceeds the 32-operation limit.'] };
+
     const aliases = new Set<string>();
     const errors: string[] = [];
-    for (const [index, operation] of parsed.operations.entries()) {
-      if (!isRecord(operation) || typeof operation.op !== 'string' || !allowedOperationNames.has(operation.op as MaisAnalysisOperation['op'])) {
+    for (const [index, operationValue] of parsed.operations.entries()) {
+      if (!isRecord(operationValue) || typeof operationValue.op !== 'string' || !allowedOperationNames.has(operationValue.op as MaisAnalysisOperation['op'])) {
         errors.push(`Operation ${index + 1} is unsupported.`);
         continue;
       }
-      if (!namedResult(operation)) {
+      if (!namedResult(operationValue)) {
         errors.push(`Operation ${index + 1} requires a result alias.`);
         continue;
       }
+
+      const operation = operationValue as Record<string, unknown> & {
+        op: MaisAnalysisOperation['op'];
+        as: string;
+      };
       if (aliases.has(operation.as)) errors.push(`Result alias ${operation.as} is duplicated.`);
       aliases.add(operation.as);
-      if (operation.op !== 'count' && operation.op !== 'pearson' && operation.op !== 'linear_regression' && operation.op !== 'group_mean' && typeof operation.field !== 'string') {
+
+      if (
+        operation.op !== 'count'
+        && operation.op !== 'pearson'
+        && operation.op !== 'linear_regression'
+        && operation.op !== 'group_mean'
+        && typeof operation.field !== 'string'
+      ) {
         errors.push(`Operation ${operation.as} requires a field.`);
       }
-      if ((operation.op === 'pearson' || operation.op === 'linear_regression') && (typeof operation.x !== 'string' || typeof operation.y !== 'string')) {
+      if (
+        (operation.op === 'pearson' || operation.op === 'linear_regression')
+        && (typeof operation.x !== 'string' || typeof operation.y !== 'string')
+      ) {
         errors.push(`Operation ${operation.as} requires x and y fields.`);
       }
       if (operation.op === 'group_mean' && (typeof operation.groupBy !== 'string' || typeof operation.field !== 'string')) {
         errors.push(`Operation ${operation.as} requires groupBy and field.`);
       }
-      if (operation.op === 'trimmed_mean' && (!finiteNumber(operation.trimFraction) || operation.trimFraction < 0 || operation.trimFraction >= 0.5)) {
+      if (
+        operation.op === 'trimmed_mean'
+        && (!finiteNumber(operation.trimFraction) || operation.trimFraction < 0 || operation.trimFraction >= 0.5)
+      ) {
         errors.push(`Operation ${operation.as} has an invalid trimFraction.`);
       }
     }
@@ -212,7 +231,10 @@ function linearRegression(pairs: Array<[number, number]>): Record<string, number
 function executeOperation(operation: MaisAnalysisOperation, sourceRecords: Record<string, unknown>[]): unknown {
   const records = sourceRecords.filter((record) => matchesFilter(record, operation.filter));
   if (operation.op === 'count') return records.length;
-  if (operation.op === 'pearson') return { coefficient: pearson(pairedValues(records, operation.x, operation.y)), n: pairedValues(records, operation.x, operation.y).length };
+  if (operation.op === 'pearson') {
+    const pairs = pairedValues(records, operation.x, operation.y);
+    return { coefficient: pearson(pairs), n: pairs.length };
+  }
   if (operation.op === 'linear_regression') return linearRegression(pairedValues(records, operation.x, operation.y));
   if (operation.op === 'group_mean') {
     const groups = new Map<string, number[]>();
@@ -223,7 +245,11 @@ function executeOperation(operation: MaisAnalysisOperation, sourceRecords: Recor
       const key = String(groupValue);
       groups.set(key, [...(groups.get(key) ?? []), numeric]);
     }
-    return Object.fromEntries([...groups.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([key, values]) => [key, { mean: mean(values), n: values.length }]));
+    return Object.fromEntries(
+      [...groups.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, values]) => [key, { mean: mean(values), n: values.length }]),
+    );
   }
 
   const values = numericValues(records, operation.field);
@@ -233,10 +259,15 @@ function executeOperation(operation: MaisAnalysisOperation, sourceRecords: Recor
   if (operation.op === 'min') return values.length ? Math.min(...values) : null;
   if (operation.op === 'max') return values.length ? Math.max(...values) : null;
   if (operation.op === 'standard_deviation') return standardDeviation(values);
-  const ordered = [...values].sort((left, right) => left - right);
-  const trim = Math.floor(ordered.length * operation.trimFraction);
-  const trimmed = ordered.slice(trim, ordered.length - trim);
-  return { mean: mean(trimmed), n: trimmed.length, trimmedPerSide: trim };
+  if (operation.op === 'trimmed_mean') {
+    const ordered = [...values].sort((left, right) => left - right);
+    const trim = Math.floor(ordered.length * operation.trimFraction);
+    const trimmed = ordered.slice(trim, ordered.length - trim);
+    return { mean: mean(trimmed), n: trimmed.length, trimmedPerSide: trim };
+  }
+
+  const exhaustive: never = operation;
+  throw new Error(`Unsupported analysis operation: ${String(exhaustive)}`);
 }
 
 export function createMaisAnalysisInput(
