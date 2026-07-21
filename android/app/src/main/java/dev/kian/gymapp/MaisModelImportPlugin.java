@@ -43,6 +43,7 @@ public final class MaisModelImportPlugin extends Plugin {
         try {
             required(call, "artifactId");
             safeFileName(required(call, "fileName"));
+            safeExtension(required(call, "expectedExtension"));
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("*/*");
@@ -68,17 +69,21 @@ public final class MaisModelImportPlugin extends Plugin {
         Intent data = result.getData();
         Uri uri = data == null ? null : data.getData();
         if (uri == null) {
-            call.reject("No model file was selected.");
+            call.reject("No file was selected.");
             return;
         }
 
         final String artifactId;
         final String fileName;
+        final String displayName;
+        final String expectedExtension;
         final long minimumBytes;
         final long maximumBytes;
         try {
             artifactId = required(call, "artifactId");
             fileName = safeFileName(required(call, "fileName"));
+            displayName = required(call, "displayName");
+            expectedExtension = safeExtension(required(call, "expectedExtension"));
             minimumBytes = Math.max(1L, call.getLong("minimumBytes", 1L));
             maximumBytes = Math.max(minimumBytes, call.getLong("maximumBytes", Long.MAX_VALUE));
         } catch (Exception error) {
@@ -91,23 +96,23 @@ public final class MaisModelImportPlugin extends Plugin {
             try {
                 ensureModelDirectory();
                 ContentResolver resolver = getContext().getContentResolver();
-                DocumentMetadata metadata = readMetadata(resolver, uri);
-                if (!metadata.displayName.toLowerCase(Locale.ROOT).endsWith(".tflite")) {
-                    throw new IOException("Select the Qualcomm EmbeddingGemma .tflite file.");
+                DocumentMetadata metadata = readMetadata(resolver, uri, fileName);
+                if (!metadata.displayName.toLowerCase(Locale.ROOT).endsWith(expectedExtension.toLowerCase(Locale.ROOT))) {
+                    throw new IOException("Select the expected " + expectedExtension + " file for " + displayName + ".");
                 }
                 if (metadata.sizeBytes >= 0L && (metadata.sizeBytes < minimumBytes || metadata.sizeBytes > maximumBytes)) {
-                    throw new IOException("The selected file size does not match the expected EmbeddingGemma artefact.");
+                    throw new IOException("The selected file size does not match the expected " + displayName + " artefact.");
                 }
                 long sourceBytes = Math.max(0L, metadata.sizeBytes);
                 if (sourceBytes > 0L && availableBytes() < sourceBytes + 64L * 1024L * 1024L) {
-                    throw new IOException("Not enough free storage to import this model.");
+                    throw new IOException("Not enough free storage to import this file.");
                 }
 
                 importing = new File(modelDirectory(), fileName + ".importing");
                 deleteIfPresent(importing);
                 long copied = copyUri(resolver, uri, importing);
                 if (copied < minimumBytes || copied > maximumBytes) {
-                    throw new IOException("The imported file size does not match the expected EmbeddingGemma artefact.");
+                    throw new IOException("The imported file size does not match the expected " + displayName + " artefact.");
                 }
 
                 String actualSha256 = sha256(importing);
@@ -146,8 +151,8 @@ public final class MaisModelImportPlugin extends Plugin {
         });
     }
 
-    private DocumentMetadata readMetadata(ContentResolver resolver, Uri uri) {
-        String displayName = "selected-model.tflite";
+    private DocumentMetadata readMetadata(ContentResolver resolver, Uri uri, String fallbackName) {
+        String displayName = fallbackName;
         long size = -1L;
         try (Cursor cursor = resolver.query(uri, new String[] { OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE }, null, null, null)) {
             if (cursor != null && cursor.moveToFirst()) {
@@ -159,7 +164,7 @@ public final class MaisModelImportPlugin extends Plugin {
         } catch (Exception ignored) {
             // The stream itself remains authoritative when metadata is unavailable.
         }
-        return new DocumentMetadata(displayName == null ? "selected-model.tflite" : displayName, size);
+        return new DocumentMetadata(displayName == null ? fallbackName : displayName, size);
     }
 
     private long copyUri(ContentResolver resolver, Uri uri, File destination) throws IOException {
@@ -168,7 +173,7 @@ public final class MaisModelImportPlugin extends Plugin {
             BufferedInputStream input = raw == null ? null : new BufferedInputStream(raw, BUFFER_BYTES);
             BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(destination), BUFFER_BYTES)
         ) {
-            if (input == null) throw new IOException("The selected model file could not be opened.");
+            if (input == null) throw new IOException("The selected file could not be opened.");
             byte[] buffer = new byte[BUFFER_BYTES];
             long copied = 0L;
             int count;
@@ -229,6 +234,12 @@ public final class MaisModelImportPlugin extends Plugin {
     private String safeFileName(String value) {
         if (!value.matches("[A-Za-z0-9._-]+") || value.contains("..")) throw new IllegalArgumentException("Invalid model filename.");
         return value;
+    }
+
+    private String safeExtension(String value) {
+        String extension = value.toLowerCase(Locale.ROOT);
+        if (!extension.matches("\\.[a-z0-9]+")) throw new IllegalArgumentException("Invalid expected file extension.");
+        return extension;
     }
 
     private void deleteIfPresent(File file) throws IOException {
