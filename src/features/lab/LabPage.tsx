@@ -1,5 +1,5 @@
 import type { AppDatabase } from '../../domain/model';
-import type { MaisLabProposal } from '../../mais/labProposalState';
+import type { MaisExperimentDecisionDraft, MaisLabProposal } from '../../mais/labProposalState';
 import type { MaisSystemSnapshot } from '../../mais/systemState';
 
 interface Props {
@@ -15,9 +15,16 @@ function proposalForExperiment(proposals: MaisLabProposal[], experimentId: strin
   return proposals.find((proposal) => proposal.materialisedExperimentId === experimentId || `experiment_${proposal.id}` === experimentId);
 }
 
+function latestDecision(decisions: MaisExperimentDecisionDraft[], experimentId: string): MaisExperimentDecisionDraft | undefined {
+  return decisions
+    .filter((decision) => decision.experimentId === experimentId && decision.status === 'ready')
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+}
+
 export function LabPage({ database, maisSnapshot, onActivate, onReject, onPromote, onRejectPendingProposal }: Props) {
   const experiments = [...database.experiments].reverse();
   const proposals = maisSnapshot?.labProposals.proposals ?? [];
+  const decisions = maisSnapshot?.labProposals.decisions ?? [];
   const pendingProposals = proposals.filter((proposal) => proposal.status === 'ready' && !database.experiments.some((experiment) => experiment.id === `experiment_${proposal.id}`));
 
   return (
@@ -47,6 +54,7 @@ export function LabPage({ database, maisSnapshot, onActivate, onReject, onPromot
         experiments.length > 0 && <section className="experiment-list">
           {experiments.map((experiment) => {
             const sourceProposal = proposalForExperiment(proposals, experiment.id);
+            const decision = latestDecision(decisions, experiment.id);
             return <article className="experiment-card" key={experiment.id}>
               <header>
                 <div>
@@ -57,6 +65,16 @@ export function LabPage({ database, maisSnapshot, onActivate, onReject, onPromot
               </header>
               <p>{experiment.hypothesis}</p>
               {experiment.evidenceSummary && <p className="evidence-summary">{experiment.evidenceSummary}</p>}
+              {decision && <section className="paper-card experiment-decision-card">
+                <p className="eyebrow">MAIS recommendation · {decision.recommendation}</p>
+                <h3>{decision.title}</h3>
+                <p>{decision.summary}</p>
+                <p className="evidence-summary">{decision.evidenceSummary}</p>
+                <p><strong>Rationale:</strong> {decision.rationale}</p>
+                {decision.limitations.length > 0 && <p><strong>Limitations:</strong> {decision.limitations.join('; ')}</p>}
+                {decision.nextEvidence.length > 0 && <p><strong>Further evidence:</strong> {decision.nextEvidence.join('; ')}</p>}
+                <small className="provenance-line">Recommendation only · {decision.provenanceRefs.length} provenance ref{decision.provenanceRefs.length === 1 ? '' : 's'} · you retain the decision.</small>
+              </section>}
               {sourceProposal && <details><summary>Proposal contract</summary><dl className="metric-list compact-metrics"><div><dt>Source artefact</dt><dd>{sourceProposal.sourceArtifactId}</dd></div><div><dt>Provenance refs</dt><dd>{sourceProposal.provenanceRefs.length}</dd></div><div><dt>Success criteria</dt><dd>{sourceProposal.successCriteria.join('; ') || 'Not specified'}</dd></div><div><dt>Stop conditions</dt><dd>{sourceProposal.stopConditions.join('; ') || 'Not specified'}</dd></div></dl></details>}
               <footer>
                 {experiment.status === 'proposed' && (
