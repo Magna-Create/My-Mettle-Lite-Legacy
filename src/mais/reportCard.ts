@@ -1,6 +1,6 @@
 import { createId } from '../domain/ids';
 import type { MaisAnalysisRun } from './analysisSandbox';
-import type { MaisBeliefGraphState } from './beliefGraph';
+import { createMaisBeliefGraphState, type MaisBeliefGraphState } from './beliefGraph';
 import type { MaisCapabilityState } from './capabilityProtocol';
 import type { MaisContextManifest } from './contextCompiler';
 import type { MaisState } from './contracts';
@@ -92,13 +92,14 @@ export function buildMaisReportCard(input: {
   widgets: MaisWidgetState;
   research: MaisResearchState;
   reinforcement: MaisReinforcementState;
-  beliefs: MaisBeliefGraphState;
+  beliefs?: MaisBeliefGraphState | undefined;
   contextManifests: MaisContextManifest[];
   analysisRuns: MaisAnalysisRun[];
   diagnostics: MaisDiagnosticRecord[];
   now?: string | undefined;
 }): MaisReportCard {
   const generatedAt = input.now ?? new Date().toISOString();
+  const beliefs = input.beliefs ?? createMaisBeliefGraphState();
   const card: MaisReportCard = {
     schema: 'MaisReportCardV1',
     id: createId('mais_report_card'),
@@ -109,7 +110,7 @@ export function buildMaisReportCard(input: {
     widgets: structuredClone(input.widgets),
     research: structuredClone(input.research),
     reinforcement: structuredClone(input.reinforcement),
-    beliefs: structuredClone(input.beliefs),
+    beliefs: structuredClone(beliefs),
     contextManifests: structuredClone(input.contextManifests),
     analysisRuns: structuredClone(input.analysisRuns),
     diagnostics: structuredClone(input.diagnostics),
@@ -124,10 +125,10 @@ export function buildMaisReportCard(input: {
       failedModelLeaseCount: input.models.leases.filter((lease) => lease.status === 'failed').length,
       researchRequestCount: input.research.requests.length,
       installedWidgetCount: input.widgets.widgets.filter((widget) => widget.status === 'installed').length,
-      activeBeliefCount: input.beliefs.beliefs.filter((belief) => !['superseded', 'archived'].includes(belief.status)).length,
-      contestedBeliefCount: input.beliefs.beliefs.filter((belief) => belief.status === 'contested').length,
-      unresolvedQuestionCount: input.beliefs.unresolvedQuestions.filter((question) => ['open', 'research_requested'].includes(question.status)).length,
-      rejectionMemoryCount: input.beliefs.rejections.length,
+      activeBeliefCount: beliefs.beliefs.filter((belief) => !['superseded', 'archived'].includes(belief.status)).length,
+      contestedBeliefCount: beliefs.beliefs.filter((belief) => belief.status === 'contested').length,
+      unresolvedQuestionCount: beliefs.unresolvedQuestions.filter((question) => ['open', 'research_requested'].includes(question.status)).length,
+      rejectionMemoryCount: beliefs.rejections.length,
     },
   };
   return sanitise(card) as MaisReportCard;
