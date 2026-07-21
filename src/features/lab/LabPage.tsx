@@ -1,13 +1,33 @@
 import type { AppDatabase } from '../../domain/model';
+import type { MaisResourceMode } from '../../mais/contracts';
+import type { MaisSystemSnapshot } from '../../mais/systemState';
+import { MaisActivityPanel } from './MaisActivityPanel';
 
 interface Props {
   database: AppDatabase;
+  maisSnapshot: MaisSystemSnapshot | null;
+  maisResourceMode: MaisResourceMode;
   onActivate: (experimentId: string) => Promise<void>;
   onReject: (experimentId: string) => Promise<void>;
   onPromote: (experimentId: string) => Promise<void>;
+  onRunMaisDemo: () => Promise<void>;
+  onPulseMais: () => Promise<void>;
+  onClearMais: () => Promise<void>;
+  onExportMaisReport: () => void;
 }
 
-export function LabPage({ database, onActivate, onReject, onPromote }: Props) {
+export function LabPage({
+  database,
+  maisSnapshot,
+  maisResourceMode,
+  onActivate,
+  onReject,
+  onPromote,
+  onRunMaisDemo,
+  onPulseMais,
+  onClearMais,
+  onExportMaisReport,
+}: Props) {
   const experiments = [...database.experiments].reverse();
 
   return (
@@ -17,6 +37,15 @@ export function LabPage({ database, onActivate, onReject, onPromote }: Props) {
         <h1>Turn evidence into a controlled change.</h1>
         <p>Experiments remain temporary until a later exposure produces evidence and you explicitly promote the result.</p>
       </section>
+
+      <MaisActivityPanel
+        snapshot={maisSnapshot}
+        resourceMode={maisResourceMode}
+        onRunDemo={onRunMaisDemo}
+        onPulse={onPulseMais}
+        onClear={onClearMais}
+        onExportReport={onExportMaisReport}
+      />
 
       {experiments.length === 0 ? (
         <section className="paper-card empty-card">
