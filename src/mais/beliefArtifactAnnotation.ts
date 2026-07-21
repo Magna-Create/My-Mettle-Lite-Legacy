@@ -1,12 +1,13 @@
-import type { MaisBeliefGraphState } from './beliefGraph';
+import type { MaisBeliefConfidence, MaisBeliefGraphState, MaisBeliefStatus } from './beliefGraph';
 import type { MaisArtifact } from './contracts';
 
 export interface MaisResolvedBeliefReference {
   beliefId: string;
   domain: string;
   claim: string;
-  status: string;
-  confidence: number;
+  status: MaisBeliefStatus;
+  confidence: MaisBeliefConfidence;
+  probability: number;
 }
 
 export function annotateMaisBeliefArtifact(
@@ -26,6 +27,7 @@ export function annotateMaisBeliefArtifact(
     claim: belief.claim,
     status: belief.status,
     confidence: belief.confidence,
+    probability: belief.probability,
   }));
   if (resolved.length > 0) artifact.content.resolvedBeliefs = resolved;
   return resolved;
