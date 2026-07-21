@@ -1,15 +1,41 @@
 import { describe, expect, it } from 'vitest';
-import { formatModelBytes, getFirstMaisRuntimeArtifact, getMaisModelArtifacts } from '../src/mais/modelArtifacts';
+import {
+  canDirectlyDownloadMaisArtifact,
+  formatModelBytes,
+  getFirstMaisRuntimeArtifact,
+  getMaisGenerativeArtifacts,
+  getMaisModelArtifact,
+  getMaisModelArtifacts,
+} from '../src/mais/modelArtifacts';
 
 describe('MAIS model artefact registry', () => {
-  it('registers the official Gemma 4 E2B LiteRT-LM artefact without embedding model bytes', () => {
+  it('retains the verified Gemma 4 E2B artefact as the first runtime candidate', () => {
     const artifact = getFirstMaisRuntimeArtifact();
     expect(artifact.modelId).toBe('google.gemma-4-e2b-it');
-    expect(artifact.runtime).toBe('litert-lm');
-    expect(artifact.fileName).toBe('gemma-4-E2B-it.litertlm');
+    expect(artifact.defaultBackend).toBe('cpu');
     expect(artifact.sha256).toBe('181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c');
-    expect(artifact.downloadUrl).toMatch(/^https:\/\//);
     expect(artifact.approximateBytes).toBeGreaterThan(2_000_000_000);
+  });
+
+  it('registers E4B and Qwen3-8B as separate persistent generative artefacts', () => {
+    const generative = getMaisGenerativeArtifacts();
+    expect(generative.map((artifact) => artifact.modelId)).toEqual([
+      'google.gemma-4-e2b-it',
+      'google.gemma-4-e4b-it',
+      'qwen.qwen3-8b',
+    ]);
+    expect(getMaisModelArtifact('google.gemma-4-e4b-it.litertlm.default').defaultBackend).toBe('gpu');
+    expect(getMaisModelArtifact('qwen.qwen3-8b.litertlm.mixed-int4').contextTokens).toBe(2048);
+  });
+
+  it('marks the Qwen development artefact as trust-on-first-use and EmbeddingGemma as gated', () => {
+    const qwen = getMaisModelArtifact('qwen.qwen3-8b.litertlm.mixed-int4');
+    const embedding = getMaisModelArtifact('google.embeddinggemma-300m.qualcomm-sm8750.seq512');
+    expect(qwen.integrityMode).toBe('trust_on_first_use');
+    expect(canDirectlyDownloadMaisArtifact(qwen)).toBe(true);
+    expect(embedding.defaultBackend).toBe('npu');
+    expect(embedding.downloadPolicy).toBe('manual');
+    expect(canDirectlyDownloadMaisArtifact(embedding)).toBe(false);
   });
 
   it('returns cloned definitions so UI changes cannot mutate the registry', () => {
