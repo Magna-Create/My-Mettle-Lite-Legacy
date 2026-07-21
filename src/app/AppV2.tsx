@@ -30,6 +30,7 @@ const tabs = ['brief', 'train', 'progress', 'lab', 'library'] as const;
 type Tab = (typeof tabs)[number];
 const tabLabels: Record<Tab, string> = { brief: 'Brief', train: 'Train', progress: 'Progress', lab: 'Lab', library: 'Library' };
 const fallbackTimerSettings: AppSettings['restTimer'] = { autoStart: true, vibrationEnabled: true, vibrationStrength: 'strong', chimeEnabled: false, backgroundNotificationEnabled: true };
+const MAIS_HEARTBEAT_INTERVAL_MS = 15_000;
 
 function downloadText(filename: string, text: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
@@ -61,6 +62,7 @@ export function AppV2() {
   const [error, setError] = useState<string | null>(null);
   const databaseRef = useRef<AppDatabase | null>(null);
   const operationQueue = useRef<Promise<void>>(Promise.resolve());
+  const maisReadyRef = useRef(false);
   const restTimer = useRestTimer(database?.settings.restTimer ?? fallbackTimerSettings);
 
   useEffect(() => {
@@ -78,7 +80,8 @@ export function AppV2() {
 
     void (async () => {
       try {
-        const initial = await mais.initialise();
+        await mais.initialise();
+        maisReadyRef.current = true;
         const resources = await readMaisResourceSnapshot({ activeWorkoutInteraction: Boolean(databaseRef.current?.activeSessionId) });
         const foregrounded = await mais.ingest({ type: resources.appVisibility === 'foreground' ? 'app_foregrounded' : 'app_backgrounded' }, resources.capturedAt);
         if (!cancelled) {
@@ -99,7 +102,6 @@ export function AppV2() {
             }
           })();
         });
-        void initial;
       } catch (reason) {
         if (!cancelled) setError(reason instanceof Error ? reason.message : 'MAIS could not open its local workspace.');
       }
@@ -107,6 +109,7 @@ export function AppV2() {
 
     return () => {
       cancelled = true;
+      maisReadyRef.current = false;
       if (dispose) void dispose();
     };
   }, [mais]);
@@ -118,6 +121,22 @@ export function AppV2() {
       capturedAt: new Date().toISOString(),
     }));
   }, [database?.activeSessionId]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (!maisReadyRef.current) return;
+      void (async () => {
+        try {
+          const resources = await readMaisResourceSnapshot({ activeWorkoutInteraction: Boolean(databaseRef.current?.activeSessionId) });
+          setMaisResources(resources);
+          setMaisSnapshot(await mais.pulse(resources));
+        } catch (reason) {
+          setError(reason instanceof Error ? reason.message : 'The MAIS heartbeat failed.');
+        }
+      })();
+    }, MAIS_HEARTBEAT_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [mais]);
 
   function run(operation: (current: AppDatabase) => Promise<AppDatabase>): Promise<void> {
     operationQueue.current = operationQueue.current.then(async () => {
@@ -178,7 +197,7 @@ export function AppV2() {
     const occurredAt = new Date().toISOString();
     await mais.ingest({ type: 'session_completed', entityRefs: [sessionId], payload: { sessionId } }, occurredAt);
     const resources = await currentMaisResources();
-    setMaisSnapshot(await mais.runUntilSettled(resources, 6));
+    setMaisSnapshot(await mais.pulse(resources));
   }
 
   function navigate(nextTab: Tab) {
