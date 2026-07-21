@@ -1,12 +1,28 @@
 import { IndexedDbGymRepository } from '../adapters/storage/IndexedDbGymRepository';
+import { IndexedDbMaisEmbeddingRepository } from '../adapters/storage/IndexedDbMaisEmbeddingRepository';
+import { IndexedDbMaisRepository } from '../adapters/storage/IndexedDbMaisRepository';
 import type { AppDatabase, Experiment, Exercise, RoutineVersion, Session, SessionExercise } from '../domain/model';
 import { deriveComparableExposure } from './comparableExposureEngine';
 import type { MaisRoleRequest } from './contracts';
-import { selectMaisInvestigationCandidates, type MaisInvestigationCandidate } from './investigationSelector';
+import { NativeMaisEmbeddingRuntime } from './embeddingRuntime';
+import { buildInvestigationCandidates, type MaisInvestigationCandidate } from './investigationSelector';
 import { resolveExerciseMuscleContributions } from './muscleOntology';
+import { buildTrainingSemanticDocuments } from './semanticDocuments';
+import { MaisSemanticRetrievalService, semanticDocumentSetFingerprint } from './semanticRetrievalService';
+import { buildMaisKnowledgeSemanticDocuments } from './systemSemanticDocuments';
 
 export interface MaisTrainingEvidenceProvider {
   read(request: MaisRoleRequest): Promise<MaisTrainingEvidencePacket | null>;
+}
+
+export interface MaisSemanticEvidenceMatch {
+  score: number;
+  documentId: string;
+  documentKind: string;
+  documentTitle: string;
+  sectionHeading: string;
+  text: string;
+  provenanceRefs: string[];
 }
 
 export interface MaisTrainingEvidencePacket {
@@ -18,8 +34,18 @@ export interface MaisTrainingEvidencePacket {
   exercises: Array<ReturnType<typeof exerciseEvidence>>;
   routines: Array<ReturnType<typeof routineEvidence>>;
   experiments: Array<ReturnType<typeof experimentEvidence>>;
-  investigationCandidates?: MaisInvestigationCandidate[] | undefined;
   recentBodyMeasurements: AppDatabase['bodyMeasurements'];
+  investigationCandidates: MaisInvestigationCandidate[];
+  semanticContext: {
+    query: string;
+    documentSetFingerprint: string;
+    indexedDocumentCount: number;
+    embeddedChunkCount: number;
+    reusedChunkCount: number;
+    matches: MaisSemanticEvidenceMatch[];
+    estimatedTokens: number;
+    omittedMatchCount: number;
+  } | null;
   warnings: string[];
 }
 
@@ -191,6 +217,13 @@ function comparableExposures(database: AppDatabase, directSessions: Session[]): 
   return result;
 }
 
+function semanticQuery(request: MaisRoleRequest): string {
+  const payload = request.triggerEvents
+    .map((event) => JSON.stringify({ type: event.type, entityRefs: event.entityRefs, payload: event.payload }))
+    .join('\n');
+  return `${request.task.goal}\n${request.step.goal}\n${payload}`.trim();
+}
+
 export function compileTrainingEvidence(database: AppDatabase, request: MaisRoleRequest): MaisTrainingEvidencePacket {
   const directRefs = refsFromRequest(request);
   const refSet = new Set(directRefs);
@@ -204,10 +237,6 @@ export function compileTrainingEvidence(database: AppDatabase, request: MaisRole
   if (sessions.some((session) => session.excludedFromInsights)) warnings.push('At least one direct session is excluded from insight calculations.');
   if (sessions.some((session) => session.status !== 'completed')) warnings.push('At least one direct session is not complete.');
 
-  const investigationCandidates = selectMaisInvestigationCandidates(database, { maximumCandidates: 20 })
-    .filter((candidate) => exerciseIds.has(candidate.exerciseId))
-    .slice(0, 6);
-
   return {
     generatedAt: new Date().toISOString(),
     sourceDatabaseUpdatedAt: database.updatedAt,
@@ -219,17 +248,69 @@ export function compileTrainingEvidence(database: AppDatabase, request: MaisRole
     experiments: database.experiments.filter((experiment) => refSet.has(experiment.id)
       || exerciseIds.has(experiment.exerciseId)
       || sessions.some((session) => experiment.testedSessionId === session.id)).map(experimentEvidence),
-    investigationCandidates,
     recentBodyMeasurements: database.bodyMeasurements.slice(-3),
+    investigationCandidates: buildInvestigationCandidates(database).slice(0, 6),
+    semanticContext: null,
     warnings,
   };
 }
 
 export class IndexedDbMaisTrainingEvidenceProvider implements MaisTrainingEvidenceProvider {
-  constructor(private readonly repository = new IndexedDbGymRepository()) {}
+  constructor(
+    private readonly repository = new IndexedDbGymRepository(),
+    private readonly maisRepository = new IndexedDbMaisRepository(),
+    private readonly embeddingRuntime = new NativeMaisEmbeddingRuntime(),
+    private readonly embeddingRepository = new IndexedDbMaisEmbeddingRepository(),
+  ) {}
 
   async read(request: MaisRoleRequest): Promise<MaisTrainingEvidencePacket | null> {
     const database = await this.repository.load();
-    return database ? compileTrainingEvidence(database, request) : null;
+    if (!database) return null;
+    const packet = compileTrainingEvidence(database, request);
+    if (!this.embeddingRuntime.isAvailable()) {
+      packet.warnings.push('Semantic retrieval is unavailable outside the native Android runtime.');
+      return packet;
+    }
+
+    try {
+      const status = await this.embeddingRuntime.status();
+      if (!status.ready) {
+        packet.warnings.push('EmbeddingGemma retrieval is waiting for both the model and sentencepiece tokenizer imports.');
+        return packet;
+      }
+      const maisSnapshot = await this.maisRepository.load();
+      const documents = [
+        ...buildTrainingSemanticDocuments(database),
+        ...buildMaisKnowledgeSemanticDocuments(maisSnapshot),
+      ];
+      const service = new MaisSemanticRetrievalService(this.embeddingRepository, this.embeddingRuntime);
+      const result = await service.search(documents, semanticQuery(request), {
+        topK: request.step.requiredTier === 'deep' ? 10 : 6,
+        tokenBudget: request.step.requiredTier === 'deep' ? 1_800 : 900,
+        maximumPerDocument: 2,
+      });
+      packet.semanticContext = {
+        query: semanticQuery(request),
+        documentSetFingerprint: semanticDocumentSetFingerprint(documents),
+        indexedDocumentCount: result.sync.manifests.length,
+        embeddedChunkCount: result.sync.embeddedChunkCount,
+        reusedChunkCount: result.sync.reusedChunkCount,
+        matches: result.selection.matches.map((match) => ({
+          score: match.score,
+          documentId: match.chunk.documentId,
+          documentKind: match.chunk.documentKind,
+          documentTitle: match.chunk.documentTitle,
+          sectionHeading: match.chunk.sectionHeading,
+          text: match.chunk.text,
+          provenanceRefs: [...match.chunk.provenanceRefs],
+        })),
+        estimatedTokens: result.selection.estimatedTokens,
+        omittedMatchCount: result.selection.omittedMatchCount,
+      };
+      if (packet.semanticContext.matches.length === 0) packet.warnings.push('EmbeddingGemma returned no semantic evidence above the current bounded selection.');
+    } catch (reason) {
+      packet.warnings.push(`EmbeddingGemma retrieval failed cleanly: ${reason instanceof Error ? reason.message : String(reason)}`);
+    }
+    return packet;
   }
 }
