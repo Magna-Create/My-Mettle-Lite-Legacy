@@ -57,6 +57,7 @@ export interface MaisReportCard {
     activeMemoryCount: number;
     readyLabProposalCount: number;
     materialisedLabProposalCount: number;
+    readyExperimentDecisionCount: number;
     analysisInputCount: number;
     analysisProgramCount: number;
     analysisRunCount: number;
@@ -156,6 +157,7 @@ export function buildMaisReportCard(input: {
       activeMemoryCount: memories.records.filter((memory) => memory.status === 'active').length,
       readyLabProposalCount: labProposals.proposals.filter((proposal) => proposal.status === 'ready').length,
       materialisedLabProposalCount: labProposals.proposals.filter((proposal) => proposal.status === 'materialised').length,
+      readyExperimentDecisionCount: labProposals.decisions.filter((decision) => decision.status === 'ready').length,
       analysisInputCount: analysisInputs.length,
       analysisProgramCount: analysisPrograms.length,
       analysisRunCount: input.analysisRuns.length,
