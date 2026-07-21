@@ -12,8 +12,8 @@ describe('MAIS role output contracts', () => {
     expect(expectedArtifactKindForRole('research_broker')).toBe('research_request');
   });
 
-  it('accepts each published example and returns defensive clones', () => {
-    const roles = ['governor', 'analyst', 'coding_analyst', 'auditor', 'coach', 'memory_curator', 'research_broker'] as const;
+  it('accepts each published non-Coach example and returns defensive clones', () => {
+    const roles = ['governor', 'analyst', 'coding_analyst', 'auditor', 'memory_curator', 'research_broker'] as const;
     for (const role of roles) {
       const contract = getMaisRoleContentContract(role);
       expect(validateMaisRoleContent(role, contract.contentExample)).toEqual({ valid: true, errors: [] });
@@ -21,6 +21,14 @@ describe('MAIS role output contracts', () => {
       contract.requiredKeys.push('mutated');
       expect(getMaisRoleContentContract(role).requiredKeys).not.toContain('mutated');
     }
+  });
+
+  it('validates both concrete Coach schemas independently', () => {
+    const experiment = getMaisRoleContentContract('coach', 'MaisTrainingExperimentDraftV1');
+    expect(validateMaisRoleContent('coach', experiment.contentExample, 'MaisTrainingExperimentDraftV1')).toEqual({ valid: true, errors: [] });
+    const decision = getMaisRoleContentContract('coach', 'MaisExperimentDecisionDraftV1');
+    expect(validateMaisRoleContent('coach', decision.contentExample, 'MaisExperimentDecisionDraftV1')).toEqual({ valid: true, errors: [] });
+    expect(formatMaisRoleContentContract('coach')).toContain('experiment_decision');
   });
 
   it('rejects generic untyped JSON for analytical roles', () => {
