@@ -13,6 +13,8 @@ interface ReductionResult {
   diagnostics: string[];
 }
 
+type TypedEvidenceRecord = Record<string, unknown> & { polarity: MaisEvidencePolarity };
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -63,20 +65,20 @@ function findBeliefId(
   return { state: next, beliefId: created?.id ?? null, created: Boolean(created) };
 }
 
-function evidenceRecords(record: Record<string, unknown>): Array<Record<string, unknown> & { polarity: MaisEvidencePolarity }> {
-  const generic = records(record.evidence).flatMap((item) => {
-    const polarity = item.polarity === 'support' || item.polarity === 'counter' ? item.polarity : null;
-    return polarity ? [{ ...item, polarity }] : [];
+function evidenceRecords(record: Record<string, unknown>): TypedEvidenceRecord[] {
+  const generic = records(record.evidence).flatMap<TypedEvidenceRecord>((item) => {
+    if (item.polarity !== 'support' && item.polarity !== 'counter') return [];
+    return [{ ...item, polarity: item.polarity }];
   });
-  const support = records(record.supportingEvidence).map((item) => ({ ...item, polarity: 'support' as const }));
-  const counter = records(record.counterEvidence).map((item) => ({ ...item, polarity: 'counter' as const }));
+  const support: TypedEvidenceRecord[] = records(record.supportingEvidence).map((item) => ({ ...item, polarity: 'support' }));
+  const counter: TypedEvidenceRecord[] = records(record.counterEvidence).map((item) => ({ ...item, polarity: 'counter' }));
   return [...generic, ...support, ...counter];
 }
 
 function applyEvidence(
   state: MaisBeliefGraphState,
   beliefId: string,
-  evidence: Array<Record<string, unknown> & { polarity: MaisEvidencePolarity }>,
+  evidence: TypedEvidenceRecord[],
   artifact: MaisArtifact,
 ): { state: MaisBeliefGraphState; count: number } {
   let next = state;
