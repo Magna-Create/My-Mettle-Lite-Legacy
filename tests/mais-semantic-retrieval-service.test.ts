@@ -37,7 +37,7 @@ class FakeEmbeddingRuntime implements MaisEmbeddingRuntime {
 function document(id: string, title: string, text: string): MaisSemanticDocument {
   return {
     id,
-    kind: 'exercise',
+    kind: 'exercise_history',
     title,
     summary: text,
     updatedAt: '2026-07-21T18:00:00.000Z',
