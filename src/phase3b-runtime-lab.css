@@ -1,0 +1,108 @@
+.mais-runtime-lab {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.mais-runtime-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.mais-runtime-header h2 {
+  margin: 0.15rem 0 0;
+}
+
+.mais-runtime-model {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--paper, #f7f3eb) 82%, transparent);
+}
+
+.mais-runtime-model p,
+.mais-runtime-note,
+.mais-runtime-model dd,
+.mais-runtime-model dt {
+  margin: 0;
+}
+
+.mais-runtime-model > div > p,
+.mais-runtime-note,
+.mais-runtime-model dt {
+  color: var(--muted, #756f66);
+}
+
+.mais-runtime-model dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.mais-runtime-model dl div {
+  min-width: 0;
+}
+
+.mais-runtime-model dt {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.mais-runtime-model dd {
+  margin-top: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.mais-runtime-progress {
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.mais-runtime-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 180ms linear;
+}
+
+.mais-runtime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+}
+
+.mais-runtime-error {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, #b23525 12%, transparent);
+}
+
+.mais-runtime-note {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.danger-text {
+  color: #8f2e25;
+}
+
+@media (max-width: 620px) {
+  .mais-runtime-header {
+    align-items: flex-start;
+  }
+
+  .mais-runtime-model dl {
+    grid-template-columns: 1fr;
+  }
+}
