@@ -8,7 +8,6 @@ function resources(overrides: Partial<MaisResourceSnapshot> = {}): MaisResourceS
   return {
     appVisibility: 'foreground',
     batterySaver: false,
-    thermalState: 'nominal',
     isCharging: false,
     activeWorkoutInteraction: false,
     availableMemoryMb: 7_000,
@@ -28,9 +27,13 @@ describe('MAIS Resource Governor', () => {
     expect(deriveMaisResourceMode(resources({ appVisibility: 'background' }))).toBe('light');
   });
 
-  it('pauses when the app is closed or thermal state is critical', () => {
+  it('pauses when the app is closed or the user explicitly pauses MAIS', () => {
     expect(deriveMaisResourceMode(resources({ appVisibility: 'closed' }))).toBe('paused');
-    expect(deriveMaisResourceMode(resources({ thermalState: 'critical' }))).toBe('paused');
+    expect(deriveMaisResourceMode(resources({ userPaused: true }))).toBe('paused');
+  });
+
+  it('leaves thermal throttling to Android and the selected model runtime', () => {
+    expect(deriveMaisResourceMode(resources({ thermalState: 'critical' }))).toBe('full');
   });
 });
 
