@@ -1,7 +1,7 @@
 import { createId } from '../domain/ids';
 import type { MaisEventInput, MaisResourceSnapshot, MaisRoleRunner } from './contracts';
 import { ingestMaisEvent, pulseMais } from './heart';
-import { MaisModelLeaseManager, type MaisModelRuntimeAdapter } from './modelLeases';
+import { MaisModelLeaseManager, SimulatedMaisModelRuntime, type MaisModelRuntimeAdapter } from './modelLeases';
 import type { MaisRepository } from './repository';
 import { buildMaisReportCard, parseMaisParentReview, type MaisDiagnosticRecord, type MaisParentReview, type MaisReportCard } from './reportCard';
 import { createMaisSystemSnapshot, type MaisSystemSnapshot } from './systemState';
@@ -18,16 +18,14 @@ export class MaisCoordinator {
   constructor(
     private readonly repository: MaisRepository,
     private readonly roleRunner: MaisRoleRunner,
-    private readonly modelRuntime?: MaisModelRuntimeAdapter | undefined,
+    private readonly modelRuntime: MaisModelRuntimeAdapter = new SimulatedMaisModelRuntime(),
   ) {}
 
   async initialise(now?: string): Promise<MaisSystemSnapshot> {
     const stored = await this.repository.load();
     this.snapshotValue = stored ?? createMaisSystemSnapshot(timestamp(now));
-    if (this.modelRuntime) {
-      this.leaseManager = new MaisModelLeaseManager(this.modelRuntime, this.snapshotValue.models);
-      this.snapshotValue.models = this.leaseManager.snapshot();
-    }
+    this.leaseManager = new MaisModelLeaseManager(this.modelRuntime, this.snapshotValue.models);
+    this.snapshotValue.models = this.leaseManager.snapshot();
     await this.repository.save(this.snapshotValue);
     return this.snapshot();
   }
@@ -133,7 +131,7 @@ export class MaisCoordinator {
     await this.enqueue(async () => {
       await this.repository.clear();
       this.snapshotValue = createMaisSystemSnapshot(timestamp(now));
-      if (this.modelRuntime) this.leaseManager = new MaisModelLeaseManager(this.modelRuntime, this.snapshotValue.models);
+      this.leaseManager = new MaisModelLeaseManager(this.modelRuntime, this.snapshotValue.models);
       await this.repository.save(this.snapshotValue);
     });
     return this.snapshot();
