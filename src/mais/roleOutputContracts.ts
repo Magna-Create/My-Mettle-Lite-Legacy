@@ -56,6 +56,15 @@ const experimentDecisionCoachContract: RoleContract = {
   requiredKeys: ['proposal', 'presentation'],
 };
 
+const genericCoachContract: RoleContract = {
+  purpose: 'Use proposal.type="experiment_decision" only for MaisExperimentDecisionDraftV1; otherwise use proposal.type="training_experiment". Never execute, activate, adopt or imply user approval.',
+  contentExample: {
+    trainingExperimentShape: trainingExperimentCoachContract.contentExample,
+    experimentDecisionShape: experimentDecisionCoachContract.contentExample,
+  },
+  requiredKeys: ['proposal', 'presentation'],
+};
+
 const roleContracts: Omit<Record<MaisRole, RoleContract>, 'coach'> = {
   governor: {
     purpose: 'Bound the next useful action. Route recognised complexity rather than answering it shallowly.',
@@ -138,9 +147,9 @@ const roleContracts: Omit<Record<MaisRole, RoleContract>, 'coach'> = {
 };
 
 function coachContract(outputSchema?: string): RoleContract {
-  return outputSchema === 'MaisExperimentDecisionDraftV1'
-    ? experimentDecisionCoachContract
-    : trainingExperimentCoachContract;
+  if (outputSchema === 'MaisExperimentDecisionDraftV1') return experimentDecisionCoachContract;
+  if (outputSchema) return trainingExperimentCoachContract;
+  return genericCoachContract;
 }
 
 function contractFor(role: MaisRole, outputSchema?: string): RoleContract {
@@ -207,26 +216,29 @@ export function validateMaisRoleContent(
   if (role === 'coach') {
     if (!isRecord(content.proposal)) {
       errors.push('artifact.content.proposal must be an object.');
-    } else if (outputSchema === 'MaisExperimentDecisionDraftV1') {
-      const allowed = new Set(['adopt', 'extend', 'reject', 'defer']);
-      if (content.proposal.type !== 'experiment_decision') errors.push('artifact.content.proposal.type must be experiment_decision.');
-      if (!nonEmpty(content.proposal.experimentId)) errors.push('artifact.content.proposal.experimentId is required.');
-      if (typeof content.proposal.recommendation !== 'string' || !allowed.has(content.proposal.recommendation)) errors.push('artifact.content.proposal.recommendation is invalid.');
-      if (!nonEmpty(content.proposal.rationale)) errors.push('artifact.content.proposal.rationale is required.');
-      if (!nonEmpty(content.proposal.evidenceSummary)) errors.push('artifact.content.proposal.evidenceSummary is required.');
-      if (!Array.isArray(content.proposal.limitations)) errors.push('artifact.content.proposal.limitations must be an array.');
-      if (!Array.isArray(content.proposal.nextEvidence)) errors.push('artifact.content.proposal.nextEvidence must be an array.');
     } else {
-      if (content.proposal.type !== 'training_experiment') errors.push('artifact.content.proposal.type must be training_experiment.');
-      if (!nonEmpty(content.proposal.exerciseId)) errors.push('artifact.content.proposal.exerciseId is required.');
-      if (!nonEmpty(content.proposal.routineSlotId)) errors.push('artifact.content.proposal.routineSlotId is required.');
-      if (!nonEmpty(content.proposal.rationale)) errors.push('artifact.content.proposal.rationale is required.');
-      if (!finite(content.proposal.baselineLoad) || content.proposal.baselineLoad < 0) errors.push('artifact.content.proposal.baselineLoad must be non-negative.');
-      if (!finite(content.proposal.proposedLoad) || content.proposal.proposedLoad < 0) errors.push('artifact.content.proposal.proposedLoad must be non-negative.');
-      if (!finite(content.proposal.targetRepMin) || content.proposal.targetRepMin <= 0) errors.push('artifact.content.proposal.targetRepMin must be positive.');
-      if (content.proposal.reversible !== true) errors.push('artifact.content.proposal.reversible must be true.');
-      if (!Array.isArray(content.proposal.successCriteria) || content.proposal.successCriteria.length === 0) errors.push('artifact.content.proposal.successCriteria requires at least one criterion.');
-      if (!Array.isArray(content.proposal.stopConditions) || content.proposal.stopConditions.length === 0) errors.push('artifact.content.proposal.stopConditions requires at least one condition.');
+      const decisionMode = outputSchema === 'MaisExperimentDecisionDraftV1' || content.proposal.type === 'experiment_decision';
+      if (decisionMode) {
+        const allowed = new Set(['adopt', 'extend', 'reject', 'defer']);
+        if (content.proposal.type !== 'experiment_decision') errors.push('artifact.content.proposal.type must be experiment_decision.');
+        if (!nonEmpty(content.proposal.experimentId)) errors.push('artifact.content.proposal.experimentId is required.');
+        if (typeof content.proposal.recommendation !== 'string' || !allowed.has(content.proposal.recommendation)) errors.push('artifact.content.proposal.recommendation is invalid.');
+        if (!nonEmpty(content.proposal.rationale)) errors.push('artifact.content.proposal.rationale is required.');
+        if (!nonEmpty(content.proposal.evidenceSummary)) errors.push('artifact.content.proposal.evidenceSummary is required.');
+        if (!Array.isArray(content.proposal.limitations)) errors.push('artifact.content.proposal.limitations must be an array.');
+        if (!Array.isArray(content.proposal.nextEvidence)) errors.push('artifact.content.proposal.nextEvidence must be an array.');
+      } else {
+        if (content.proposal.type !== 'training_experiment') errors.push('artifact.content.proposal.type must be training_experiment.');
+        if (!nonEmpty(content.proposal.exerciseId)) errors.push('artifact.content.proposal.exerciseId is required.');
+        if (!nonEmpty(content.proposal.routineSlotId)) errors.push('artifact.content.proposal.routineSlotId is required.');
+        if (!nonEmpty(content.proposal.rationale)) errors.push('artifact.content.proposal.rationale is required.');
+        if (!finite(content.proposal.baselineLoad) || content.proposal.baselineLoad < 0) errors.push('artifact.content.proposal.baselineLoad must be non-negative.');
+        if (!finite(content.proposal.proposedLoad) || content.proposal.proposedLoad < 0) errors.push('artifact.content.proposal.proposedLoad must be non-negative.');
+        if (!finite(content.proposal.targetRepMin) || content.proposal.targetRepMin <= 0) errors.push('artifact.content.proposal.targetRepMin must be positive.');
+        if (content.proposal.reversible !== true) errors.push('artifact.content.proposal.reversible must be true.');
+        if (!Array.isArray(content.proposal.successCriteria) || content.proposal.successCriteria.length === 0) errors.push('artifact.content.proposal.successCriteria requires at least one criterion.');
+        if (!Array.isArray(content.proposal.stopConditions) || content.proposal.stopConditions.length === 0) errors.push('artifact.content.proposal.stopConditions requires at least one condition.');
+      }
     }
     if (!isRecord(content.presentation)) {
       errors.push('artifact.content.presentation must be an object.');
