@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createSeedDatabase } from '../src/data/seed';
 import { createId } from '../src/domain/ids';
-import type { MaisRoleRequest, Session } from '../src/domain/model';
-import type { MaisRoleRequest as RoleRequest } from '../src/mais/contracts';
+import type { Session } from '../src/domain/model';
+import type { MaisRoleRequest } from '../src/mais/contracts';
 import { compileTrainingEvidence } from '../src/mais/trainingEvidence';
 
-function request(sessionId: string): RoleRequest {
+function request(sessionId: string): MaisRoleRequest {
   return {
     task: {
       id: 'task_1',
