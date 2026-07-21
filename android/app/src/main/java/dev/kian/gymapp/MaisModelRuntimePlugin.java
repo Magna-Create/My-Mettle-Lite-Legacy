@@ -43,8 +43,10 @@ public final class MaisModelRuntimePlugin extends Plugin {
         try {
             String artifactId = required(call, "artifactId");
             String fileName = safeFileName(required(call, "fileName"));
-            String expectedSha256 = required(call, "sha256").toLowerCase(Locale.ROOT);
-            call.resolve(statusFor(artifactId, fileName, expectedSha256));
+            String expectedSha256 = optional(call, "sha256").toLowerCase(Locale.ROOT);
+            String integrityMode = integrityMode(call);
+            validateIntegrity(integrityMode, expectedSha256);
+            call.resolve(statusFor(artifactId, fileName, expectedSha256, integrityMode));
         } catch (Exception error) {
             call.reject(error.getMessage(), error);
         }
@@ -55,10 +57,13 @@ public final class MaisModelRuntimePlugin extends Plugin {
         final String artifactId;
         final String fileName;
         final String expectedSha256;
+        final String integrityMode;
         try {
             artifactId = required(call, "artifactId");
             fileName = safeFileName(required(call, "fileName"));
-            expectedSha256 = required(call, "sha256").toLowerCase(Locale.ROOT);
+            expectedSha256 = optional(call, "sha256").toLowerCase(Locale.ROOT);
+            integrityMode = integrityMode(call);
+            validateIntegrity(integrityMode, expectedSha256);
         } catch (Exception error) {
             call.reject(error.getMessage(), error);
             return;
@@ -70,12 +75,9 @@ public final class MaisModelRuntimePlugin extends Plugin {
                 if (!file.isFile()) throw new IOException("The model file is not installed.");
                 emitProgress(artifactId, "verifying", file.length(), file.length());
                 String actual = sha256(file);
-                if (!actual.equals(expectedSha256)) {
-                    deleteVerification(fileName);
-                    throw new IOException("Model checksum verification failed.");
-                }
-                writeVerification(artifactId, fileName, actual, file);
-                call.resolve(statusFor(artifactId, fileName, expectedSha256));
+                verifyExpectedDigest(integrityMode, expectedSha256, actual);
+                writeVerification(artifactId, fileName, actual, integrityMode, file);
+                call.resolve(statusFor(artifactId, fileName, expectedSha256, integrityMode));
             } catch (Exception error) {
                 call.reject(error.getMessage(), error);
             }
@@ -88,14 +90,18 @@ public final class MaisModelRuntimePlugin extends Plugin {
         final String fileName;
         final String downloadUrl;
         final String expectedSha256;
+        final String integrityMode;
         final long approximateBytes;
         try {
             artifactId = required(call, "artifactId");
             fileName = safeFileName(required(call, "fileName"));
             downloadUrl = required(call, "downloadUrl");
-            expectedSha256 = required(call, "sha256").toLowerCase(Locale.ROOT);
+            expectedSha256 = optional(call, "sha256").toLowerCase(Locale.ROOT);
+            integrityMode = integrityMode(call);
             approximateBytes = Math.max(0L, call.getLong("approximateBytes", 0L));
+            validateIntegrity(integrityMode, expectedSha256);
             if (!downloadUrl.startsWith("https://")) throw new IllegalArgumentException("Model downloads require HTTPS.");
+            if ("manual".equals(integrityMode)) throw new IllegalArgumentException("This model requires manual installation.");
         } catch (Exception error) {
             call.reject(error.getMessage(), error);
             return;
@@ -111,7 +117,7 @@ public final class MaisModelRuntimePlugin extends Plugin {
         EXECUTOR.execute(() -> {
             try {
                 ensureModelDirectory();
-                JSObject current = statusFor(artifactId, fileName, expectedSha256);
+                JSObject current = statusFor(artifactId, fileName, expectedSha256, integrityMode);
                 if ("ready".equals(current.getString("state"))) {
                     call.resolve(current);
                     return;
@@ -127,7 +133,7 @@ public final class MaisModelRuntimePlugin extends Plugin {
                 streamDownload(artifactId, downloadUrl, part, cancellation);
                 if (cancellation.get()) {
                     emitProgress(artifactId, "cancelled", part.length(), 0L);
-                    JSObject cancelled = statusFor(artifactId, fileName, expectedSha256);
+                    JSObject cancelled = statusFor(artifactId, fileName, expectedSha256, integrityMode);
                     cancelled.put("cancelled", true);
                     call.resolve(cancelled);
                     return;
@@ -135,11 +141,7 @@ public final class MaisModelRuntimePlugin extends Plugin {
 
                 emitProgress(artifactId, "verifying", part.length(), part.length());
                 String actualSha256 = sha256(part);
-                if (!actualSha256.equals(expectedSha256)) {
-                    part.delete();
-                    deleteVerification(fileName);
-                    throw new IOException("Downloaded model failed SHA-256 verification.");
-                }
+                verifyExpectedDigest(integrityMode, expectedSha256, actualSha256);
 
                 File destination = finalFile(fileName);
                 if (destination.exists() && !destination.delete()) {
@@ -149,9 +151,9 @@ public final class MaisModelRuntimePlugin extends Plugin {
                     copyFile(part, destination);
                     if (!part.delete()) part.deleteOnExit();
                 }
-                writeVerification(artifactId, fileName, actualSha256, destination);
+                writeVerification(artifactId, fileName, actualSha256, integrityMode, destination);
                 emitProgress(artifactId, "ready", destination.length(), destination.length());
-                call.resolve(statusFor(artifactId, fileName, expectedSha256));
+                call.resolve(statusFor(artifactId, fileName, expectedSha256, integrityMode));
             } catch (Exception error) {
                 emitProgress(artifactId, "failed", partialFile(fileName).length(), 0L);
                 call.reject(error.getMessage(), error);
@@ -176,23 +178,26 @@ public final class MaisModelRuntimePlugin extends Plugin {
         try {
             String artifactId = required(call, "artifactId");
             String fileName = safeFileName(required(call, "fileName"));
+            String expectedSha256 = optional(call, "sha256").toLowerCase(Locale.ROOT);
+            String integrityMode = integrityMode(call);
             AtomicBoolean cancellation = CANCELLATIONS.get(artifactId);
             if (cancellation != null) cancellation.set(true);
             deleteIfPresent(finalFile(fileName));
             deleteIfPresent(partialFile(fileName));
             deleteIfPresent(verificationFile(fileName));
-            call.resolve(statusFor(artifactId, fileName, call.getString("sha256", "")));
+            call.resolve(statusFor(artifactId, fileName, expectedSha256, integrityMode));
         } catch (Exception error) {
             call.reject(error.getMessage(), error);
         }
     }
 
-    private JSObject statusFor(String artifactId, String fileName, String expectedSha256) throws Exception {
+    private JSObject statusFor(String artifactId, String fileName, String expectedSha256, String integrityMode) throws Exception {
         ensureModelDirectory();
         File finalFile = finalFile(fileName);
         File partialFile = partialFile(fileName);
         boolean downloading = CANCELLATIONS.containsKey(artifactId);
-        boolean verified = finalFile.isFile() && verificationMatches(artifactId, fileName, expectedSha256, finalFile);
+        JSONObject verification = readVerification(fileName);
+        boolean verified = finalFile.isFile() && verificationMatches(artifactId, expectedSha256, integrityMode, finalFile, verification);
 
         String state;
         if (downloading) state = "downloading";
@@ -210,6 +215,7 @@ public final class MaisModelRuntimePlugin extends Plugin {
         result.put("partialBytes", partialFile.isFile() ? partialFile.length() : 0L);
         result.put("availableBytes", availableBytes());
         result.put("modelPath", finalFile.isFile() ? finalFile.getAbsolutePath() : JSONObject.NULL);
+        result.put("actualSha256", verification == null ? JSONObject.NULL : verification.optString("sha256", null));
         return result;
     }
 
@@ -317,6 +323,31 @@ public final class MaisModelRuntimePlugin extends Plugin {
         return value.trim();
     }
 
+    private String optional(PluginCall call, String key) {
+        String value = call.getString(key, "");
+        return value == null ? "" : value.trim();
+    }
+
+    private String integrityMode(PluginCall call) {
+        String mode = optional(call, "integrityMode").toLowerCase(Locale.ROOT);
+        return mode.isEmpty() ? "sha256" : mode;
+    }
+
+    private void validateIntegrity(String mode, String expectedSha256) {
+        if (!mode.equals("sha256") && !mode.equals("trust_on_first_use") && !mode.equals("manual")) {
+            throw new IllegalArgumentException("Unsupported model integrity mode.");
+        }
+        if (mode.equals("sha256") && !expectedSha256.matches("[a-f0-9]{64}")) {
+            throw new IllegalArgumentException("A pinned SHA-256 is required for this model.");
+        }
+    }
+
+    private void verifyExpectedDigest(String mode, String expectedSha256, String actualSha256) throws IOException {
+        if (mode.equals("sha256") && !actualSha256.equalsIgnoreCase(expectedSha256)) {
+            throw new IOException("Model checksum verification failed.");
+        }
+    }
+
     private String safeFileName(String value) {
         if (!value.matches("[A-Za-z0-9._-]+") || value.contains("..")) {
             throw new IllegalArgumentException("Invalid model filename.");
@@ -337,10 +368,11 @@ public final class MaisModelRuntimePlugin extends Plugin {
         return result.toString();
     }
 
-    private void writeVerification(String artifactId, String fileName, String sha256, File model) throws Exception {
+    private void writeVerification(String artifactId, String fileName, String sha256, String integrityMode, File model) throws Exception {
         JSONObject metadata = new JSONObject();
         metadata.put("artifactId", artifactId);
         metadata.put("sha256", sha256);
+        metadata.put("integrityMode", integrityMode);
         metadata.put("bytes", model.length());
         metadata.put("modifiedAt", model.lastModified());
         metadata.put("verifiedAt", System.currentTimeMillis());
@@ -349,29 +381,32 @@ public final class MaisModelRuntimePlugin extends Plugin {
         }
     }
 
-    private boolean verificationMatches(String artifactId, String fileName, String expectedSha256, File model) {
+    private JSONObject readVerification(String fileName) {
         File verification = verificationFile(fileName);
-        if (!verification.isFile()) return false;
+        if (!verification.isFile()) return null;
         try {
             byte[] bytes = new byte[(int) Math.min(verification.length(), 64 * 1024L)];
             int count;
             try (FileInputStream input = new FileInputStream(verification)) {
                 count = input.read(bytes);
             }
-            if (count <= 0) return false;
-            JSONObject metadata = new JSONObject(new String(bytes, 0, count, StandardCharsets.UTF_8));
-            return artifactId.equals(metadata.optString("artifactId"))
-                && expectedSha256.equalsIgnoreCase(metadata.optString("sha256"))
-                && model.length() == metadata.optLong("bytes", -1L)
-                && model.lastModified() == metadata.optLong("modifiedAt", -1L);
+            if (count <= 0) return null;
+            return new JSONObject(new String(bytes, 0, count, StandardCharsets.UTF_8));
         } catch (Exception ignored) {
-            return false;
+            return null;
         }
     }
 
-    private void deleteVerification(String fileName) {
-        File verification = verificationFile(fileName);
-        if (verification.exists()) verification.delete();
+    private boolean verificationMatches(String artifactId, String expectedSha256, String integrityMode, File model, JSONObject metadata) {
+        if (metadata == null) return false;
+        String recordedSha = metadata.optString("sha256", "");
+        boolean digestMatches = integrityMode.equals("sha256")
+            ? expectedSha256.equalsIgnoreCase(recordedSha)
+            : recordedSha.matches("[a-fA-F0-9]{64}");
+        return artifactId.equals(metadata.optString("artifactId"))
+            && digestMatches
+            && model.length() == metadata.optLong("bytes", -1L)
+            && model.lastModified() == metadata.optLong("modifiedAt", -1L);
     }
 
     private void deleteIfPresent(File file) throws IOException {
