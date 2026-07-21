@@ -4,6 +4,7 @@ import type { MaisModelTier, MaisRole } from './contracts';
 
 export type MaisModelRole = MaisRole | 'retrieval' | 'multimodal';
 export type MaisModelRuntimeName = 'litert' | 'litert-lm' | 'executorch';
+export type MaisModelCapability = 'retrieval' | 'everyday_language' | 'deep_reasoning' | 'multimodal';
 
 export interface MaisRuntimeCandidate {
   runtime: MaisModelRuntimeName;
@@ -82,13 +83,27 @@ export function createMaisModelLeaseState(): MaisModelLeaseState {
   return { leases: [], activeLeaseId: null };
 }
 
+export function capabilityForRole(role: MaisModelRole, tier: MaisModelTier): MaisModelCapability {
+  if (role === 'retrieval') return 'retrieval';
+  if (role === 'multimodal') return 'multimodal';
+  if (tier === 'deep' || role === 'coding_analyst') return 'deep_reasoning';
+  return 'everyday_language';
+}
+
 function preferredModelIds(role: MaisModelRole, tier: MaisModelTier): string[] {
-  if (role === 'retrieval') return ['google.embeddinggemma'];
-  if (tier === 'deep' || role === 'coding_analyst') return ['qwen.qwen3-8b', 'google.gemma-4-e4b-it'];
-  if (tier === 'standard' || ['analyst', 'auditor'].includes(role)) {
-    return ['google.gemma-4-e4b-it', 'qwen.qwen3-8b', 'google.gemma-4-e2b-it'];
+  switch (capabilityForRole(role, tier)) {
+    case 'retrieval':
+      return ['google.embeddinggemma'];
+    case 'deep_reasoning':
+      // Qwen3-8B is a temporary, CPU-only 2K development stand-in. It will be
+      // replaced by the custom Qwen3-4B Thinking 12K artefact without changing
+      // the rest of MAIS because callers request this capability, not a binary.
+      return ['qwen.qwen3-8b', 'google.gemma-4-e2b-it'];
+    case 'multimodal':
+      return ['google.gemma-4-e2b-it'];
+    default:
+      return ['google.gemma-4-e2b-it'];
   }
-  return ['google.gemma-4-e2b-it', 'google.gemma-4-e4b-it', 'qwen.qwen3-8b'];
 }
 
 export function selectMaisModel(
