@@ -1,4 +1,5 @@
 import type { MaisArtifactKind, MaisRole, MaisRoleRunner } from './contracts';
+import { createNativeMaisRoleRunner } from './nativeRoleRunner';
 
 const artifactKindByRole: Record<MaisRole, MaisArtifactKind> = {
   governor: 'plan',
@@ -10,7 +11,7 @@ const artifactKindByRole: Record<MaisRole, MaisArtifactKind> = {
   research_broker: 'research_request',
 };
 
-export function createDeterministicMaisRoleRunner(): MaisRoleRunner {
+function createDeterministicFallbackRunner(): MaisRoleRunner {
   return {
     async run(request) {
       return {
@@ -32,4 +33,13 @@ export function createDeterministicMaisRoleRunner(): MaisRoleRunner {
       };
     },
   };
+}
+
+/**
+ * Historical name retained while Phase 3B transitions the Heart from simulation to installed local
+ * models. Android uses a verified role model when available; tests, web and missing-model roles use
+ * the deterministic fallback with the reason written into the resulting artefact.
+ */
+export function createDeterministicMaisRoleRunner(): MaisRoleRunner {
+  return createNativeMaisRoleRunner(createDeterministicFallbackRunner());
 }
