@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(RestTimerNotificationsPlugin.class);
         registerPlugin(MaisDeviceStatePlugin.class);
+        registerPlugin(MaisModelRuntimePlugin.class);
         super.onCreate(savedInstanceState);
     }
 
