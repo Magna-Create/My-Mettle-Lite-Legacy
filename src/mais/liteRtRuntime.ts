@@ -1,7 +1,7 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import type { MaisModelArtifactDefinition } from './modelArtifacts';
 
-export type MaisLiteRtBackend = 'cpu' | 'gpu';
+export type MaisLiteRtBackend = 'cpu' | 'gpu' | 'npu';
 export type MaisLiteRtRunState = 'loading' | 'generating' | 'completed' | 'cancelled' | 'failed';
 
 export interface MaisLiteRtRunResult {
@@ -11,6 +11,7 @@ export interface MaisLiteRtRunResult {
   runtime: 'litert-lm';
   runtimeVersion: string;
   backend: MaisLiteRtBackend;
+  maxNumTokens: number;
   startedAtEpochMs: number;
   completedAtEpochMs: number;
   loadMs: number;
@@ -28,10 +29,12 @@ export interface MaisLiteRtRunResult {
 
 export interface MaisLiteRtStatus {
   running: boolean;
+  activeModelId?: string | null | undefined;
   lastResult?: MaisLiteRtRunResult | null | undefined;
 }
 
 export interface MaisLiteRtProgress {
+  modelId: string;
   state: MaisLiteRtRunState;
   backend: MaisLiteRtBackend;
   loadMs: number;
@@ -39,12 +42,21 @@ export interface MaisLiteRtProgress {
   capturedAtEpochMs: number;
 }
 
+export interface MaisLiteRtPromptOptions {
+  prompt: string;
+  systemInstruction: string;
+  maxNumTokens?: number | undefined;
+}
+
 interface MaisLiteRtRuntimePlugin {
-  getStatus(): Promise<MaisLiteRtStatus>;
+  getStatus(options?: { modelId?: string }): Promise<MaisLiteRtStatus>;
   runBaseline(options: {
+    modelId: string;
     fileName: string;
     backend: MaisLiteRtBackend;
+    maxNumTokens: number;
     prompt?: string;
+    systemInstruction?: string;
   }): Promise<MaisLiteRtRunResult>;
   cancelRun(): Promise<{ requested: boolean }>;
   addListener(
@@ -59,17 +71,38 @@ function requireNative(): void {
   if (!Capacitor.isNativePlatform()) throw new Error('LiteRT-LM inference is available in the Android app only.');
 }
 
-export async function readMaisLiteRtStatus(): Promise<MaisLiteRtStatus> {
-  if (!Capacitor.isNativePlatform()) return { running: false, lastResult: null };
-  return nativePlugin.getStatus();
+export async function readMaisLiteRtStatus(modelId?: string): Promise<MaisLiteRtStatus> {
+  if (!Capacitor.isNativePlatform()) return { running: false, activeModelId: null, lastResult: null };
+  return nativePlugin.getStatus(modelId ? { modelId } : undefined);
 }
 
 export async function runMaisLiteRtBaseline(
   artifact: MaisModelArtifactDefinition,
   backend: MaisLiteRtBackend,
 ): Promise<MaisLiteRtRunResult> {
+  return runMaisLiteRtPrompt(artifact, backend, {
+    prompt: 'You are the first local MAIS model runtime check. Reply with exactly two short sentences: first confirm you are running locally, then name one reason typed evidence is safer than an endless chat transcript.',
+    systemInstruction: 'You are a bounded local runtime check for My Mettle. Be concise, factual and do not claim access to any training data.',
+    maxNumTokens: artifact.contextTokens,
+  });
+}
+
+export async function runMaisLiteRtPrompt(
+  artifact: MaisModelArtifactDefinition,
+  backend: MaisLiteRtBackend,
+  options: MaisLiteRtPromptOptions,
+): Promise<MaisLiteRtRunResult> {
   requireNative();
-  return nativePlugin.runBaseline({ fileName: artifact.fileName, backend });
+  if (artifact.runtime !== 'litert-lm') throw new Error(`${artifact.displayName} is not a LiteRT-LM generative model.`);
+  if (!artifact.backendCandidates.includes(backend)) throw new Error(`${artifact.displayName} does not register ${backend.toUpperCase()} as a candidate backend.`);
+  return nativePlugin.runBaseline({
+    modelId: artifact.modelId,
+    fileName: artifact.fileName,
+    backend,
+    maxNumTokens: options.maxNumTokens ?? artifact.contextTokens,
+    prompt: options.prompt,
+    systemInstruction: options.systemInstruction,
+  });
 }
 
 export async function cancelMaisLiteRtRun(): Promise<boolean> {
