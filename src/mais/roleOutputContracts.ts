@@ -19,7 +19,44 @@ const analysisRecipeExample = JSON.stringify({
   ],
 });
 
-const roleContracts: Record<MaisRole, RoleContract> = {
+const trainingExperimentCoachContract: RoleContract = {
+  purpose: 'Translate accepted analysis into one reversible training experiment proposal. Do not execute, activate or imply approval.',
+  contentExample: {
+    proposal: {
+      type: 'training_experiment',
+      exerciseId: 'exercise_id_from_packet',
+      routineSlotId: 'slot_id_from_packet',
+      rationale: 'Why this bounded test is informative.',
+      baselineLoad: 40,
+      proposedLoad: 42,
+      targetRepMin: 6,
+      reversible: true,
+      successCriteria: ['Complete the target repetitions with clean execution.'],
+      stopConditions: ['Stop if comfort is recorded as pain.'],
+    },
+    presentation: { title: 'Short experiment title', summary: 'Plain-language summary.' },
+  },
+  requiredKeys: ['proposal', 'presentation'],
+};
+
+const experimentDecisionCoachContract: RoleContract = {
+  purpose: 'Prepare an inspectable recommendation for a completed experiment. Never apply the decision or imply user approval.',
+  contentExample: {
+    proposal: {
+      type: 'experiment_decision',
+      experimentId: 'experiment_id_from_packet',
+      recommendation: 'adopt',
+      rationale: 'Why the observed result supports this recommendation.',
+      evidenceSummary: 'What happened compared with the baseline and success criteria.',
+      limitations: ['A limitation or competing explanation.'],
+      nextEvidence: ['Evidence required if the recommendation is extend or defer.'],
+    },
+    presentation: { title: 'Experiment recommendation', summary: 'Plain-language summary.' },
+  },
+  requiredKeys: ['proposal', 'presentation'],
+};
+
+const roleContracts: Omit<Record<MaisRole, RoleContract>, 'coach'> = {
   governor: {
     purpose: 'Bound the next useful action. Route recognised complexity rather than answering it shallowly.',
     contentExample: {
@@ -75,22 +112,6 @@ const roleContracts: Record<MaisRole, RoleContract> = {
     },
     requiredKeys: ['verdict', 'findings', 'concerns'],
   },
-  coach: {
-    purpose: 'Translate accepted analysis into one reversible proposal. Do not execute or imply approval.',
-    contentExample: {
-      proposal: {
-        type: 'training_experiment',
-        rationale: 'Why this test is informative.',
-        targetRefs: ['exercise_id'],
-        change: {},
-        reversible: true,
-        successCriteria: ['criterion'],
-        stopConditions: ['condition'],
-      },
-      presentation: { title: 'Short title', summary: 'Plain-language summary.' },
-    },
-    requiredKeys: ['proposal', 'presentation'],
-  },
   memory_curator: {
     purpose: 'Create provenance-linked memory updates without converting one subjective note into a permanent fact.',
     contentExample: {
@@ -116,21 +137,43 @@ const roleContracts: Record<MaisRole, RoleContract> = {
   },
 };
 
+function coachContract(outputSchema?: string): RoleContract {
+  return outputSchema === 'MaisExperimentDecisionDraftV1'
+    ? experimentDecisionCoachContract
+    : trainingExperimentCoachContract;
+}
+
+function contractFor(role: MaisRole, outputSchema?: string): RoleContract {
+  return role === 'coach' ? coachContract(outputSchema) : roleContracts[role];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-export function getMaisRoleContentContract(role: MaisRole): RoleContract {
-  return structuredClone(roleContracts[role]);
+function finite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
-export function formatMaisRoleContentContract(role: MaisRole): string {
-  const contract = roleContracts[role];
+function nonEmpty(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+export function getMaisRoleContentContract(role: MaisRole, outputSchema?: string): RoleContract {
+  return structuredClone(contractFor(role, outputSchema));
+}
+
+export function formatMaisRoleContentContract(role: MaisRole, outputSchema?: string): string {
+  const contract = contractFor(role, outputSchema);
   return `${contract.purpose} The artifact.content object must follow this compact shape: ${JSON.stringify(contract.contentExample)}`;
 }
 
-export function validateMaisRoleContent(role: MaisRole, content: Record<string, unknown>): MaisRoleContentValidation {
-  const errors = roleContracts[role].requiredKeys
+export function validateMaisRoleContent(
+  role: MaisRole,
+  content: Record<string, unknown>,
+  outputSchema?: string,
+): MaisRoleContentValidation {
+  const errors = contractFor(role, outputSchema).requiredKeys
     .filter((key) => !(key in content))
     .map((key) => `artifact.content.${key} is required for ${role}.`);
 
@@ -162,8 +205,35 @@ export function validateMaisRoleContent(role: MaisRole, content: Record<string, 
     if (!Array.isArray(content.sensitivityChecks)) errors.push('artifact.content.sensitivityChecks must be an array.');
   }
   if (role === 'coach') {
-    if (!isRecord(content.proposal)) errors.push('artifact.content.proposal must be an object.');
-    if (!isRecord(content.presentation)) errors.push('artifact.content.presentation must be an object.');
+    if (!isRecord(content.proposal)) {
+      errors.push('artifact.content.proposal must be an object.');
+    } else if (outputSchema === 'MaisExperimentDecisionDraftV1') {
+      const allowed = new Set(['adopt', 'extend', 'reject', 'defer']);
+      if (content.proposal.type !== 'experiment_decision') errors.push('artifact.content.proposal.type must be experiment_decision.');
+      if (!nonEmpty(content.proposal.experimentId)) errors.push('artifact.content.proposal.experimentId is required.');
+      if (typeof content.proposal.recommendation !== 'string' || !allowed.has(content.proposal.recommendation)) errors.push('artifact.content.proposal.recommendation is invalid.');
+      if (!nonEmpty(content.proposal.rationale)) errors.push('artifact.content.proposal.rationale is required.');
+      if (!nonEmpty(content.proposal.evidenceSummary)) errors.push('artifact.content.proposal.evidenceSummary is required.');
+      if (!Array.isArray(content.proposal.limitations)) errors.push('artifact.content.proposal.limitations must be an array.');
+      if (!Array.isArray(content.proposal.nextEvidence)) errors.push('artifact.content.proposal.nextEvidence must be an array.');
+    } else {
+      if (content.proposal.type !== 'training_experiment') errors.push('artifact.content.proposal.type must be training_experiment.');
+      if (!nonEmpty(content.proposal.exerciseId)) errors.push('artifact.content.proposal.exerciseId is required.');
+      if (!nonEmpty(content.proposal.routineSlotId)) errors.push('artifact.content.proposal.routineSlotId is required.');
+      if (!nonEmpty(content.proposal.rationale)) errors.push('artifact.content.proposal.rationale is required.');
+      if (!finite(content.proposal.baselineLoad) || content.proposal.baselineLoad < 0) errors.push('artifact.content.proposal.baselineLoad must be non-negative.');
+      if (!finite(content.proposal.proposedLoad) || content.proposal.proposedLoad < 0) errors.push('artifact.content.proposal.proposedLoad must be non-negative.');
+      if (!finite(content.proposal.targetRepMin) || content.proposal.targetRepMin <= 0) errors.push('artifact.content.proposal.targetRepMin must be positive.');
+      if (content.proposal.reversible !== true) errors.push('artifact.content.proposal.reversible must be true.');
+      if (!Array.isArray(content.proposal.successCriteria) || content.proposal.successCriteria.length === 0) errors.push('artifact.content.proposal.successCriteria requires at least one criterion.');
+      if (!Array.isArray(content.proposal.stopConditions) || content.proposal.stopConditions.length === 0) errors.push('artifact.content.proposal.stopConditions requires at least one condition.');
+    }
+    if (!isRecord(content.presentation)) {
+      errors.push('artifact.content.presentation must be an object.');
+    } else {
+      if (!nonEmpty(content.presentation.title)) errors.push('artifact.content.presentation.title is required.');
+      if (!nonEmpty(content.presentation.summary)) errors.push('artifact.content.presentation.summary is required.');
+    }
   }
   if (role === 'memory_curator') {
     if (!Array.isArray(content.memoryUpdates)) errors.push('artifact.content.memoryUpdates must be an array.');
