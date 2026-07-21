@@ -1,9 +1,11 @@
 import { createId } from '../domain/ids';
 import { reduceMaisAnalysisArtifact } from './analysisArtifactReducer';
+import { annotateMaisBeliefArtifact } from './beliefArtifactAnnotation';
 import { reduceMaisBeliefArtifact } from './beliefArtifactReducer';
 import { addMaisUnresolvedQuestion } from './beliefGraph';
-import type { MaisEventInput, MaisResourceSnapshot, MaisRoleRunner } from './contracts';
+import type { MaisArtifact, MaisEventInput, MaisResourceSnapshot, MaisRoleRunner } from './contracts';
 import { ingestMaisEvent, pulseMais } from './heart';
+import { applyMaisGovernorRoute } from './investigationWorkflow';
 import {
   markMaisLabProposalMaterialised,
   markMaisLabProposalRejected,
@@ -109,148 +111,38 @@ export class MaisCoordinator {
       if (this.leaseManager) current.models = this.leaseManager.snapshot();
       current.updatedAt = resources.capturedAt;
 
-      for (const artifact of current.heart.artifacts.filter((candidate) => !existingArtifactIds.has(candidate.id))) {
-        const analysisReduction = reduceMaisAnalysisArtifact(artifact);
-        if (analysisReduction.execution) {
-          const { input, program, run } = analysisReduction.execution;
-          if (!current.analysisInputs.some((candidate) => candidate.id === input.id)) current.analysisInputs.push(input);
-          if (!current.analysisPrograms.some((candidate) => candidate.id === program.id)) current.analysisPrograms.push(program);
-          if (!current.analysisRuns.some((candidate) => candidate.id === run.id)) current.analysisRuns.push(run);
+      const newArtifactIds = current.heart.artifacts
+        .filter((candidate) => !existingArtifactIds.has(candidate.id))
+        .map((artifact) => artifact.id);
+
+      for (const artifactId of newArtifactIds) {
+        let artifact = current.heart.artifacts.find((candidate) => candidate.id === artifactId);
+        if (!artifact) continue;
+
+        const routeApplication = applyMaisGovernorRoute(current.heart, artifact, resources.capturedAt);
+        current.heart = routeApplication.state;
+        artifact = current.heart.artifacts.find((candidate) => candidate.id === artifactId) ?? artifact;
+        if (routeApplication.message) {
           current.diagnostics.push({
             id: createId('mais_diagnostic'),
-            category: 'analysis',
-            severity: 'info',
-            message: 'A generated analysis executed against an immutable host snapshot.',
-            refs: [artifact.id, input.id, program.id, run.id],
-            recordedAt: resources.capturedAt,
-            data: { outputSchema: program.outputSchema, recordCount: input.records.length, executionMs: run.executionMs },
-          });
-        }
-        for (const message of analysisReduction.diagnostics) {
-          current.diagnostics.push({
-            id: createId('mais_diagnostic'),
-            category: 'analysis',
-            severity: 'warning',
-            message,
+            category: 'heart',
+            severity: routeApplication.completedEarly ? 'info' : routeApplication.expanded ? 'info' : 'warning',
+            message: routeApplication.message,
             refs: [artifact.id, artifact.taskId],
             recordedAt: resources.capturedAt,
-            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+            data: {
+              route: routeApplication.route,
+              expanded: routeApplication.expanded,
+              completedEarly: routeApplication.completedEarly,
+            },
           });
         }
 
-        const beliefReduction = reduceMaisBeliefArtifact(current.beliefs, artifact);
-        current.beliefs = beliefReduction.state;
-        if (beliefReduction.applied) {
-          current.diagnostics.push({
-            id: createId('mais_diagnostic'),
-            category: 'belief',
-            severity: 'info',
-            message: `${artifact.kind.replaceAll('_', ' ')} updated the persistent belief graph.`,
-            refs: [artifact.id, artifact.taskId],
-            recordedAt: resources.capturedAt,
-            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
-          });
-        }
-        for (const message of beliefReduction.diagnostics) {
-          current.diagnostics.push({
-            id: createId('mais_diagnostic'),
-            category: 'belief',
-            severity: 'warning',
-            message,
-            refs: [artifact.id, artifact.taskId],
-            recordedAt: resources.capturedAt,
-            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
-          });
-        }
-
-        const memoryReduction = reduceMaisMemoryArtifact(current.memories, artifact);
-        current.memories = memoryReduction.state;
-        for (const question of memoryReduction.unresolvedQuestions) {
-          try {
-            current.beliefs = addMaisUnresolvedQuestion(current.beliefs, {
-              domain: question.domain,
-              question: question.question,
-              beliefIds: [],
-              priority: question.priority,
-              requiredEvidence: question.requiredEvidence,
-              createdByTaskId: artifact.taskId,
-            }, resources.capturedAt);
-          } catch (reason) {
-            memoryReduction.diagnostics.push(reason instanceof Error ? reason.message : String(reason));
-          }
-        }
-        if (memoryReduction.added.length > 0) {
-          current.diagnostics.push({
-            id: createId('mais_diagnostic'),
-            category: 'context',
-            severity: 'info',
-            message: `${memoryReduction.added.length} provenance-linked memory update${memoryReduction.added.length === 1 ? '' : 's'} stored.`,
-            refs: [artifact.id, ...memoryReduction.added.map((memory) => memory.id)],
-            recordedAt: resources.capturedAt,
-            data: { entityRefs: memoryReduction.added.map((memory) => memory.entityRef) },
-          });
-        }
-        for (const message of memoryReduction.diagnostics) {
-          current.diagnostics.push({
-            id: createId('mais_diagnostic'),
-            category: 'context',
-            severity: 'warning',
-            message,
-            refs: [artifact.id, artifact.taskId],
-            recordedAt: resources.capturedAt,
-            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
-          });
-        }
-
-        const labReduction = reduceMaisLabProposalArtifact(current.labProposals, artifact);
-        current.labProposals = labReduction.state;
-        if (labReduction.proposal) {
-          current.diagnostics.push({
-            id: createId('mais_diagnostic'),
-            category: 'capability',
-            severity: 'info',
-            message: 'A validated reversible experiment proposal is ready to enter Lab.',
-            refs: [artifact.id, artifact.taskId, labReduction.proposal.id],
-            recordedAt: resources.capturedAt,
-            data: { exerciseId: labReduction.proposal.exerciseId, proposedLoad: labReduction.proposal.proposedLoad },
-          });
-        }
-        for (const message of labReduction.diagnostics) {
-          current.diagnostics.push({
-            id: createId('mais_diagnostic'),
-            category: 'capability',
-            severity: 'warning',
-            message,
-            refs: [artifact.id, artifact.taskId],
-            recordedAt: resources.capturedAt,
-            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
-          });
-        }
-
-        const researchReduction = reduceMaisResearchArtifact(current.research, artifact);
-        current.research = researchReduction.state;
-        if (researchReduction.dossier) {
-          current.diagnostics.push({
-            id: createId('mais_diagnostic'),
-            category: 'research',
-            severity: 'info',
-            message: 'A manual external-research dossier is ready for user review and export.',
-            refs: [artifact.id, artifact.taskId, researchReduction.dossier.id],
-            recordedAt: resources.capturedAt,
-            data: { topic: researchReduction.dossier.topic, expectedValue: researchReduction.dossier.expectedValue },
-          });
-        }
-        for (const message of researchReduction.diagnostics) {
-          current.diagnostics.push({
-            id: createId('mais_diagnostic'),
-            category: 'research',
-            severity: 'warning',
-            message,
-            refs: [artifact.id, artifact.taskId],
-            recordedAt: resources.capturedAt,
-            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
-          });
-        }
+        this.reduceAnalysis(current, artifact, resources.capturedAt);
+        this.reduceBelief(current, artifact, resources.capturedAt);
+        this.reduceMemory(current, artifact, resources.capturedAt);
+        this.reduceLabProposal(current, artifact, resources.capturedAt);
+        this.reduceResearch(current, artifact, resources.capturedAt);
       }
 
       current.analysisInputs = current.analysisInputs.slice(-200);
@@ -317,10 +209,11 @@ export class MaisCoordinator {
     let document = '';
     await this.enqueue(async () => {
       const current = this.requireSnapshot();
+      const recordedAt = timestamp(now);
       const broker = new MaisResearchBroker(current.research);
-      document = broker.export(requestId, timestamp(now));
+      document = broker.export(requestId, recordedAt);
       current.research = broker.snapshot();
-      current.updatedAt = timestamp(now);
+      current.updatedAt = recordedAt;
       await this.repository.save(current);
     });
     return { snapshot: this.snapshot(), document };
@@ -356,17 +249,18 @@ export class MaisCoordinator {
   async rejectResearchRequest(requestId: string, now?: string): Promise<MaisSystemSnapshot> {
     await this.enqueue(async () => {
       const current = this.requireSnapshot();
+      const recordedAt = timestamp(now);
       const broker = new MaisResearchBroker(current.research);
       const request = broker.reject(requestId);
       current.research = broker.snapshot();
-      current.updatedAt = timestamp(now);
+      current.updatedAt = recordedAt;
       current.diagnostics.push({
         id: createId('mais_diagnostic'),
         category: 'research',
         severity: 'info',
         message: 'The manual research request was rejected by the user.',
         refs: [request.id],
-        recordedAt: current.updatedAt,
+        recordedAt,
         data: { topic: request.topic },
       });
       await this.repository.save(current);
@@ -426,6 +320,162 @@ export class MaisCoordinator {
       await this.repository.save(this.snapshotValue);
     });
     return this.snapshot();
+  }
+
+  private reduceAnalysis(current: MaisSystemSnapshot, artifact: MaisArtifact, recordedAt: string): void {
+    const reduction = reduceMaisAnalysisArtifact(artifact);
+    if (reduction.execution) {
+      const { input, program, run } = reduction.execution;
+      if (!current.analysisInputs.some((candidate) => candidate.id === input.id)) current.analysisInputs.push(input);
+      if (!current.analysisPrograms.some((candidate) => candidate.id === program.id)) current.analysisPrograms.push(program);
+      if (!current.analysisRuns.some((candidate) => candidate.id === run.id)) current.analysisRuns.push(run);
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'analysis',
+        severity: run.status === 'completed' ? 'info' : 'warning',
+        message: run.status === 'completed'
+          ? 'A generated analysis executed against an immutable host snapshot.'
+          : 'A generated analysis did not complete successfully.',
+        refs: [artifact.id, input.id, program.id, run.id],
+        recordedAt,
+        data: { outputSchema: program.outputSchema, recordCount: input.records.length, executionMs: run.executionMs, status: run.status },
+      });
+    }
+    for (const message of reduction.diagnostics) {
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'analysis',
+        severity: 'warning',
+        message,
+        refs: [artifact.id, artifact.taskId],
+        recordedAt,
+        data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+      });
+    }
+  }
+
+  private reduceBelief(current: MaisSystemSnapshot, artifact: MaisArtifact, recordedAt: string): void {
+    const before = current.beliefs;
+    const reduction = reduceMaisBeliefArtifact(before, artifact);
+    current.beliefs = reduction.state;
+    const resolved = annotateMaisBeliefArtifact(artifact, before, current.beliefs);
+    if (reduction.applied || resolved.length > 0) {
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'belief',
+        severity: 'info',
+        message: `${artifact.kind.replaceAll('_', ' ')} updated the persistent belief graph.`,
+        refs: [artifact.id, artifact.taskId, ...resolved.map((belief) => belief.beliefId)],
+        recordedAt,
+        data: { artifactKind: artifact.kind, createdBy: artifact.createdBy, resolvedBeliefCount: resolved.length },
+      });
+    }
+    for (const message of reduction.diagnostics) {
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'belief',
+        severity: 'warning',
+        message,
+        refs: [artifact.id, artifact.taskId],
+        recordedAt,
+        data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+      });
+    }
+  }
+
+  private reduceMemory(current: MaisSystemSnapshot, artifact: MaisArtifact, recordedAt: string): void {
+    const reduction = reduceMaisMemoryArtifact(current.memories, artifact);
+    current.memories = reduction.state;
+    for (const question of reduction.unresolvedQuestions) {
+      try {
+        current.beliefs = addMaisUnresolvedQuestion(current.beliefs, {
+          domain: question.domain,
+          question: question.question,
+          beliefIds: [],
+          priority: question.priority,
+          requiredEvidence: question.requiredEvidence,
+          createdByTaskId: artifact.taskId,
+        }, recordedAt);
+      } catch (reason) {
+        reduction.diagnostics.push(reason instanceof Error ? reason.message : String(reason));
+      }
+    }
+    if (reduction.added.length > 0) {
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'context',
+        severity: 'info',
+        message: `${reduction.added.length} provenance-linked memory update${reduction.added.length === 1 ? '' : 's'} stored.`,
+        refs: [artifact.id, ...reduction.added.map((memory) => memory.id)],
+        recordedAt,
+        data: { entityRefs: reduction.added.map((memory) => memory.entityRef) },
+      });
+    }
+    for (const message of reduction.diagnostics) {
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'context',
+        severity: 'warning',
+        message,
+        refs: [artifact.id, artifact.taskId],
+        recordedAt,
+        data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+      });
+    }
+  }
+
+  private reduceLabProposal(current: MaisSystemSnapshot, artifact: MaisArtifact, recordedAt: string): void {
+    const reduction = reduceMaisLabProposalArtifact(current.labProposals, artifact);
+    current.labProposals = reduction.state;
+    if (reduction.proposal) {
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'capability',
+        severity: 'info',
+        message: 'A validated reversible experiment proposal is ready to enter Lab.',
+        refs: [artifact.id, artifact.taskId, reduction.proposal.id],
+        recordedAt,
+        data: { exerciseId: reduction.proposal.exerciseId, proposedLoad: reduction.proposal.proposedLoad },
+      });
+    }
+    for (const message of reduction.diagnostics) {
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'capability',
+        severity: 'warning',
+        message,
+        refs: [artifact.id, artifact.taskId],
+        recordedAt,
+        data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+      });
+    }
+  }
+
+  private reduceResearch(current: MaisSystemSnapshot, artifact: MaisArtifact, recordedAt: string): void {
+    const reduction = reduceMaisResearchArtifact(current.research, artifact);
+    current.research = reduction.state;
+    if (reduction.dossier) {
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'research',
+        severity: 'info',
+        message: 'A manual external-research dossier is ready for user review and export.',
+        refs: [artifact.id, artifact.taskId, reduction.dossier.id],
+        recordedAt,
+        data: { topic: reduction.dossier.topic, expectedValue: reduction.dossier.expectedValue },
+      });
+    }
+    for (const message of reduction.diagnostics) {
+      current.diagnostics.push({
+        id: createId('mais_diagnostic'),
+        category: 'research',
+        severity: 'warning',
+        message,
+        refs: [artifact.id, artifact.taskId],
+        recordedAt,
+        data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+      });
+    }
   }
 
   private requireSnapshot(): MaisSystemSnapshot {
