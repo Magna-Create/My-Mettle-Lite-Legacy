@@ -266,8 +266,7 @@ function executeOperation(operation: MaisAnalysisOperation, sourceRecords: Recor
     return { mean: mean(trimmed), n: trimmed.length, trimmedPerSide: trim };
   }
 
-  const exhaustive: never = operation;
-  throw new Error(`Unsupported analysis operation: ${String(exhaustive)}`);
+  throw new Error('Unsupported analysis operation.');
 }
 
 export function createMaisAnalysisInput(
