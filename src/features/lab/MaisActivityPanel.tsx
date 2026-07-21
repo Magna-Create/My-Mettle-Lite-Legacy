@@ -10,6 +10,40 @@ interface Props {
   onExportReport: () => void;
 }
 
+interface ExecutionSummary {
+  source: string;
+  modelId?: string | undefined;
+  intendedModelId?: string | undefined;
+  backend?: string | undefined;
+  reason?: string | undefined;
+  totalMs?: number | undefined;
+}
+
+function executionFrom(content: Record<string, unknown>): ExecutionSummary | null {
+  const value = content.execution;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.source !== 'string') return null;
+  return {
+    source: record.source,
+    modelId: typeof record.modelId === 'string' ? record.modelId : undefined,
+    intendedModelId: typeof record.intendedModelId === 'string' ? record.intendedModelId : undefined,
+    backend: typeof record.backend === 'string' ? record.backend : undefined,
+    reason: typeof record.reason === 'string' ? record.reason : undefined,
+    totalMs: typeof record.totalMs === 'number' ? record.totalMs : undefined,
+  };
+}
+
+function executionLabel(execution: ExecutionSummary | null): string {
+  if (!execution) return 'Legacy / unlabelled';
+  if (execution.source === 'local_model') {
+    const backend = execution.backend ? ` · ${execution.backend.toUpperCase()}` : '';
+    const time = typeof execution.totalMs === 'number' ? ` · ${(execution.totalMs / 1_000).toFixed(2)} s` : '';
+    return `${execution.modelId ?? 'local model'}${backend}${time}`;
+  }
+  return `${execution.intendedModelId ?? 'local model'} · deterministic fallback`;
+}
+
 export function MaisActivityPanel({ snapshot, resourceMode, onRunDemo, onPulse, onClear, onExportReport }: Props) {
   if (!snapshot) {
     return <section className="paper-card mais-activity"><p className="eyebrow">MAIS Activity</p><h2>Opening intelligence workspace…</h2></section>;
@@ -17,14 +51,19 @@ export function MaisActivityPanel({ snapshot, resourceMode, onRunDemo, onPulse, 
 
   const recentTasks = [...snapshot.heart.tasks].reverse().slice(0, 6);
   const recentDiagnostics = [...snapshot.diagnostics].reverse().slice(0, 8);
+  const recentExecutions = [...snapshot.heart.artifacts]
+    .reverse()
+    .map((artifact) => ({ artifact, execution: executionFrom(artifact.content) }))
+    .filter(({ execution }) => Boolean(execution))
+    .slice(0, 8);
   const lastDecision = snapshot.lastPulseDecision;
 
   return (
     <section className="paper-card mais-activity">
       <header className="mais-activity-header">
         <div>
-          <p className="eyebrow">MAIS Activity · Phase 3A</p>
-          <h2>Heartbeat and framework console</h2>
+          <p className="eyebrow">MAIS Activity · Phase 3B</p>
+          <h2>Heartbeat and runtime console</h2>
         </div>
         <span className="status-chip">{resourceMode}</span>
       </header>
@@ -50,6 +89,18 @@ export function MaisActivityPanel({ snapshot, resourceMode, onRunDemo, onPulse, 
         <button className="text-button" type="button" onClick={() => { if (window.confirm('Clear the separate MAIS framework database? Training data will not be touched.')) void onClear(); }}>Clear MAIS state</button>
       </div>
 
+      <details open={recentExecutions.length > 0}>
+        <summary>Role execution</summary>
+        {recentExecutions.length === 0 ? <p>No labelled role executions yet.</p> : <ol className="mais-ledger">
+          {recentExecutions.map(({ artifact, execution }) => <li key={artifact.id}>
+            <strong>{artifact.createdBy}</strong>
+            <span>{executionLabel(execution)}</span>
+            <small>{artifact.kind} · {new Date(artifact.createdAt).toLocaleString()}</small>
+            {execution?.source === 'deterministic_fallback' && execution.reason && <small>{execution.reason}</small>}
+          </li>)}
+        </ol>}
+      </details>
+
       <details>
         <summary>Task ledger</summary>
         {recentTasks.length === 0 ? <p>No tasks yet.</p> : <ol className="mais-ledger">
@@ -64,7 +115,7 @@ export function MaisActivityPanel({ snapshot, resourceMode, onRunDemo, onPulse, 
         </ol>}
       </details>
 
-      <p className="mais-framework-note">This console is intentionally plain. It exposes framework state for testing; it is not the final Lab interface.</p>
+      <p className="mais-framework-note">This console is deliberately plain. It exposes real/fallback role execution for development; Phase 3.5 will replace it with the final intelligence interface.</p>
     </section>
   );
 }
