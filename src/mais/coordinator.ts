@@ -108,6 +108,7 @@ export class MaisCoordinator {
       widgets: current.widgets,
       research: current.research,
       reinforcement: current.reinforcement,
+      beliefs: current.beliefs,
       contextManifests: current.contextManifests,
       analysisRuns: current.analysisRuns,
       diagnostics: current.diagnostics,
