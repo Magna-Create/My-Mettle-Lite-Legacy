@@ -2,7 +2,6 @@ import type { AppDatabase } from '../../domain/model';
 import type { MaisResourceMode } from '../../mais/contracts';
 import type { MaisSystemSnapshot } from '../../mais/systemState';
 import { MaisActivityPanel } from './MaisActivityPanel';
-import { MaisRuntimeLabPanel } from './MaisRuntimeLabPanel';
 
 interface Props {
   database: AppDatabase;
@@ -38,8 +37,6 @@ export function LabPage({
         <h1>Turn evidence into a controlled change.</h1>
         <p>Experiments remain temporary until a later exposure produces evidence and you explicitly promote the result.</p>
       </section>
-
-      <MaisRuntimeLabPanel />
 
       <MaisActivityPanel
         snapshot={maisSnapshot}
