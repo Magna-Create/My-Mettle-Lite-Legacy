@@ -4,6 +4,8 @@ import { createMaisCapabilityState, type MaisCapabilityState } from './capabilit
 import type { MaisContextManifest } from './contextCompiler';
 import type { MaisPulseDecision, MaisState } from './contracts';
 import { createMaisState } from './heart';
+import { createMaisLabProposalState, type MaisLabProposalState } from './labProposalState';
+import { createMaisMemoryLedgerState, type MaisMemoryLedgerState } from './memoryLedger';
 import { createMaisModelLeaseState, type MaisModelLeaseState } from './modelLeases';
 import { createMaisReinforcementState, type MaisReinforcementState } from './reinforcementLedger';
 import { createMaisResearchState, type MaisResearchState } from './researchBroker';
@@ -22,6 +24,8 @@ export interface MaisSystemSnapshot {
   research: MaisResearchState;
   reinforcement: MaisReinforcementState;
   beliefs: MaisBeliefGraphState;
+  memories: MaisMemoryLedgerState;
+  labProposals: MaisLabProposalState;
   contextManifests: MaisContextManifest[];
   semanticManifests: MaisSemanticIndexManifest[];
   analysisInputs: MaisAnalysisInputSnapshot[];
@@ -44,6 +48,8 @@ export function createMaisSystemSnapshot(now = new Date().toISOString()): MaisSy
     research: createMaisResearchState(),
     reinforcement: createMaisReinforcementState(),
     beliefs: createMaisBeliefGraphState(),
+    memories: createMaisMemoryLedgerState(),
+    labProposals: createMaisLabProposalState(),
     contextManifests: [],
     semanticManifests: [],
     analysisInputs: [],
@@ -73,6 +79,8 @@ export function normaliseMaisSystemSnapshot(value: unknown, now = new Date().toI
     research: structuredClone(stored.research ?? base.research),
     reinforcement: structuredClone(stored.reinforcement ?? base.reinforcement),
     beliefs: structuredClone(stored.beliefs ?? base.beliefs),
+    memories: structuredClone(stored.memories ?? base.memories),
+    labProposals: structuredClone(stored.labProposals ?? base.labProposals),
     contextManifests: structuredClone(stored.contextManifests ?? []),
     semanticManifests: structuredClone(stored.semanticManifests ?? []),
     analysisInputs: structuredClone(stored.analysisInputs ?? []),
