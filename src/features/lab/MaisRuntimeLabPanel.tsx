@@ -11,6 +11,16 @@ import {
   type MaisModelArtifactStatus,
   type MaisModelDownloadProgress,
 } from '../../mais/modelArtifacts';
+import {
+  cancelMaisLiteRtRun,
+  readMaisLiteRtStatus,
+  runMaisLiteRtBaseline,
+  subscribeMaisLiteRtProgress,
+  type MaisLiteRtBackend,
+  type MaisLiteRtProgress,
+  type MaisLiteRtRunResult,
+  type MaisLiteRtStatus,
+} from '../../mais/liteRtRuntime';
 
 function statusLabel(status: MaisModelArtifactStatus | null): string {
   if (!status) return 'Checking';
@@ -39,28 +49,63 @@ function progressText(
   return null;
 }
 
+function formatDuration(milliseconds: number): string {
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return 'Not recorded';
+  if (milliseconds < 1_000) return `${Math.round(milliseconds)} ms`;
+  return `${(milliseconds / 1_000).toFixed(milliseconds >= 10_000 ? 1 : 2)} s`;
+}
+
+function runLabel(progress: MaisLiteRtProgress | null, status: MaisLiteRtStatus | null): string {
+  if (progress?.state === 'loading') return `Loading on ${progress.backend.toUpperCase()}`;
+  if (progress?.state === 'generating') return `Generating on ${progress.backend.toUpperCase()}`;
+  if (status?.running) return 'Runtime active';
+  return 'Runtime idle';
+}
+
+function resultState(result: MaisLiteRtRunResult): string {
+  if (result.state === 'completed') return 'Completed';
+  if (result.state === 'cancelled') return 'Cancelled';
+  return 'Failed';
+}
+
 export function MaisRuntimeLabPanel() {
   const artifact = useMemo(() => getFirstMaisRuntimeArtifact(), []);
   const [status, setStatus] = useState<MaisModelArtifactStatus | null>(null);
   const [progress, setProgress] = useState<MaisModelDownloadProgress | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [runtimeStatus, setRuntimeStatus] = useState<MaisLiteRtStatus | null>(null);
+  const [runtimeProgress, setRuntimeProgress] = useState<MaisLiteRtProgress | null>(null);
+  const [runtimeBusy, setRuntimeBusy] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
   async function refresh(): Promise<void> {
     try {
-      setStatus(await readMaisModelArtifactStatus(artifact));
+      const [nextArtifact, nextRuntime] = await Promise.all([
+        readMaisModelArtifactStatus(artifact),
+        readMaisLiteRtStatus(),
+      ]);
+      setStatus(nextArtifact);
+      setRuntimeStatus(nextRuntime);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Model status could not be read.');
+      setError(reason instanceof Error ? reason.message : 'Runtime Lab status could not be read.');
     }
   }
 
   useEffect(() => {
     let cancelled = false;
-    let dispose: (() => Promise<void>) | undefined;
+    let disposeDownload: (() => Promise<void>) | undefined;
+    let disposeRuntime: (() => Promise<void>) | undefined;
     void (async () => {
-      const initial = await readMaisModelArtifactStatus(artifact);
-      if (!cancelled) setStatus(initial);
-      dispose = await subscribeMaisModelDownload((event) => {
+      const [initialArtifact, initialRuntime] = await Promise.all([
+        readMaisModelArtifactStatus(artifact),
+        readMaisLiteRtStatus(),
+      ]);
+      if (!cancelled) {
+        setStatus(initialArtifact);
+        setRuntimeStatus(initialRuntime);
+      }
+      disposeDownload = await subscribeMaisModelDownload((event) => {
         if (event.artifactId !== artifact.artifactId || cancelled) return;
         setProgress(event);
         setStatus((current) => current ? {
@@ -69,16 +114,22 @@ export function MaisRuntimeLabPanel() {
           partialBytes: event.downloadedBytes,
         } : current);
       });
+      disposeRuntime = await subscribeMaisLiteRtProgress((event) => {
+        if (cancelled) return;
+        setRuntimeProgress(event);
+        setRuntimeStatus((current) => ({ ...current, running: ['loading', 'generating'].includes(event.state) }));
+      });
     })().catch((reason: unknown) => {
       if (!cancelled) setError(reason instanceof Error ? reason.message : 'Runtime Lab could not initialise.');
     });
     return () => {
       cancelled = true;
-      if (dispose) void dispose();
+      if (disposeDownload) void disposeDownload();
+      if (disposeRuntime) void disposeRuntime();
     };
   }, [artifact]);
 
-  async function run(operation: () => Promise<MaisModelArtifactStatus>): Promise<void> {
+  async function runArtifactOperation(operation: () => Promise<MaisModelArtifactStatus>): Promise<void> {
     setBusy(true);
     setError(null);
     try {
@@ -92,10 +143,30 @@ export function MaisRuntimeLabPanel() {
     }
   }
 
+  async function runBaseline(backend: MaisLiteRtBackend): Promise<void> {
+    setRuntimeBusy(true);
+    setRuntimeError(null);
+    setRuntimeProgress({ state: 'loading', backend, loadMs: 0, outputChars: null, capturedAtEpochMs: Date.now() });
+    try {
+      const result = await runMaisLiteRtBaseline(artifact, backend);
+      setRuntimeStatus({ running: false, lastResult: result });
+      setRuntimeProgress(null);
+    } catch (reason) {
+      setRuntimeError(reason instanceof Error ? reason.message : 'LiteRT-LM inference failed.');
+      setRuntimeStatus(await readMaisLiteRtStatus());
+      setRuntimeProgress(null);
+    } finally {
+      setRuntimeBusy(false);
+    }
+  }
+
   const downloading = busy && (status?.state === 'downloading' || progress?.state === 'downloading');
   const canDownload = !busy && status?.state !== 'ready' && status?.state !== 'unverified';
   const canVerify = !busy && status?.state === 'unverified';
-  const canDelete = !busy && Boolean(status?.installed || status?.partialBytes);
+  const canDelete = !busy && !runtimeBusy && !runtimeStatus?.running && Boolean(status?.installed || status?.partialBytes);
+  const canRun = status?.state === 'ready' && !busy && !runtimeBusy && !runtimeStatus?.running;
+  const running = runtimeBusy || runtimeStatus?.running === true;
+  const lastResult = runtimeStatus?.lastResult ?? null;
 
   return (
     <section className="paper-card mais-runtime-lab" aria-labelledby="mais-runtime-title">
@@ -129,7 +200,7 @@ export function MaisRuntimeLabPanel() {
 
       <div className="mais-runtime-actions">
         {canDownload && (
-          <button className="primary-action compact" type="button" onClick={() => void run(() => downloadMaisModelArtifact(artifact))}>
+          <button className="primary-action compact" type="button" onClick={() => void runArtifactOperation(() => downloadMaisModelArtifact(artifact))}>
             {status?.state === 'partial' ? 'Resume download' : 'Download model'}
           </button>
         )}
@@ -139,18 +210,18 @@ export function MaisRuntimeLabPanel() {
           </button>
         )}
         {canVerify && (
-          <button className="primary-action compact" type="button" onClick={() => void run(() => verifyMaisModelArtifact(artifact))}>
+          <button className="primary-action compact" type="button" onClick={() => void runArtifactOperation(() => verifyMaisModelArtifact(artifact))}>
             Verify model
           </button>
         )}
-        <button className="text-button" type="button" disabled={busy} onClick={() => void refresh()}>Refresh</button>
+        <button className="text-button" type="button" disabled={busy || runtimeBusy} onClick={() => void refresh()}>Refresh</button>
         {canDelete && (
           <button
             className="text-button danger-text"
             type="button"
             onClick={() => {
               if (window.confirm('Delete the installed or partial Gemma model from this phone?')) {
-                void run(() => deleteMaisModelArtifact(artifact));
+                void runArtifactOperation(() => deleteMaisModelArtifact(artifact));
               }
             }}
           >
@@ -159,8 +230,58 @@ export function MaisRuntimeLabPanel() {
         )}
       </div>
 
+      {status?.state === 'ready' && (
+        <section className="mais-inference-lab" aria-labelledby="mais-inference-title">
+          <header>
+            <div>
+              <p className="eyebrow">LiteRT-LM 0.14.0</p>
+              <h3 id="mais-inference-title">Real inference baseline</h3>
+            </div>
+            <span className="status-chip">{runLabel(runtimeProgress, runtimeStatus)}</span>
+          </header>
+
+          <p className="mais-runtime-note">
+            This runs one bounded local prompt, records the complete load → generate → unload lifecycle, then releases the model. The autonomous Heart remains simulated until this gate passes.
+          </p>
+
+          {runtimeError && <p className="mais-runtime-error" role="alert">{runtimeError}</p>}
+
+          <div className="mais-runtime-actions">
+            {canRun && <button className="primary-action compact" type="button" onClick={() => void runBaseline('cpu')}>Run CPU baseline</button>}
+            {canRun && <button className="text-button" type="button" onClick={() => void runBaseline('gpu')}>Run GPU baseline</button>}
+            {running && <button className="text-button danger-text" type="button" onClick={() => void cancelMaisLiteRtRun()}>Cancel run</button>}
+          </div>
+
+          {runtimeProgress && (
+            <p className="mais-runtime-live" aria-live="polite">
+              <strong>{runtimeProgress.state}</strong>
+              <span>{runtimeProgress.backend.toUpperCase()} · {runtimeProgress.outputChars ?? 0} characters</span>
+            </p>
+          )}
+
+          {lastResult && (
+            <article className={`mais-runtime-result is-${lastResult.state}`}>
+              <header>
+                <strong>{resultState(lastResult)} · {lastResult.backend.toUpperCase()}</strong>
+                <span>{new Date(lastResult.completedAtEpochMs).toLocaleString()}</span>
+              </header>
+              <dl>
+                <div><dt>Model load</dt><dd>{formatDuration(lastResult.loadMs)}</dd></div>
+                <div><dt>First chunk</dt><dd>{formatDuration(lastResult.firstChunkLatencyMs)}</dd></div>
+                <div><dt>Generation</dt><dd>{formatDuration(lastResult.generationMs)}</dd></div>
+                <div><dt>Unload</dt><dd>{formatDuration(lastResult.unloadMs)}</dd></div>
+                <div><dt>Total</dt><dd>{formatDuration(lastResult.totalMs)}</dd></div>
+                <div><dt>Peak PSS</dt><dd>{formatModelBytes(lastResult.peakPssBytes)}</dd></div>
+              </dl>
+              {lastResult.output && <blockquote>{lastResult.output}</blockquote>}
+              {lastResult.error && <p className="mais-runtime-error">{lastResult.error}</p>}
+            </article>
+          )}
+        </section>
+      )}
+
       <p className="mais-runtime-note">
-        The file downloads directly into app-private storage. It is not included in the APK, Git repository or JavaScript state.
+        The model file lives in persistent app-private data. Normal signed APK updates reuse it; uninstalling the app or clearing app data removes it.
       </p>
     </section>
   );
