@@ -1,6 +1,6 @@
 # My Mettle — Product Roadmap
 
-_Last updated: 20 July 2026_
+_Last updated: 21 July 2026_
 
 This document is the live product roadmap and the primary planning reference for development.
 
@@ -13,212 +13,289 @@ When project references disagree, use them in this order:
 3. Accepted decisions recorded in active or merged pull requests.
 4. The original master specification in `docs/spec/`.
 
-The master specification remains the product foundation, but later accepted decisions supersede it where they conflict. Development is **Git-first**: inspect the current branch, current repository documents and relevant pull-request history before relying on an older exported project file or conversational memory.
+The master specification remains the product foundation, but later accepted decisions supersede it where they conflict. Development is **Git-first**: inspect the current branch, repository documents and relevant pull-request history before relying on an older exported project file or conversational memory.
 
 ## Current product direction
 
-My Mettle is an adaptive personal training system that meets the user where they are, records training accurately, explains useful decisions without becoming chatty, and gradually develops a more personal visual and intelligent layer.
+My Mettle is an adaptive personal training system that meets the user where they are, records training accurately and develops a persistent local intelligence capable of investigating accumulated evidence, designing reversible experiments and deploying context-sensitive training decisions.
 
-The interaction tone should be concise, British, direct and occasionally funny. Avoid reassurance-for-its-own-sake, therapist-style language and unnecessary explanation.
+The interaction tone remains concise, British, direct and occasionally funny. Avoid reassurance-for-its-own-sake, therapist-style language and unnecessary explanation.
+
+The intelligence is structural rather than decorative. Deterministic systems establish trustworthy evidence, constraints and transactions; MAIS conducts inquiry, plans analyses, forms and revises hypotheses, proposes experiments and decides what matters in context.
 
 ## Accepted interface and product decisions
 
 ### Navigation and header
 
-- The bottom navigation is icon-only, compact and substantially narrower than a full-width dock.
-- Its material should be light, translucent and liquid-glass-like, with blur, restrained refraction, a thin top highlight and colour interaction with content beneath.
-- The selected icon is highlighted without expanding to reveal a text label.
-- The current page name appears in the centre of the app header, slightly faded, between the `MY METTLE` wordmark and settings/profile controls.
+- The bottom navigation is icon-only, compact and narrower than a full-width dock.
+- Its material is light, translucent and liquid-glass-like, with blur, restrained refraction and a thin highlight.
+- The selected icon does not expand into a text label.
+- The current page name appears in the centre of the app header.
 - The accepted scroll-linked workout progress tint remains.
-- Material Symbols selected for the primary bar are:
+- Primary symbols remain locally bundled assets:
   - Brief: `cycle`;
   - Train: `sports_martial_arts`;
   - Progress: `analytics`;
   - Lab: `tactic`;
   - Library: `add_row_below`.
-- Icons must be optically centred and use local bundled assets rather than network fonts.
 
 ### Brief
 
 - Brief favours useful information over motivational or reassuring copy.
-- Fuel guidance includes carbohydrate and protein quantities, plus water.
-- Generic phrases such as “Ramp the first movement. No extra ceremony.” are replaced by concrete movement-aware warm-up guidance.
+- Fuel guidance includes carbohydrate, protein and water quantities.
+- Warm-up guidance is movement-aware rather than generic.
 - The primary Begin action remains lower in the briefing sequence.
-- A future preparation-confirmation gesture may let the user mark fuel, hydration and warm-up items as done without literal checkboxes; this belongs to Phase 3 unless required for dumb-input parity.
+- Preparation acknowledgement may use a deliberate tactile gesture without literal checkboxes, streaks or guilt.
+- Brief becomes the deployment surface for current MAIS knowledge, active experiments and temporary session adaptations.
 
-### Workout cards
+### Workout and exercise details
 
-- The current compact/expanded exercise-card system remains the working interaction model.
-- Workout-card transitions should be slightly slower and calmer than the current implementation.
-- A minimal, low-emphasis `Add set` action is available beneath prescribed sets.
-- Additional sets remain visible as extra work and are distinguished from prescribed sets in stored data.
-- Details opens a full-screen exercise surface.
-- By Phase 2 completion, Details includes setup, technique cues, common mistakes, personal notes, equipment/machine settings, substitutions, recent performance and deterministic progression configuration.
-- Character imagery remains deferred to the character/generative phase.
+- The compact/expanded exercise-card system remains the working interaction model.
+- A low-emphasis `Add set` action sits beneath prescribed sets.
+- Additional sets remain explicitly distinguishable from prescribed work.
+- Exercise Details includes setup, technique cues, common mistakes, machine settings, substitutions, video reference and recent evidence.
+- Setup Notes and the video reference are editable during a workout and save to shared exercise memory.
+- Exercise-level Personal Notes are retired; session-specific thoughts belong to reflections.
+- Character imagery remains deferred to Phase 4.
 
 ### Routine and exercise management
 
-- The current routine is fully editable rather than append-only.
-- Exercises can be reordered within a day, moved between days, edited, removed from the current routine, archived and restored.
-- Permanent routine changes create a new immutable routine version; historical sessions retain their original routine and exercise snapshots.
-- Exercise objects support category, equipment, target muscles, fatigue cost, skill difficulty, cues, common mistakes, personal setup/machine settings, notes and substitutions.
-- Updating an exercise updates future routine use while historical session snapshots remain unchanged.
-- Permanent deletion is only allowed for records with no historical references; normal removal uses routine removal or archive.
+- The current routine is fully editable.
+- Exercises can be reordered, moved, duplicated, edited, removed, archived and restored.
+- Permanent routine changes create a new immutable routine version.
+- Historical sessions retain original routine and exercise snapshots.
+- Updating an exercise affects future use without rewriting history.
+- Normal removal uses routine removal or archive rather than destructive deletion.
+- MAIS never receives direct database write access. It submits typed proposals through the Capability Protocol.
+- Permanent AI-proposed changes require exact user approval tied to the proposed payload.
 
 ### Session history and amendments
 
-- Profile contains a chronological Session History surface.
+- Profile contains chronological Session History.
 - Completed and abandoned sessions can be reviewed individually.
-- A completed session can be amended: set values, notes and additional/accidental sets may be changed after completion.
-- A session can be excluded from Progress/Lab while preserving the raw record, or permanently discarded with explicit confirmation.
-- Amendments retain metadata such as original completion time and latest edit time.
-- Historical calculations update from the amended session without mutating unrelated routine versions.
-
-### Set editing
-
-- The `Set updated` Undo toast dismisses after five seconds; a newer edit restarts the timer.
-- Undo and exercise completion clear the toast immediately.
-- Added sets use stable IDs and maintain contiguous display indices after removal.
+- Completed sessions may be amended without mutating unrelated routine versions.
+- Sessions may be excluded from intelligence while preserving raw evidence, or discarded with explicit confirmation.
+- Amendments retain original completion and latest-edit metadata.
 
 ### Rest timer
 
-- The timer is an app-level object rather than part of an exercise card.
+- The timer is app-level rather than embedded in an exercise card.
 - Expanded rest mode lifts above the workout and softens content beneath.
 - Controls include Pause/Resume, `+30`, Skip and Minimise.
-- Minimise collapses the timer into a compact header widget that can be expanded again.
-- Completion supports an optional chime and vibration levels: Low, Medium, Strong and Very strong.
-- Timer settings live under `Settings → Workout → Rest timer`.
-- Timing uses an absolute deadline.
-- Android completion must remain reliable while My Mettle is backgrounded or the screen is off, using native scheduling and a timer notification.
-- The project may request the permissions needed for exact alarms, notifications, vibration and foreground/background timer delivery; the personal user is expected to grant them.
-
-### Settings architecture
-
-- Settings use nested Android-style navigation rather than one continuously growing sheet.
-- Initial groups are Workout, Units & measurements, Notifications & feedback, Data, Accessibility and About/diagnostics.
-- Workout contains Rest timer and future set/session behaviour.
-- Data contains export, restore and reset.
+- Minimise produces a compact header widget.
+- Completion supports optional chime and four vibration strengths.
+- Android completion remains reliable while backgrounded or screen-off through native scheduling and notification delivery.
 
 ### Exercise creation and tracking
 
-- The guided card-based creation flow and review screen remain.
-- Inputs display measurement suffixes inside the field.
-- Exercises define how performance is recorded rather than assuming ordinary kilograms.
-- Tracking supports external load, assisted bodyweight, bodyweight, bodyweight plus external load, total/per-hand/per-side entry, repetitions, duration and distance.
-- Historical sessions snapshot the applicable tracking definition so later edits do not reinterpret old data.
+- The guided creation flow and review screen remain.
+- Exercises define their tracking semantics rather than assuming ordinary kilograms.
+- Tracking supports external load, assistance, bodyweight, bodyweight plus external load, per-hand/per-side/total entry, repetitions, duration and distance.
+- Historical sessions snapshot tracking definitions and bodyweight context.
 
-### Body measurements
+### Health data
 
-- Profile contains timestamped weight and height records rather than one mutable value.
-- Sessions retain the relevant bodyweight snapshot.
-- Assisted and weighted bodyweight exercises can therefore calculate effective load historically.
+- Health Connect is the primary Android interoperability layer behind a provider interface.
+- My Mettle may read supported Samsung Health data exposed through Health Connect and write My Mettle-owned sessions and measurements.
+- Stable client IDs, ownership and overlap detection prevent duplicate workouts.
+- Samsung Health Data SDK remains an optional richer read adapter.
+- Imported physiology is contextual readiness evidence, not a direct CNS measurement or medical diagnosis.
+- Wear OS sits outside the first-alpha roadmap.
 
-### Health data architecture
+### MAIS operating principles
 
-- Health Connect is the primary Android interoperability layer and is implemented behind a provider interface.
-- Phase 2 defines provider contracts, permission state, provenance, external-record identity and local observation storage.
-- Phase 3 adds a bidirectional Health Connect adapter.
-- My Mettle may read supported Samsung Health data exposed through Health Connect and write My Mettle-owned completed sessions and measurements.
-- Stable client record IDs, record ownership and overlap detection prevent duplicate watch/My Mettle workouts.
-- The Samsung Health Data SDK remains an optional richer read adapter.
-- Imported physiological information is recovery/readiness evidence, not a direct CNS measurement or medical diagnosis.
-- A Wear OS companion sits outside the first-alpha six-phase roadmap.
-
-### Visual atmosphere
-
-- The calm visual base is accepted but intentionally incomplete.
-- Character creation precedes final cinematic integration because it affects composition and motion.
-- The full cinematic pass happens after the main product surfaces and interaction architecture are mature.
+- MAIS is an event-driven local research and action system, not a chatbot or one long conversation.
+- The Heart advances bounded role steps and persists checkpoints between model loads.
+- Models communicate through typed Workbench artefacts rather than transcript accumulation.
+- One generative model is leased at a time.
+- Context is compiled afresh with provenance and a hard budget.
+- External research is an infrequent, batched escalation tool.
+- Generated widgets are declarative, attributable, permission-scoped and removable.
+- AI-created UI has safe mode and a user blocklist.
+- The app stops model work when closed. Battery Saver, background state and active workout interaction reduce work to Light mode.
+- Thermal throttling is delegated to Android and the selected runtime during the current development phase; MAIS does not independently poll or gate on thermal state.
+- Permanent product-state changes remain subject to exact approval.
 
 ## Development phases
 
 ### Phase 1 — Functional training loop
 
-Status: foundation established.
+Status: **complete foundation**.
 
-- Offline-first application shell and persistence.
-- Routine and immutable routine-version foundations.
-- Session creation, exercise sequence and set entry.
+- Offline-first shell and persistence.
+- Routine/version foundations.
+- Session creation, sequence and set entry.
 - Cycle logic and day selection.
 - Brief, Train, Progress, Lab and Library foundations.
-- Initial Android build and local installation workflow.
+- Android build and local installation workflow.
 
 ### Phase 2 — Complete non-intelligent training product
 
-Status: **reopened; implementation in progress.**
+Status: **complete and device accepted**.
 
-Phase 2 is complete only when My Mettle can replace the original gym web app as a reliable day-to-day “dumb input” tracker without depending on AI.
+My Mettle can replace the original gym web app as a reliable day-to-day tracker without AI.
 
-Already implemented:
+Completed scope includes:
 
-- Tracking schemas and adaptive input fields.
-- External, assisted, bodyweight and weighted-bodyweight calculations.
-- Per-hand, per-side and total-load configuration.
-- Repetition, duration and distance tracking.
-- Timestamped body measurements and session snapshots.
-- App-level rest timer, five-second Undo, Details foundation and schema migration.
-- Compact navigation, centred header labels and health-provider foundations.
+- all supported tracking schemas and effective-load calculations;
+- body measurements and historical snapshots;
+- app-level native rest timer and completion feedback;
+- additional sets and set amendment;
+- Session History, exclusion, discard and restoration;
+- exercise reflection and editable exercise memory;
+- routine reconstruction, drag movement, duplication, archive and recovery;
+- nested functional settings and data controls;
+- schema v4 migration, backup coverage and Android device testing.
 
-Remaining completion scope:
+### Phase 3 — MAIS functional intelligence platform
 
-- Full routine editing: reorder, move, edit, remove, archive and restore.
-- Complete exercise Details data: notes, substitutions, mistakes, setup and machine settings, deterministic progression configuration.
-- Minimal additional-set creation and correction.
-- Session history, completed-session amendment, exclusion and discard.
-- Nested settings architecture.
-- Native Android background timer scheduling and notification delivery.
-- Four vibration strengths and reliable completion feedback outside the foreground app.
-- Final Material Symbol hotbar assets and optical alignment.
-- Slower workout-card transitions and remaining glass/highlight refinements.
-- Concrete carbohydrate, protein and hydration quantities in Brief.
-- Tests, migration coverage and an updated device bug-test plan for all parity functions.
+Phase 3 prioritises a working intelligence system and basic framework UI. Final presentation belongs to Phase 3.5.
 
-Phase 2 exits into **bug testing only** after every item above is implemented and the automated web/Android build is green. No Phase 3 feature work begins before the Phase 2 device pass is accepted.
+#### Phase 3A — MAIS substrate
 
-### Phase 3 — Product completion and training intelligence
+Status: **implementation candidate complete; device framework pass pending**.
 
-- Useful Progress views, trends and comparisons.
-- Full Lab experiment creation, operation and evaluation.
-- Contextual Brief suggestions and preparation feedback.
-- Dynamic warm-ups, fuel, water and readiness guidance.
-- Progression, regression and training-recommendation logic.
-- Clear explanation surfaces.
-- Local AI/model integration with deterministic fallbacks.
-- Bidirectional Health Connect adapter and duplicate controls.
-- Optional Samsung Health Data SDK read adapter.
+- MAIS system and autonomy contract.
+- Immutable event journal and Heart pulse/episode state machine.
+- Persistent Workbench, checkpoints and process recovery.
+- independent MAIS IndexedDB database.
+- MCP-like Capability Protocol.
+- exact proposal fingerprints and approval receipts.
+- transactional execution and rollback.
+- real routine-rearrangement and add-exercise domain executors.
+- model registry and exclusive load/run/unload leases.
+- deterministic simulated runtime for framework testing.
+- resource modes driven by visibility, Battery Saver, workout interaction, explicit pause and available memory.
+- native Android lifecycle/Battery Saver/memory bridge.
+- provenance-first Context Compiler and evidence manifests.
+- declarative Widget Foundry, safe mode and recreation blocklist.
+- generated-analysis sandbox contract and validator.
+- infrequent Research Broker.
+- domain-specific Reinforcement Ledger.
+- Report Card export and Parent Review import.
+- basic Lab-based MAIS Activity console.
+- automated web, strict TypeScript and Android regression coverage.
+
+Phase 3A ends after the device verifies persistence, Battery Saver behaviour, passive event ingestion, simulated lease cycles and Report Card export.
+
+#### Phase 3B — Runtime laboratory and real model integration
+
+- verified model-download and deletion pipeline;
+- app-private model storage and manifest/checksum enforcement;
+- LiteRT-LM adapter;
+- ExecuTorch comparison adapter where useful;
+- EmbeddingGemma retrieval benchmark;
+- Gemma 4 E2B fast-governor benchmark;
+- Gemma 4 E4B general reasoning/audit benchmark;
+- Qwen3-8B Deep Lab benchmark;
+- load/unload, context, memory, latency and battery measurements;
+- MAIS-specific structured-output and capability-call evaluations;
+- selected model topology with deterministic/simulated fallback.
+
+#### Phase 3C — Evidence, memory and belief system
+
+- comparable-exposure engine across all tracking types;
+- derived metrics with algorithm provenance;
+- stable muscle ontology and contribution metadata;
+- hierarchical episodic and semantic memory;
+- embeddings and retrieval indexes;
+- belief/hypothesis graph with support, counter-evidence and uncertainty;
+- unresolved-question and rejection memory;
+- synthetic histories at 10, 50, 200 and 1,000 sessions.
+
+#### Phase 3D — Analyst, code laboratory and auditor
+
+- AI-driven investigation selection;
+- competing hypotheses and confound identification;
+- isolated generated-code execution against immutable snapshots;
+- reproducible analyses and sensitivity checks;
+- independent audit passes;
+- background task queue while the app remains open;
+- reinforcement updates from experiment and user outcomes;
+- higher-capability Report Card review workflow.
+
+#### Phase 3E — Functional Progress, Lab and Brief
+
+Use plain, test-oriented interfaces first.
+
+- Progress exposes beliefs, trends, uncertainty and evidence.
+- Lab generates, activates, monitors and evaluates controlled experiments.
+- Successful experiments may create routine proposals for approval.
+- Brief selects relevant current knowledge and active interventions.
+- Scheduler applies reversible temporary session changes.
+- Versioned nutrition and warm-up rules.
+- simple generated widgets and activity/debug views.
+
+#### Phase 3F — Health Connect and external evidence
+
+- bidirectional Health Connect adapter;
+- ownership and duplicate-workout linking;
+- physiological context in readiness evidence;
+- research dossier export/import;
+- optional constrained network broker later;
+- optional Samsung Health Data SDK read adapter.
+
+#### Phase 3G — Integrated intelligence alpha
+
+The north-star test is:
+
+1. passive evidence wakes MAIS;
+2. MAIS notices a non-obvious relationship;
+3. it retrieves the right evidence;
+4. it creates and executes a reproducible analysis;
+5. an auditor challenges the result;
+6. Lab proposes a reversible experiment;
+7. Brief and Train deploy it;
+8. later evidence is evaluated;
+9. the belief is revised;
+10. a permanent routine change is offered for exact approval;
+11. the full trace survives interruption and appears in the Report Card.
+
+### Phase 3.5 — Intelligence interface and productisation
+
+Transform the functional Phase 3 surfaces into the accepted My Mettle experience.
+
+- body-region Progress interface;
+- polished evidence, uncertainty and comparison views;
+- Lab proposal cards, experiment timelines and decision sequences;
+- intelligence-led Brief hierarchy and preparation interactions;
+- generated-widget design system;
+- MAIS Creations manager and safe mode;
+- Intelligence Activity, model/resource and research surfaces;
+- final copy, motion, haptics, accessibility and loading states.
 
 ### Phase 4 — Character and generative visual system
 
-- Base character identity, proportions and body model.
-- Consistent face, clothing and rendering language.
-- Exercise pose generation and control pipeline.
-- Dot, particle or 2.5D treatment.
-- Exercise-card imagery and expanded visuals.
-- Character progression, consistency checks, correction, caching and local asset management.
+- base character identity, proportions and body model;
+- consistent face, clothing and rendering language;
+- exercise pose generation/control pipeline;
+- dot, particle or 2.5D treatment;
+- exercise-card imagery;
+- character progression, caching and correction.
 
 ### Phase 5 — Cinematic integration
 
-- Animated Brief environments and blurred video/light backgrounds.
-- Character integration, particles and atmospheric depth.
-- Card transitions and spatial choreography.
-- Timer focus and completion sequences.
-- Tactile/audio language and refined liquid glass.
-- Shared spring, blur, elevation and timing rules with reduced-motion equivalents.
+- animated Brief environments;
+- character integration and atmospheric depth;
+- spatial choreography and card transitions;
+- timer focus/completion sequences;
+- tactile/audio language and refined liquid glass;
+- shared motion rules with reduced-motion equivalents.
 
 ### Phase 6 — Alpha hardening and personal release
 
 Prepare **My Mettle Alpha 0.1** for a genuine month-long personal test:
 
-- End-to-end and regression testing.
-- Schema migration and data-integrity testing.
-- Crash, interruption and background recovery.
-- Battery, performance and local-model optimisation.
-- Notification, vibration and timer reliability.
-- Accessibility and reduced-motion verification.
-- Exercise-tracking edge cases.
-- Export, backup, restoration, stable signing and upgrade installation.
-- Local diagnostic logs and final copy/visual consistency.
+- end-to-end and regression testing;
+- migration and data-integrity testing;
+- crash, interruption and recovery;
+- battery/performance/local-model optimisation;
+- timer and notification reliability;
+- accessibility and reduced-motion verification;
+- tracking edge cases;
+- export, restore, stable signing and upgrade installation;
+- diagnostic logs and final consistency.
 
 ## Roadmap maintenance
 
-Update this document whenever an accepted decision materially changes scope, phase order, product behaviour or the reference hierarchy. Retain the original master specification as the historical foundation rather than rewriting it to appear current.
+Update this document whenever an accepted decision changes scope, phase order, product behaviour or the reference hierarchy. Retain the original master specification as the historical foundation rather than rewriting it to appear current.

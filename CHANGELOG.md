@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.0 — Phase 3A MAIS substrate
+
+- Added the MAIS Heart with passive events, prioritised tasks, bounded role episodes and durable checkpoints.
+- Added a self-advancing foreground heartbeat that performs no model work while idle.
+- Added a separate persistent MAIS IndexedDB database and process-recovery coordinator.
+- Added Full, Standard, Light and Paused resource modes using app visibility, Battery Saver, active workout state, explicit pause and available memory.
+- Added a native Android bridge for lifecycle, Battery Saver, charging and memory state; thermal policy remains delegated to Android and the inference runtime.
+- Added the MCP-like MAIS Capability Protocol with exact proposal fingerprints, approval receipts, validated transactions and rollback.
+- Added real capability executors for routine movement, slot duplication/removal and approved new-exercise creation through existing domain services.
+- Added model manifests, role/tier routing and exclusive load/run/unload leases using a deterministic simulated runtime.
+- Added a provenance-first Context Compiler with evidence inclusion/exclusion manifests and hard context budgets.
+- Added the declarative Widget Foundry with safe mode, removal and recreation blocking.
+- Added the generated-analysis sandbox contract and prohibited-API validator.
+- Added the scarce, batched Research Broker and cited-report import contract.
+- Added the domain-specific Reinforcement Ledger.
+- Added MAIS Report Card export and Parent Review import contracts.
+- Added a basic MAIS Activity framework console inside Lab and a comprehensive Android device-test checklist.
+- Separated Phase 3 functional intelligence from Phase 3.5 interface productisation and moved real model/runtime evaluation into Phase 3B.
+
 ## 0.4.1 — Phase 2 final polish
 
 - Removed visible numeric pills from exercise-reflection sliders.
