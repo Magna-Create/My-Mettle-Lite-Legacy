@@ -21,6 +21,7 @@ import { useRestTimer } from '../features/timer/useRestTimer';
 import { MaisCoordinator } from '../mais/coordinator';
 import type { MaisResourceSnapshot } from '../mais/contracts';
 import { readMaisResourceSnapshot, subscribeMaisDeviceState } from '../mais/deviceState';
+import { createNativeMaisRoleRunner } from '../mais/nativeRoleRunner';
 import { deriveMaisResourceMode } from '../mais/resourceGovernor';
 import { exportMaisReportCard } from '../mais/reportCard';
 import { saveMaisReportCard } from '../mais/reportExport';
@@ -35,7 +36,10 @@ const MAIS_HEARTBEAT_INTERVAL_MS = 15_000;
 
 export function AppV2() {
   const service = useMemo(() => new GymAppService(new IndexedDbGymRepository()), []);
-  const mais = useMemo(() => new MaisCoordinator(new IndexedDbMaisRepository(), createDeterministicMaisRoleRunner()), []);
+  const mais = useMemo(() => {
+    const fallback = createDeterministicMaisRoleRunner();
+    return new MaisCoordinator(new IndexedDbMaisRepository(), createNativeMaisRoleRunner(fallback));
+  }, []);
   const [database, setDatabase] = useState<AppDatabase | null>(null);
   const [maisSnapshot, setMaisSnapshot] = useState<MaisSystemSnapshot | null>(null);
   const [maisResources, setMaisResources] = useState<MaisResourceSnapshot>({
@@ -170,7 +174,7 @@ export function AppV2() {
     await mais.ingest({
       type: 'session_completed',
       entityRefs: [`synthetic_session_${Date.now()}`],
-      payload: { synthetic: true, purpose: 'Phase 3A heartbeat verification' },
+      payload: { synthetic: true, purpose: 'Phase 3 native role verification' },
     }, eventTime);
     const resources = await currentMaisResources();
     setMaisSnapshot(await mais.runUntilSettled(resources, 8));
@@ -225,11 +229,11 @@ export function AppV2() {
       <section hidden={tab !== 'brief'}><BriefPage database={database} onBeginSession={async (day: DaySymbol, mode: Mode) => { await run((current) => service.beginSession(current, day, mode)); setTab('train'); }} /></section>
       <section hidden={tab !== 'train'}><TrainPage database={database} onGoBrief={() => navigate('brief')} onProgressState={handleProgressState} onStartRest={restTimer.start} onAddSet={(sessionId, exerciseId) => apply((current) => addSessionSet(current, sessionId, exerciseId))} onRemoveSet={(sessionId, exerciseId, setId) => apply((current) => removeSessionSet(current, sessionId, exerciseId, setId))} onUpdateExercise={(exerciseId, patch) => apply((current) => updateExerciseRecord(current, exerciseId, patch))} onSaveReflection={(sessionId, exerciseId, input) => apply((current) => saveExerciseReflection(current, sessionId, exerciseId, input))} onUpdateSet={(sessionId, exerciseId, setId, patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>) => run((current) => service.updateSet(current, sessionId, exerciseId, setId, patch))} onCompleteExercise={(sessionId, exerciseId) => run((current) => service.completeExercise(current, sessionId, exerciseId))} onCompleteSession={async (sessionId) => { restTimer.dismiss(); await run((current) => service.completeSession(current, sessionId)); await recordCompletedSession(sessionId); setTab('progress'); }} /></section>
       <section hidden={tab !== 'progress'}><ProgressPage database={database} /></section>
-      <section hidden={tab !== 'lab'}><LabPage database={database} maisSnapshot={maisSnapshot} maisResourceMode={maisResourceMode} onRunMaisDemo={runMaisDemo} onPulseMais={pulseMaisOnce} onClearMais={clearMais} onExportMaisReport={exportMaisReport} onActivate={(id) => run((current) => service.activateExperiment(current, id))} onReject={async (id) => { await run((current) => service.rejectExperiment(current, id)); setMaisSnapshot(await mais.ingest({ type: 'user_rejected_proposal', entityRefs: [id] })); }} onPromote={async (id) => { await run((current) => service.promoteExperiment(current, id)); const routineId = databaseRef.current?.currentRoutineVersionId; if (routineId) setMaisSnapshot(await mais.ingest({ type: 'routine_version_created', entityRefs: [routineId], payload: { sourceExperimentId: id } })); }} /></section>
+      <section hidden={tab !== 'lab'}><LabPage database={database} onActivate={(id) => run((current) => service.activateExperiment(current, id))} onReject={async (id) => { await run((current) => service.rejectExperiment(current, id)); setMaisSnapshot(await mais.ingest({ type: 'user_rejected_proposal', entityRefs: [id] })); }} onPromote={async (id) => { await run((current) => service.promoteExperiment(current, id)); const routineId = databaseRef.current?.currentRoutineVersionId; if (routineId) setMaisSnapshot(await mais.ingest({ type: 'routine_version_created', entityRefs: [routineId], payload: { sourceExperimentId: id } })); }} /></section>
       <section hidden={tab !== 'library'}><LibraryPage database={database} externalDiscardToken={routineEditDiscardToken} onEditStateChange={setRoutineEditState} onCommitRoutineEdit={(draft: RoutineEditDraft) => apply((current) => commitRoutineEditDraft(current, draft))} onAddExercise={(input: AddExerciseInput) => run((current) => service.addExerciseToRoutine(current, input))} onReorderSlot={(slotId, direction) => apply((current) => reorderRoutineSlot(current, slotId, direction))} onMoveSlot={(slotId, day) => apply((current) => moveRoutineSlot(current, slotId, day))} onRemoveSlot={(slotId) => apply((current) => removeRoutineSlotWithArchive(current, slotId))} onUpdateSlot={(slotId, patch: RoutineSlotPatch) => apply((current) => updateRoutineSlot(current, slotId, patch))} onUpdateExercise={(exerciseId, patch: ExerciseRecordPatch) => apply((current) => updateExerciseRecord(current, exerciseId, patch))} onArchiveExercise={(exerciseId) => apply((current) => archiveExercise(current, exerciseId))} onRestoreExercise={(exerciseId) => apply((current) => restoreArchivedExercise(current, exerciseId))} /></section>
     </div>
     <nav className="bottom-nav" aria-label="Primary navigation">{tabs.map((item) => <button key={item} data-active={tab === item} aria-label={tabLabels[item]} title={tabLabels[item]} onClick={() => navigate(item)}><NavIcon name={item} /></button>)}</nav>
-    {settingsOpen && <SettingsSheet database={database} onClose={() => setSettingsOpen(false)} onUpdateSettings={(patch) => run((current) => service.updateSettings(current, patch))} onReset={async () => { restTimer.dismiss(); const reset = await service.reset(); databaseRef.current = reset; setDatabase(reset); setTab('brief'); setSettingsOpen(false); }} />}
+    {settingsOpen && <SettingsSheet database={database} maisSnapshot={maisSnapshot} maisResourceMode={maisResourceMode} onRunMaisDemo={runMaisDemo} onPulseMais={pulseMaisOnce} onClearMais={clearMais} onExportMaisReport={exportMaisReport} onClose={() => setSettingsOpen(false)} onUpdateSettings={(patch) => run((current) => service.updateSettings(current, patch))} onReset={async () => { restTimer.dismiss(); const reset = await service.reset(); databaseRef.current = reset; setDatabase(reset); setTab('brief'); setSettingsOpen(false); }} />}
     {profileOpen && <ProfileSheetV2 database={database} onClose={() => setProfileOpen(false)} onAddMeasurement={(input) => run((current) => service.addBodyMeasurement(current, input))} onAmendSet={(sessionId, exerciseId, setId, patch) => apply((current) => amendHistoricalSet(current, sessionId, exerciseId, setId, patch))} onAddSet={(sessionId, exerciseId) => apply((current) => addSessionSet(current, sessionId, exerciseId))} onRemoveSet={(sessionId, exerciseId, setId) => apply((current) => removeSessionSet(current, sessionId, exerciseId, setId))} onSaveReflection={(sessionId, exerciseId, input) => apply((current) => saveExerciseReflection(current, sessionId, exerciseId, input))} onSetExcluded={(sessionId, excluded) => apply((current) => setSessionExcluded(current, sessionId, excluded))} onDiscardSession={(sessionId) => apply((current) => discardSession(current, sessionId))} onRestoreSession={(sessionId) => apply((current) => restoreDiscardedSession(current, sessionId))} />}
     <RestTimerOverlay state={restTimer.presentationReady ? restTimer.state : null} onPause={restTimer.pause} onResume={restTimer.resume} onAddSeconds={restTimer.addSeconds} onMinimise={restTimer.minimize} onDismiss={restTimer.dismiss} />
   </div>;
