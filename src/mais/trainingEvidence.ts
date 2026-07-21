@@ -1,5 +1,6 @@
 import { IndexedDbGymRepository } from '../adapters/storage/IndexedDbGymRepository';
 import type { AppDatabase, Experiment, Exercise, RoutineVersion, Session, SessionExercise } from '../domain/model';
+import { deriveComparableExposure } from './comparableExposureEngine';
 import type { MaisRoleRequest } from './contracts';
 
 export interface MaisTrainingEvidenceProvider {
@@ -97,6 +98,7 @@ function exposureEvidence(session: Session, exercise: SessionExercise) {
     routineVersionId: session.routineVersionId,
     excludedFromInsights: session.excludedFromInsights ?? false,
     exercise: sessionExerciseEvidence(exercise),
+    derivedMetrics: deriveComparableExposure(session, exercise),
   };
 }
 
@@ -178,7 +180,7 @@ function comparableExposures(database: AppDatabase, directSessions: Session[]): 
       .flatMap((session) => session.exercises
         .filter((exercise) => exercise.exerciseId === exerciseId)
         .map((exercise) => exposureEvidence(session, exercise)))
-      .slice(-5);
+      .slice(-12);
   }
   return result;
 }
