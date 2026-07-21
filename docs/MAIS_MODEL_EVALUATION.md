@@ -1,20 +1,18 @@
 # MAIS Model and Runtime Evaluation
 
-Status: Phase 3A benchmark contract.
+Status: Phase 3B benchmark contract; Phase 3A registry and lease framework implemented.
 
 Model selection is empirical. My Mettle evaluates a complete deployment unit:
 
 > model + quantisation + runtime + hardware backend + context configuration + role prompt
 
-No model weights belong in the source repository. The repository stores manifests, download/conversion recipes, checksums, licences, prompts, evaluations and measured results.
+No model weights belong in the source repository. Git stores manifests, download/conversion recipes, checksums, licences, prompts, evaluation cases and measured results.
 
-## Current candidate topology
+## Candidate topology
 
-### Retrieval
+### Retrieval — EmbeddingGemma
 
-- EmbeddingGemma
-
-Purpose:
+Intended work:
 
 - semantic retrieval across reflections, analyses and imported research;
 - matching new evidence to existing hypotheses;
@@ -22,36 +20,31 @@ Purpose:
 - near-duplicate detection;
 - Context Compiler retrieval.
 
-### Fast Governor
+### Fast Governor — Gemma 4 E2B
 
-- Gemma 4 E2B
-
-Purpose:
+Intended work:
 
 - event triage;
 - task routing;
 - context selection;
 - lightweight memory work;
 - deciding whether Deep Lab is justified;
-- quick cached Brief preparation.
+- cached Brief preparation.
 
-### General reasoning and audit
+### General reasoning and audit — Gemma 4 E4B
 
-- Gemma 4 E4B
+Intended work:
 
-Purpose:
-
-- ordinary longitudinal interpretation;
+- longitudinal interpretation;
 - hypothesis development;
 - proposal drafting;
+- coaching;
 - multimodal context later;
-- auditing and counter-explanation generation.
+- independent audit and counter-explanation.
 
-### Deep Lab
+### Deep Lab — Qwen3-8B
 
-- Qwen3-8B
-
-Purpose:
+Intended work:
 
 - difficult longitudinal reasoning;
 - generated analysis code;
@@ -60,13 +53,13 @@ Purpose:
 - complex capability sequencing;
 - high-value investigations.
 
-The topology is provisional. Benchmarks may collapse roles onto fewer models or assign a role to another family.
+The topology remains provisional. Benchmarks may collapse roles onto fewer models or reassign a role.
 
-## Current official deployment facts
+## Current official deployment references
 
 ### Gemma 4
 
-Google positions Gemma 4 E2B and E4B for mobile and laptop deployment. Both support configurable reasoning, native function calling and text/image/audio input. LiteRT-LM currently supports both mobile variants.
+Google positions E2B and E4B for mobile/edge deployment with configurable reasoning, function calling and multimodal input. LiteRT-LM is the primary Android runtime candidate.
 
 Official references:
 
@@ -74,22 +67,17 @@ Official references:
 - https://developers.google.com/edge/litert-lm/models/gemma-4
 - https://developers.google.com/edge/litert-lm/overview
 
-Published LiteRT-LM mobile artefacts are approximately:
-
-- E2B: 2.58 GB;
-- E4B: 3.65 GB.
-
-Published S26 Ultra results are useful reference points but are not accepted as My Mettle performance evidence. The target phone must be measured directly.
+Published mobile artefacts are useful planning references but are not accepted as My Mettle performance evidence. The target phone must be measured directly.
 
 ### Qwen3-8B
 
-The official Qwen model card identifies:
+The official model card identifies:
 
-- 8.2B parameters;
-- hybrid thinking and non-thinking modes;
-- strong reasoning, coding, tool-use and agent emphasis;
-- 32,768 native context and extended long-context support;
-- Apache-2.0 licence.
+- approximately 8.2B parameters;
+- thinking and non-thinking modes;
+- reasoning, coding and tool-use emphasis;
+- 32K native context with extended-context options;
+- Apache-2.0 licensing for the published model.
 
 Official references:
 
@@ -101,11 +89,11 @@ Official references:
 
 Primary candidate:
 
-- LiteRT-LM for Gemma and cross-family evaluation, Kotlin integration, hardware acceleration and constrained tool use.
+- LiteRT-LM for Gemma, Kotlin integration and Android hardware acceleration.
 
-Secondary candidate:
+Comparison candidate:
 
-- ExecuTorch for Qwen/PyTorch paths, explicit Android load/unload control and XNNPACK, Vulkan and Qualcomm backends.
+- ExecuTorch for Qwen/PyTorch paths and XNNPACK, Vulkan or Qualcomm backends.
 
 Official references:
 
@@ -116,10 +104,10 @@ Official references:
 
 Model files live outside Git in one of:
 
-- developer-local model registry;
+- developer-local model storage;
 - app-private Android storage;
 - controlled release/object storage;
-- direct verified download from the declared source.
+- direct verified download from a declared source.
 
 Every installed artefact requires:
 
@@ -137,19 +125,34 @@ Every installed artefact requires:
 - measured device profile;
 - removal instructions.
 
-## Candidate configurations
+The application must be able to remove an entire downloaded model pack and its active registry entry.
 
-The first benchmark matrix should include:
+## First benchmark matrix
 
-| Candidate | Runtime | Quantisation/backend candidates | Intended role |
+| Candidate | Runtime | Backend/format candidates | Intended role |
 |---|---|---|---|
-| EmbeddingGemma | LiteRT | mobile quantised CPU/GPU | retrieval |
-| Gemma 4 E2B IT | LiteRT-LM | published mobile format, CPU/GPU/NPU where available | fast governor |
-| Gemma 4 E4B IT | LiteRT-LM | published mobile format, CPU/GPU/NPU where available | general reasoner/auditor |
-| Qwen3-8B | LiteRT-LM | supported mobile conversion candidates | Deep Lab |
-| Qwen3-8B | ExecuTorch | XNNPACK, Vulkan, Qualcomm where available | Deep Lab comparison |
+| EmbeddingGemma | LiteRT | verified mobile quantisation, CPU/GPU | retrieval |
+| Gemma 4 E2B IT | LiteRT-LM | official/reproducible mobile format, CPU/GPU/NPU where available | fast governor |
+| Gemma 4 E4B IT | LiteRT-LM | official/reproducible mobile format, CPU/GPU/NPU where available | general reasoner/auditor |
+| Qwen3-8B | LiteRT-LM | reproducibly converted mobile candidate | Deep Lab |
+| Qwen3-8B | ExecuTorch | XNNPACK, Vulkan or Qualcomm candidate | Deep Lab comparison |
 
-Do not benchmark several unverified community quantisations at once. Start with official or reproducibly converted artefacts, establish a baseline, then vary quantisation.
+Do not collect several unverified community quantisations at once. Begin with official or reproducibly converted artefacts, establish a baseline, then vary quantisation.
+
+## Existing Phase 3A runtime framework
+
+Before weights are introduced, the app already provides:
+
+- model manifest schema and registry;
+- role/tier based model selection;
+- one exclusive model lease at a time;
+- load, active, release and failure states;
+- abandoned-process lease recovery;
+- guaranteed release after bounded role work;
+- simulated runtime replacement point;
+- persistent lease history in the Report Card.
+
+The real runtime adapter must implement the same load/unload contract without changing Heart behaviour.
 
 ## MAIS-specific evaluation suites
 
@@ -158,9 +161,9 @@ Do not benchmark several unverified community quantisations at once. Start with 
 - classify whether an event warrants work;
 - create a bounded task plan;
 - select a role and model tier;
-- checkpoint without relying on transcript history;
+- checkpoint without transcript history;
 - resume from typed artefacts;
-- terminate when the task is complete;
+- terminate when complete;
 - avoid inventing unfinished steps.
 
 ### Capability protocol
@@ -170,7 +173,7 @@ Do not benchmark several unverified community quantisations at once. Start with 
 - distinguish proposal from execution;
 - respect exact approval scope;
 - avoid unauthorised actions;
-- recover cleanly from stale resources or rejected validation.
+- recover from stale base versions and rejected validation.
 
 ### Evidence analysis
 
@@ -179,15 +182,15 @@ Do not benchmark several unverified community quantisations at once. Start with 
 - preserve `unsure` as uncertainty;
 - identify conflicting evidence;
 - avoid overstating sparse samples;
-- retrieve the correct sessions and exercise versions;
+- retrieve correct sessions and exercise versions;
 - preserve counter-evidence.
 
 ### Hypothesis quality
 
 - generate several plausible explanations;
 - identify confounds;
-- specify what evidence would distinguish them;
-- avoid repeating a rejected proposal without meaningful new evidence;
+- specify distinguishing evidence;
+- avoid repeating rejected proposals without new evidence;
 - recognise when no useful conclusion is available.
 
 ### Generated analysis
@@ -211,22 +214,23 @@ Do not benchmark several unverified community quantisations at once. Start with 
 
 ### Retrieval and memory
 
-Evaluate at synthetic histories of 10, 50, 200 and 1,000 sessions:
+Evaluate synthetic histories of 10, 50, 200 and 1,000 sessions for:
 
-- relevant evidence recall;
+- relevant-evidence recall;
 - unrelated-evidence exclusion;
 - belief update accuracy;
 - counter-evidence retention;
 - summary regeneration;
 - duplicate detection;
-- resistance to stale summaries.
+- stale-summary resistance.
 
 ### Surface generation
 
 - generate schema-valid declarative widgets;
-- use only approved components and bindings;
-- provide removable and attributable metadata;
-- fail safely when data is unavailable.
+- use approved components and bindings only;
+- include attributable/removable metadata;
+- fail safely when data is unavailable;
+- honour safe mode and user blocklists.
 
 ## Hardware measurements
 
@@ -235,72 +239,73 @@ Capture for every configuration:
 - on-disk model size;
 - cold and warm load time;
 - first-token latency;
-- prefill rate;
-- decode rate;
+- prefill and decode rate;
 - peak RAM;
-- KV-cache growth at 2K, 4K, 8K and 16K contexts;
+- KV-cache growth at 2K, 4K, 8K and 16K;
 - unload time and reclaimed memory;
 - battery delta;
-- thermal status and surface temperature where available;
 - app frame responsiveness;
 - task completion time;
 - useful work per episode;
 - validation/retry frequency.
 
-Long advertised context is not a default target. The Context Compiler should normally produce 2K–8K packets, with 16K permitted for justified Deep Lab investigations.
+Temperature may be recorded during manual/runtime evaluation, but MAIS does not implement its own thermal gate in Phase 3B. Android, the device daemon and the inference runtime are expected to throttle as required.
+
+Long advertised context is not a default target. The Context Compiler should normally produce 2K–8K packets, with 16K reserved for justified Deep Lab work.
 
 ## Initial permissive resource policy
 
-During Phase 3A testing:
+During early device evaluation:
 
 - allow foreground Deep Lab episodes up to 15 minutes;
 - allow one generative model resident at a time;
 - do not require charging;
-- pause only on severe thermal state, app closure or explicit user pause;
-- record battery and thermal telemetry before tightening ordinary budgets;
-- prioritise app responsiveness during active workout interaction.
+- stop new work when the app is closed or MAIS is explicitly paused;
+- reduce work under Battery Saver, background state and active workout interaction;
+- record battery, memory and responsiveness before tightening budgets;
+- rely on Android/runtime thermal management rather than duplicate policy.
 
 ## Selection score
 
-Each candidate is scored across:
+Each configuration is scored across:
 
 - task correctness;
 - calibration and uncertainty;
 - structured-output validity;
 - capability-call accuracy;
 - generated-code success;
-- recovery and checkpoint compliance;
+- checkpoint/recovery compliance;
 - latency;
 - memory;
-- thermal/battery cost;
+- battery cost;
 - usefulness per episode;
 - failure diversity relative to other selected models.
 
-A faster model does not win if it creates substantially more invalid actions. A larger model does not win if a smaller model completes the same role reliably at lower cost.
+A faster model does not win if it creates substantially more invalid actions. A larger model does not win when a smaller model completes the same role reliably at lower cost.
 
 ## Pass gates
 
-A model/runtime configuration may enter the app only when:
+A model/runtime configuration may enter the active app topology only when:
 
-1. its manifest and checksum are valid;
-2. licence and source are recorded;
+1. manifest and checksum are valid;
+2. source, revision and licence are recorded;
 3. load/unload succeeds repeatedly without process instability;
-4. structured task outputs meet the role threshold;
+4. structured outputs meet the role threshold;
 5. invalid capability calls are rejected safely;
-6. interruption produces a recoverable checkpoint;
-7. resource telemetry remains within a documented device profile;
-8. deterministic or alternative-model fallback exists;
-9. model deletion removes the complete artefact and registry entry.
+6. interruption leaves a recoverable checkpoint;
+7. measured memory/battery/responsiveness fit a documented device profile;
+8. deterministic, simulated or alternative-model fallback exists;
+9. model deletion removes the complete artefact and active registry entry.
 
 ## Download order
 
-No manual download is required until the runtime harness exists.
+No manual download is required until the real runtime harness is ready.
 
-When ready, obtain candidates in this order:
+Obtain candidates in this order:
 
 1. EmbeddingGemma;
 2. Gemma 4 E2B;
 3. Gemma 4 E4B;
 4. Qwen3-8B.
 
-This proves the registry, retrieval and model lifecycle before introducing the largest artefact.
+This proves storage, checksum, registry, retrieval and lifecycle behaviour before introducing the largest artefact.
