@@ -1,14 +1,15 @@
 import type { MaisEmbeddingRepository } from '../adapters/storage/IndexedDbMaisEmbeddingRepository';
 import type { MaisEmbeddingRuntime } from './semanticIndexCoordinator';
 import {
-  buildSemanticIndexManifest,
   chunkSemanticDocument,
+  compileSemanticContextSelection,
+  createEmbeddingRecord,
+  createSemanticIndexManifest,
   rankSemanticChunks,
-  selectSemanticEvidence,
   stableSemanticHash,
   type MaisEmbeddingRecord,
+  type MaisSemanticContextSelection,
   type MaisSemanticDocument,
-  type MaisSemanticEvidenceSelection,
   type MaisSemanticIndexManifest,
 } from './semanticMemory';
 
@@ -20,7 +21,7 @@ export interface MaisSemanticSyncResult {
 }
 
 export interface MaisSemanticSearchResult {
-  selection: MaisSemanticEvidenceSelection;
+  selection: MaisSemanticContextSelection;
   sync: MaisSemanticSyncResult;
 }
 
@@ -34,9 +35,13 @@ function currentChunks(documents: MaisSemanticDocument[]) {
   return documents.flatMap((document) => chunkSemanticDocument(document));
 }
 
-function vectorIsCompatible(record: MaisEmbeddingRecord, dimensions: MaisEmbeddingRecord['dimensions'], modelId: string, contentHash: string): boolean {
+function vectorIsCompatible(
+  record: MaisEmbeddingRecord,
+  dimensions: MaisEmbeddingRecord['dimensions'],
+  contentHash: string,
+): boolean {
   return record.dimensions === dimensions
-    && record.modelId === modelId
+    && record.modelId === 'google.embeddinggemma'
     && record.contentHash === contentHash
     && record.vector.length === dimensions;
 }
@@ -45,7 +50,6 @@ export class MaisSemanticRetrievalService {
   constructor(
     private readonly repository: MaisEmbeddingRepository,
     private readonly runtime: MaisEmbeddingRuntime,
-    private readonly modelId = 'google.embeddinggemma',
     private readonly dimensions: MaisEmbeddingRecord['dimensions'] = 256,
     private readonly batchSize = 8,
   ) {}
@@ -56,7 +60,7 @@ export class MaisSemanticRetrievalService {
     const existingById = await this.repository.getMany(chunks.map((chunk) => chunk.id));
     const pending = chunks.filter((chunk) => {
       const existing = existingById.get(chunk.id);
-      return !existing || !vectorIsCompatible(existing, this.dimensions, this.modelId, chunk.contentHash);
+      return !existing || !vectorIsCompatible(existing, this.dimensions, chunk.contentHash);
     });
 
     let embeddedChunkCount = 0;
@@ -67,36 +71,29 @@ export class MaisSemanticRetrievalService {
         dimensions: this.dimensions,
       });
       if (vectors.length !== group.length) throw new Error('EmbeddingGemma returned an incomplete indexing batch.');
-      const createdAt = new Date().toISOString();
-      await this.repository.upsert(group.map((chunk, index): MaisEmbeddingRecord => ({
-        chunkId: chunk.id,
-        documentId: chunk.documentId,
-        contentHash: chunk.contentHash,
-        modelId: this.modelId,
-        dimensions: this.dimensions,
-        vector: Float32Array.from(vectors[index]!),
-        provenanceRefs: [...chunk.provenanceRefs],
-        createdAt,
-      })));
+      const embeddedAt = new Date().toISOString();
+      await this.repository.upsert(group.map((chunk, index) => createEmbeddingRecord(
+        chunk,
+        vectors[index]!,
+        this.dimensions,
+        embeddedAt,
+      )));
       embeddedChunkCount += group.length;
     }
 
     const allExisting = await this.repository.listAll();
     const staleChunkIds = allExisting
-      .filter((record) => record.modelId === this.modelId && !currentChunkIds.has(record.chunkId))
+      .filter((record) => record.modelId === 'google.embeddinggemma' && !currentChunkIds.has(record.chunkId))
       .map((record) => record.chunkId);
     await this.repository.deleteChunks(staleChunkIds);
 
-    const manifests = documents.map((document) => {
-      const documentChunks = chunkSemanticDocument(document);
-      return buildSemanticIndexManifest(
-        document,
-        documentChunks,
-        this.modelId,
-        this.dimensions,
-        new Date().toISOString(),
-      );
-    });
+    const indexedAt = new Date().toISOString();
+    const manifests = documents.map((document) => createSemanticIndexManifest(
+      document,
+      chunkSemanticDocument(document),
+      this.dimensions,
+      indexedAt,
+    ));
     return {
       manifests,
       embeddedChunkCount,
@@ -108,7 +105,7 @@ export class MaisSemanticRetrievalService {
   async search(
     documents: MaisSemanticDocument[],
     query: string,
-    options: { topK?: number; maximumCharacters?: number; minimumScore?: number } = {},
+    options: { topK?: number; tokenBudget?: number; minimumScore?: number; maximumPerDocument?: number } = {},
   ): Promise<MaisSemanticSearchResult> {
     const cleanQuery = query.trim();
     if (!cleanQuery) throw new Error('Semantic retrieval requires a non-empty query.');
@@ -121,16 +118,17 @@ export class MaisSemanticRetrievalService {
     const compatible = new Map<string, MaisEmbeddingRecord>();
     for (const chunk of chunks) {
       const record = recordsById.get(chunk.id);
-      if (record && vectorIsCompatible(record, this.dimensions, this.modelId, chunk.contentHash)) compatible.set(chunk.id, record);
+      if (record && vectorIsCompatible(record, this.dimensions, chunk.contentHash)) compatible.set(chunk.id, record);
     }
-    const ranked = rankSemanticChunks(queryVector, chunks, compatible)
-      .filter((match) => match.score >= (options.minimumScore ?? -1));
-    const selection = selectSemanticEvidence(
-      ranked,
-      options.maximumCharacters ?? 5_000,
-      options.topK ?? 8,
-    );
-    return { selection, sync };
+    const ranked = rankSemanticChunks(queryVector, chunks, compatible, {
+      topK: options.topK ?? 8,
+      maximumPerDocument: options.maximumPerDocument ?? 2,
+      minimumScore: options.minimumScore,
+    });
+    return {
+      selection: compileSemanticContextSelection(ranked, options.tokenBudget ?? 1_250),
+      sync,
+    };
   }
 }
 
