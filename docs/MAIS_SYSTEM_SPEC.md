@@ -1,16 +1,36 @@
 # MAIS — Mettle Artificial Intelligence System
 
-Status: Phase 3A architectural contract.
+Status: Phase 3A substrate implementation candidate.
 
-MAIS is the persistent local intelligence layer inside My Mettle. It is not a chatbot, copy-rewriter or single long-running conversation. It is an event-driven research and action system that wakes while the app is available, advances bounded work, persists useful state, unloads models and resumes later.
+MAIS is the persistent local intelligence layer inside My Mettle. It is not a chatbot, copy-rewriter or one long-running conversation. It is an event-driven research and action system that wakes while the app is available, advances bounded work, persists useful state, releases models and resumes later.
 
 ## System goal
 
 Continuously construct and revise a personal model of how the user responds to training; discover meaningful relationships in accumulating evidence; design and evaluate reversible experiments; and deploy context-sensitive training decisions while preserving provenance, inspectability and final human authority over permanent changes.
 
-## Core principle
+## Core division of labour
 
-Deterministic systems establish trustworthy evidence, enforce hard constraints and execute transactions. MAIS conducts inquiry: it decides what warrants attention, retrieves relevant evidence, forms competing hypotheses, plans analyses, invokes tools, critiques results, designs experiments and determines what matters today.
+Deterministic systems:
+
+- preserve raw evidence;
+- calculate exact quantities;
+- enforce domain constraints;
+- validate schemas;
+- grant or deny authority;
+- execute and roll back transactions.
+
+MAIS:
+
+- decides what warrants attention;
+- retrieves relevant evidence;
+- forms competing hypotheses;
+- plans analyses;
+- routes specialist roles and models;
+- critiques results;
+- designs experiments;
+- determines what matters in context.
+
+The deterministic layer is the laboratory equipment. MAIS is the researcher using it.
 
 ## System anatomy
 
@@ -18,65 +38,100 @@ Deterministic systems establish trustworthy evidence, enforce hard constraints a
 
 The Heart advances the system through cheap pulses and bounded episodes.
 
-A pulse normally performs no model inference. It checks for new events, unfinished tasks, available resources and whether a model episode is justified.
+A pulse normally performs no model inference. It checks:
 
-An episode performs one bounded piece of work:
+- newly recorded events;
+- resumable tasks;
+- app visibility;
+- Battery Saver;
+- active workout interaction;
+- explicit pause state;
+- available memory;
+- model-lease availability.
 
-1. load the required capability model;
-2. compile a fresh task context;
-3. execute one role step;
-4. persist structured artefacts and a checkpoint;
-5. unload the model;
-6. terminate or schedule the next step.
+An episode performs one bounded role step:
 
-No episode depends on retaining a model's transient conversation state.
+1. select the required capability tier;
+2. acquire one exclusive model lease;
+3. compile a fresh task context;
+4. run one role;
+5. persist structured artefacts and a checkpoint;
+6. release the model;
+7. terminate or schedule the next step.
+
+No episode depends on retaining transient conversation state.
 
 ### MAIS Workbench
 
-Models communicate through durable typed artefacts rather than one growing transcript.
+Models communicate through durable typed artefacts rather than a growing transcript.
 
 The Workbench contains:
 
 - immutable event journal;
 - task ledger;
-- checkpoints;
+- episodes and checkpoints;
 - evidence inbox;
-- agent mailbox;
-- analysis artefacts;
-- hypothesis and belief records;
-- research requests;
-- generated widget drafts;
-- approval receipts;
-- operational diagnostics.
+- prior role artefacts;
+- analysis programmes and results;
+- hypotheses and belief records;
+- capability proposals and approvals;
+- research dossiers;
+- generated widget definitions;
+- strategy reinforcement records;
+- diagnostics and Parent Reviews.
+
+### Independent persistence
+
+MAIS is stored separately from the training database.
+
+Current browser/WebView implementation:
+
+- database: `my-mettle-mais`;
+- store: `system-state`;
+- key: `primary`.
+
+Clearing MAIS state does not clear training history. Process interruption must leave the last persisted checkpoint recoverable.
 
 ### Context Compiler
 
 Every model invocation receives a newly compiled context containing only:
 
-- current task and step;
+- current task and role step;
 - latest checkpoint;
+- triggering events;
 - directly relevant raw evidence;
 - relevant beliefs and counter-evidence;
 - prior analyses of the same question;
-- user corrections and rejected proposals;
-- applicable scientific knowledge;
-- resource/tool permissions;
+- corrections and rejected proposals;
+- applicable research;
+- available capabilities;
+- resource mode;
 - required output schema.
 
-Long context is available but is not the memory architecture. Persistent memory remains structured and independently retrievable.
+The compiler:
 
-### MAIS Capability Protocol
+- resolves direct provenance references first;
+- retrieves additional evidence through a provider interface;
+- deduplicates evidence;
+- ranks relevance;
+- enforces a hard token budget;
+- records included and excluded evidence IDs;
+- emits a reproducible context manifest.
 
-The internal application capability layer is MCP-compatible in concept but initially implemented as typed in-process APIs.
+Long context is a tool, not the memory architecture.
+
+## MAIS Capability Protocol
+
+The internal application capability layer is MCP-compatible in concept but implemented as typed in-process APIs.
 
 Capability classes:
 
 - **Resources** — read-only application context;
 - **Actions** — validated proposals and transactions;
 - **Events** — passive input to the Heart;
-- **UI capabilities** — approved declarative surfaces and generated widgets.
+- **UI capabilities** — approved declarative surfaces.
 
-Initial protocol operations:
+Protocol concepts:
 
 - `capabilities/list`
 - `resources/read`
@@ -92,208 +147,299 @@ Initial protocol operations:
 - `tasks/checkpoint`
 - `tasks/resume`
 
-MAIS never receives direct database write access. It creates typed proposals. Domain services validate and execute approved changes transactionally.
+MAIS never receives direct database write access.
 
-## Authority model
+### Exact authority
 
-### Level 0 — Read
+Every proposal contains:
 
-MAIS may inspect authorised evidence and current application state.
+- capability ID;
+- reason;
+- typed payload;
+- deterministic payload fingerprint;
+- authority level;
+- reversibility state;
+- creation time.
 
-### Level 1 — Internal reversible work
+An approval receipt is valid only for the exact capability and fingerprint. A general “yes” grants no adjacent authority. The payload is fingerprinted again before execution.
 
-MAIS may update derived evidence, hypotheses, task state, analysis artefacts, cached explanations and private widget drafts without interrupting the user.
+### Authority levels
 
-### Level 2 — Temporary deployment
+#### Level 0 — Read
 
-Narrow approval or standing policy may permit active experiments, temporary session ordering, reversible widgets and supporting-record links.
+Inspect authorised evidence and application state.
 
-### Level 3 — Persistent product state
+#### Level 1 — Internal reversible work
 
-Explicit approval is required to change the base routine, add a permanent exercise, archive an exercise, promote an experiment, install a persistent generated widget or convert inferred information into permanent exercise memory.
+Update derived evidence, hypotheses, task state, cached explanations and private widget drafts.
 
-### Level 4 — Destructive or external
+#### Level 2 — Temporary deployment
+
+Deploy a reversible experiment, temporary session change or temporary widget under narrow approval or a standing policy.
+
+#### Level 3 — Persistent product state
+
+Explicit approval is required to alter the base routine, add or archive an exercise, promote an experiment, install persistent generated UI or convert an inference into permanent exercise memory.
+
+#### Level 4 — Destructive or external
 
 Stronger confirmation is required for destructive deletion, external transmission, network research, data export or intelligence-report sharing.
 
-Approval applies only to the exact proposed change set. A general “yes” grants no adjacent authority.
+### Implemented domain executors
 
-## Lifecycle and resource modes
+Phase 3A includes real executors for:
 
-MAIS initially operates only while the application process is available. Closing or killing the app stops model execution while preserving task state.
+- routine move operations;
+- routine-slot duplication;
+- routine-slot removal;
+- adding a new exercise through the existing creation service.
+
+They validate the current base routine, use existing domain services, create immutable routine versions and return rollback tokens. Rollback produces another valid routine version rather than rewriting history. A rolled-back newly created exercise is archived.
+
+## Resource Governor
 
 ### Full
 
-Permits retrieval, ordinary reasoning, deep reasoning, generated-code analysis, auditing and memory consolidation.
+Permits retrieval, ordinary reasoning, Deep Lab, generated analysis, auditing and memory consolidation.
 
-Expected when the app is foregrounded, Battery Saver is disabled, thermal state is healthy and the user is not manipulating time-sensitive workout controls.
+Expected while the app is foregrounded, Battery Saver is disabled, adequate memory is available and the user is not actively manipulating workout controls.
 
 ### Standard
 
-Permits ordinary analysis and short model episodes. Deep work may be deferred.
+Permits ordinary analysis and short episodes. Deep work is deferred.
 
 ### Light
 
-Permits event logging, deterministic calculations, lightweight retrieval/routing, cached output and checkpointing. Heavy model work is deferred.
+Permits event logging, deterministic calculation, lightweight routing, cached output and checkpointing.
 
-Expected during Battery Saver, active workout interaction, background visibility or elevated thermal pressure.
+Expected during:
+
+- Battery Saver;
+- background visibility;
+- active workout interaction;
+- low available memory.
 
 ### Paused
 
-No model work begins. A running bounded step is checkpointed as soon as safely possible.
+No model work begins. Current bounded work checkpoints at the next safe boundary.
 
-Expected when the app is closed, severe thermal pressure occurs or the user pauses MAIS.
+Expected when:
 
-Budgets begin permissively. Telemetry, not premature fear, will guide later tightening.
+- the app is closed;
+- the user explicitly pauses MAIS.
 
-## Initial specialist roles
+### Thermal policy
 
-Roles are capability contracts, not a requirement for one model binary per role.
+Phase 3A does not independently poll or gate on thermal state. Android, the device daemon and the selected inference runtime remain responsible for lower-level thermal throttling. Hardware evaluation may record temperature later, but thermal policy is not part of the current Heart state machine.
+
+## Native Android resource bridge
+
+The current native plugin exposes:
+
+- foreground/background visibility;
+- Battery Saver state;
+- charging state;
+- available memory;
+- capture timestamp.
+
+It publishes changes to the WebView through a Capacitor event. No background AI service is created. Closing the app stops model execution.
+
+## Specialist roles
+
+Roles are capability contracts, not a requirement for separate model binaries.
 
 - **Governor** — chooses useful work, routes roles and allocates budget.
 - **Analyst** — forms hypotheses and interprets longitudinal evidence.
-- **Coding analyst** — generates constrained analysis programs and interprets tool output.
-- **Auditor** — challenges comparison validity, confounds and overconfidence.
+- **Coding analyst** — creates constrained analysis programmes and interprets tool output.
+- **Auditor** — challenges comparability, confounds and overconfidence.
 - **Coach** — deploys current knowledge through Brief and temporary session preparation.
 - **Memory curator** — maintains summaries, semantic memory and unresolved questions.
 - **Research broker** — formulates infrequent, batched external research requests.
 
-## Model topology target
+## Model registry and leases
 
-The architecture supports sequential model loading. Models do not need to coexist in memory.
+The repository stores manifests and evaluation contracts, never weights.
 
 Initial capability candidates:
 
-- EmbeddingGemma for semantic retrieval;
-- Gemma 4 E2B for lightweight routing and frequent work;
-- Gemma 4 E4B for general reasoning, multimodal context and auditing;
-- Qwen3-8B for Deep Lab reasoning, coding and complex experiment design.
+- EmbeddingGemma — retrieval;
+- Gemma 4 E2B — fast governor and frequent lightweight work;
+- Gemma 4 E4B — ordinary analysis, coaching and audit;
+- Qwen3-8B — Deep Lab reasoning and coding.
 
-The selected unit is always model + quantisation + runtime + backend + context configuration. Model names remain replaceable registry entries until device benchmarks pass.
+One generative model may be active at a time. A lease records:
 
-## Generated analysis
+- task and role;
+- model tier;
+- model ID;
+- runtime and backend;
+- context budget;
+- acquisition, activation and release times;
+- failure or abandoned-process state.
 
-The coding role receives immutable data snapshots and may generate constrained programs for approved analytical tasks.
+Phase 3A uses a deterministic simulated runtime. The same lease manager will wrap the real LiteRT-LM or ExecuTorch adapter in Phase 3B.
 
-The sandbox must provide:
+## Generated-analysis boundary
 
-- no network;
-- no unrestricted filesystem;
-- no Android APIs;
-- no direct persistence writes;
-- approved numerical/statistical libraries only;
-- CPU, memory and time limits;
-- structured output validation;
-- complete storage of program, inputs, outputs and diagnostics.
+The coding role may create a constrained programme against an immutable evidence snapshot.
 
-A model may invent an analysis. It may not invent the result.
+The validator prohibits:
+
+- network access;
+- unrestricted filesystem or process access;
+- Android/device APIs;
+- direct persistence access;
+- dynamic code execution;
+- unapproved libraries.
+
+It requires:
+
+- input snapshot fingerprint;
+- output schema;
+- source limit;
+- allowed library manifest;
+- stored programme, input, output and diagnostics.
+
+Phase 3A validates and simulates execution. A genuinely isolated runtime is selected and integrated later.
 
 ## Widget Foundry
 
 Phase 3 begins with declarative widgets rendered by trusted built-in components.
 
-MAIS may control layout, hierarchy, copy, data bindings, approved chart types, actions, visibility conditions and placement in permitted zones. It may not initially execute arbitrary JavaScript, native code, network calls or unrestricted styles.
+Allowed primitives currently include:
+
+- stack;
+- text;
+- metric;
+- mini chart;
+- comparison;
+- evidence link;
+- capability action;
+- divider.
 
 Every generated widget is:
 
 - attributable;
 - permission-scoped;
-- previewable;
 - versioned;
-- removable;
+- previewable;
 - disableable;
-- prevented from automatic recreation when blocked;
-- ignored by AI-safe mode.
+- removable;
+- ignored by safe mode;
+- preventable from recreation through a user blocklist.
 
-A later tier may support sandboxed generated code after static analysis, automated tests, performance checks and rollback are proven.
+Arbitrary JavaScript, native code, network calls and unrestricted styles are not permitted.
 
 ## Research Broker
 
-External research is a rare escalation tool, not a routine dependency.
+External research is a rare escalation tool.
 
-A request is justified only when:
+A dossier is accepted only when:
 
 1. a local investigation has reached a meaningful knowledge gap;
-2. the answer could materially affect an interpretation, experiment or policy;
-3. cached knowledge is absent, stale or insufficient;
-4. the question can be formulated precisely;
-5. expected value exceeds interruption and network cost.
+2. the answer could materially affect a decision;
+3. cached knowledge is absent or insufficient;
+4. questions are precise and batched;
+5. expected value crosses the threshold;
+6. request cooldown and rolling budget permit it.
 
-Requests are batched into a research dossier containing the blocked decision, local context, questions, preferred evidence classes, required output schema and expiry requirements.
+Initial policy:
 
-The first implementation exports requests for manual higher-capability review and imports cited reports. Later versions may receive a constrained weekly network budget.
+- one active dossier at a time;
+- two requests in a rolling 30-day window;
+- seven-day cooldown;
+- duplicate-topic rejection;
+- cited report import only;
+- every imported claim references a listed source;
+- knowledge receives expiry metadata.
+
+The first workflow exports a dossier for manual higher-capability review and imports the resulting report.
 
 ## Reinforcement Ledger
 
-MAIS does not initially fine-tune model weights from one user's sparse outcomes. Instead, it maintains strategy-level credit across:
+MAIS does not fine-tune model weights from one user’s sparse history.
+
+It records domain-specific strategy credit across:
 
 - predictive accuracy;
 - calibration;
 - information gain;
 - training outcome;
-- user acceptance and correction;
+- user acceptance;
 - novelty;
 - reversibility;
 - interruption cost;
 - compute cost;
 - scientific support.
 
-Credit is domain-specific. A successful rest experiment does not make rest changes universally preferred. An explicit exploration allocation preserves novel hypotheses while penalising low-information repetition and overconfidence.
+Poor outcomes lower domain-specific credit, trigger audit requirements or add a cooldown. Exploration remains available so one successful strategy does not dominate unrelated decisions.
 
 ## Observability and Parent Review
 
-The review surface is designed primarily for engineering and higher-capability AI oversight.
+The MAIS Activity console is a plain Phase 3A framework surface in Lab. It exposes:
 
-A MAIS Report Card includes:
+- current resource mode;
+- event/task/checkpoint/artefact counts;
+- proposal and model-lease counts;
+- latest Heart decision;
+- task ledger;
+- diagnostics;
+- synthetic heartbeat;
+- one-step pulse;
+- Report Card export;
+- separate MAIS reset.
 
-- model/runtime versions;
-- resource state and budgets;
-- events processed;
-- tasks and checkpoints;
-- model-routing decisions;
-- retrieved evidence manifests;
-- tools and generated programs;
-- outputs and diagnostics;
-- claims created or revised;
-- auditor disagreements;
-- proposals and experiment predictions;
-- reinforcement-ledger changes;
-- user corrections;
-- failures and retries;
-- research requests.
+The Report Card contains operational artefacts rather than hidden chain-of-thought:
 
-It stores operational reasoning artefacts—plans, evidence, claims and results—not hidden model chain-of-thought.
+- system/model versions;
+- events and tasks;
+- checkpoints and role artefacts;
+- capability proposals, approvals and executions;
+- model leases;
+- context manifests;
+- analysis programmes/results;
+- research requests;
+- reinforcement changes;
+- widgets;
+- diagnostics and failures.
 
-## Phase 3A implementation order
+Keys representing hidden chain-of-thought, scratchpad or hidden reasoning are stripped during export.
 
-1. Heart simulator and immutable event journal.
-2. Task, episode and checkpoint state machine.
-3. Resource Governor and app/device state contracts.
-4. Workbench artefact and role handoff contracts.
-5. Capability Protocol proposals, approvals and transactions.
-6. Model registry and load/unload leases.
-7. Context Compiler interfaces.
-8. Declarative Widget Foundry schema and safe mode.
-9. Generated-analysis sandbox contract.
-10. Research Broker, Reinforcement Ledger and Report Card.
-11. Native runtime laboratory and real model integration.
+A structured Parent Review may be imported later as engineering/audit direction.
 
-## Phase 3A exit demonstration
+## Phase 3A completion contract
 
-Phase 3A is complete when a synthetic completed workout can autonomously produce this tested sequence:
+Phase 3A is complete after automated validation and an Android device pass demonstrate:
 
-1. event enters the journal;
-2. Heart wakes;
-3. Governor selects useful work;
-4. first role creates a plan and checkpoint;
-5. model unloads;
-6. coding role resumes from typed state and produces a reproducible analysis;
-7. auditor challenges the result;
-8. belief/workbench state updates;
-9. potential Lab proposal is stored;
-10. episode terminates and all model leases close;
-11. process interruption preserves the checkpoint;
-12. reopening resumes from that checkpoint;
-13. Battery Saver forces Light mode;
-14. app closure forces Paused mode;
-15. no permanent training state changes without exact approval.
+1. app opening restores separate MAIS state;
+2. a passive or synthetic event enters the journal;
+3. Heart creates and prioritises a task;
+4. each role acquires and releases one model lease;
+5. role artefacts and checkpoints persist;
+6. process/app restart resumes from typed state;
+7. Battery Saver forces Light mode;
+8. background state permits only Light work;
+9. app closure stops model execution;
+10. a capability proposal cannot execute without exact approval;
+11. approved routine/exercise actions use existing domain services;
+12. reversible actions produce valid rollback state;
+13. Context Compiler records provenance and budget exclusions;
+14. generated widgets can be disabled, removed and blocked;
+15. Research Broker remains scarce and batched;
+16. Report Card export contains reproducible operational evidence;
+17. clearing MAIS state leaves training data untouched;
+18. web tests, strict TypeScript, Vite and Android assembly are green.
+
+## Explicit Phase 3A boundary
+
+Phase 3A does **not** include:
+
+- downloaded model weights;
+- LiteRT-LM or ExecuTorch native inference;
+- production embeddings;
+- real generated-code execution;
+- belief graph or longitudinal analytics;
+- final Progress/Lab/Brief intelligence;
+- polished intelligence UI.
+
+Those begin in Phase 3B and later slices, using this substrate rather than changing its authority or lifecycle model.
