@@ -1,4 +1,5 @@
 import { createId } from '../domain/ids';
+import { reduceMaisAnalysisArtifact } from './analysisArtifactReducer';
 import { reduceMaisBeliefArtifact } from './beliefArtifactReducer';
 import type { MaisEventInput, MaisResourceSnapshot, MaisRoleRunner } from './contracts';
 import { ingestMaisEvent, pulseMais } from './heart';
@@ -67,9 +68,37 @@ export class MaisCoordinator {
       current.updatedAt = resources.capturedAt;
 
       for (const artifact of current.heart.artifacts.filter((candidate) => !existingArtifactIds.has(candidate.id))) {
-        const reduction = reduceMaisBeliefArtifact(current.beliefs, artifact);
-        current.beliefs = reduction.state;
-        if (reduction.applied) {
+        const analysisReduction = reduceMaisAnalysisArtifact(artifact);
+        if (analysisReduction.execution) {
+          const { input, program, run } = analysisReduction.execution;
+          if (!current.analysisInputs.some((candidate) => candidate.id === input.id)) current.analysisInputs.push(input);
+          if (!current.analysisPrograms.some((candidate) => candidate.id === program.id)) current.analysisPrograms.push(program);
+          if (!current.analysisRuns.some((candidate) => candidate.id === run.id)) current.analysisRuns.push(run);
+          current.diagnostics.push({
+            id: createId('mais_diagnostic'),
+            category: 'analysis',
+            severity: 'info',
+            message: 'A generated analysis executed against an immutable host snapshot.',
+            refs: [artifact.id, input.id, program.id, run.id],
+            recordedAt: resources.capturedAt,
+            data: { outputSchema: program.outputSchema, recordCount: input.records.length, executionMs: run.executionMs },
+          });
+        }
+        for (const message of analysisReduction.diagnostics) {
+          current.diagnostics.push({
+            id: createId('mais_diagnostic'),
+            category: 'analysis',
+            severity: 'warning',
+            message,
+            refs: [artifact.id, artifact.taskId],
+            recordedAt: resources.capturedAt,
+            data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
+          });
+        }
+
+        const beliefReduction = reduceMaisBeliefArtifact(current.beliefs, artifact);
+        current.beliefs = beliefReduction.state;
+        if (beliefReduction.applied) {
           current.diagnostics.push({
             id: createId('mais_diagnostic'),
             category: 'belief',
@@ -80,7 +109,7 @@ export class MaisCoordinator {
             data: { artifactKind: artifact.kind, createdBy: artifact.createdBy },
           });
         }
-        for (const message of reduction.diagnostics) {
+        for (const message of beliefReduction.diagnostics) {
           current.diagnostics.push({
             id: createId('mais_diagnostic'),
             category: 'belief',
@@ -93,6 +122,9 @@ export class MaisCoordinator {
         }
       }
 
+      current.analysisInputs = current.analysisInputs.slice(-200);
+      current.analysisPrograms = current.analysisPrograms.slice(-200);
+      current.analysisRuns = current.analysisRuns.slice(-200);
       current.diagnostics.push({
         id: createId('mais_diagnostic'),
         category: 'heart',
@@ -140,6 +172,8 @@ export class MaisCoordinator {
       reinforcement: current.reinforcement,
       beliefs: current.beliefs,
       contextManifests: current.contextManifests,
+      analysisInputs: current.analysisInputs,
+      analysisPrograms: current.analysisPrograms,
       analysisRuns: current.analysisRuns,
       diagnostics: current.diagnostics,
       now,
