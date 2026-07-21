@@ -162,10 +162,12 @@ export type MaisResourceMode = 'full' | 'standard' | 'light' | 'paused';
 export interface MaisResourceSnapshot {
   appVisibility: MaisAppVisibility;
   batterySaver: boolean;
-  thermalState: MaisThermalState;
   isCharging: boolean;
   activeWorkoutInteraction: boolean;
+  userPaused?: boolean | undefined;
   availableMemoryMb?: number;
+  /** Retained for compatibility and telemetry only. Android/runtime throttling owns thermal policy in Phase 3A. */
+  thermalState?: MaisThermalState | undefined;
   capturedAt: string;
 }
 
