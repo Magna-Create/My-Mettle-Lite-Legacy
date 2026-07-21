@@ -230,7 +230,7 @@ export function rankSemanticChunks(
       if (!embedding || embedding.contentHash !== chunk.contentHash || embedding.vector.length !== queryVector.length) return null;
       return { chunk, score: cosineSimilarity(queryVector, embedding.vector) };
     })
-    .filter((match): match is MaisSemanticMatch => Boolean(match) && match.score >= minimumScore)
+    .filter((match): match is MaisSemanticMatch => match !== null && match.score >= minimumScore)
     .sort((left, right) => right.score - left.score)
     .filter((match) => {
       const count = counts.get(match.chunk.documentId) ?? 0;
