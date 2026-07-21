@@ -6,6 +6,7 @@ import { MaisActivityPanel } from '../lab/MaisActivityPanel';
 import { MaisRuntimeLabPanel } from '../lab/MaisRuntimeLabPanel';
 import { DataSettingsPanel } from './DataSettingsPanel';
 import { EmbeddingGemmaImportPanel } from './EmbeddingGemmaImportPanel';
+import { ResearchSettingsPanel } from './ResearchSettingsPanel';
 import { TimerSettingsPanel } from './TimerSettingsPanel';
 import './intelligence-settings.css';
 
@@ -20,9 +21,12 @@ interface Props {
   onPulseMais: () => Promise<void>;
   onClearMais: () => Promise<void>;
   onExportMaisReport: () => void;
+  onExportResearchRequest: (requestId: string) => Promise<void>;
+  onImportResearchReport: (content: string) => Promise<void>;
+  onRejectResearchRequest: (requestId: string) => Promise<void>;
 }
 
-type Screen = 'root' | 'workout' | 'timer' | 'intelligence' | 'models' | 'activity' | 'data';
+type Screen = 'root' | 'workout' | 'timer' | 'intelligence' | 'models' | 'research' | 'activity' | 'data';
 
 const titles: Record<Screen, string> = {
   root: 'Settings',
@@ -30,6 +34,7 @@ const titles: Record<Screen, string> = {
   timer: 'Rest timer',
   intelligence: 'Intelligence',
   models: 'Local models',
+  research: 'Research exchange',
   activity: 'Activity & diagnostics',
   data: 'Data',
 };
@@ -39,6 +44,7 @@ const parentScreen: Record<Exclude<Screen, 'root'>, Screen> = {
   timer: 'workout',
   intelligence: 'root',
   models: 'intelligence',
+  research: 'intelligence',
   activity: 'intelligence',
   data: 'root',
 };
@@ -58,9 +64,12 @@ export function SettingsSheetV2({
   onPulseMais,
   onClearMais,
   onExportMaisReport,
+  onExportResearchRequest,
+  onImportResearchReport,
+  onRejectResearchRequest,
 }: Props) {
   const [screen, setScreen] = useState<Screen>('root');
-  const wide = screen === 'models' || screen === 'activity';
+  const wide = screen === 'models' || screen === 'research' || screen === 'activity';
 
   return <div className="modal-backdrop settings-backdrop" onMouseDown={onClose}>
     <aside className={`settings-sheet ${wide ? 'is-intelligence-wide' : ''}`} onMouseDown={(event) => event.stopPropagation()}>
@@ -68,7 +77,7 @@ export function SettingsSheetV2({
 
       {screen === 'root' && <nav className="settings-navigation">
         <Row title="Workout" detail="Rest timer and workout behaviour" onClick={() => setScreen('workout')} />
-        <Row title="Intelligence" detail="Local models, routing and diagnostics" onClick={() => setScreen('intelligence')} />
+        <Row title="Intelligence" detail="Local models, research and diagnostics" onClick={() => setScreen('intelligence')} />
         <Row title="Data" detail="Export, restore and reset" onClick={() => setScreen('data')} />
       </nav>}
 
@@ -78,11 +87,18 @@ export function SettingsSheetV2({
 
       {screen === 'intelligence' && <nav className="settings-navigation">
         <Row title="Local models" detail="Install, import, benchmark and remove model artefacts" onClick={() => setScreen('models')} />
+        <Row title="Research exchange" detail="Export focused requests and import cited reports" onClick={() => setScreen('research')} />
         <Row title="Activity & diagnostics" detail="Heartbeat, role execution, task ledger and report export" onClick={() => setScreen('activity')} />
       </nav>}
 
       {screen === 'timer' && <TimerSettingsPanel timer={database.settings.restTimer} onUpdate={(patch) => onUpdateSettings({ restTimer: patch })} />}
       {screen === 'models' && <div className="intelligence-settings-stack"><EmbeddingGemmaImportPanel /><MaisRuntimeLabPanel /></div>}
+      {screen === 'research' && <ResearchSettingsPanel
+        research={maisSnapshot?.research ?? { requests: [], reports: [], rollingWindowDays: 30, maxRequestsPerWindow: 3, cooldownDays: 7 }}
+        onExportRequest={onExportResearchRequest}
+        onImportReport={onImportResearchReport}
+        onRejectRequest={onRejectResearchRequest}
+      />}
       {screen === 'activity' && <MaisActivityPanel snapshot={maisSnapshot} resourceMode={maisResourceMode} onRunDemo={onRunMaisDemo} onPulse={onPulseMais} onClear={onClearMais} onExportReport={onExportMaisReport} />}
       {screen === 'data' && <DataSettingsPanel database={database} onReset={onReset} />}
     </aside>
