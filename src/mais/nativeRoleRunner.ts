@@ -88,6 +88,7 @@ function trainingEvidenceRefs(evidence: MaisTrainingEvidencePacket | null): stri
     ...evidence.routines.flatMap((routine) => [routine.id, ...routine.days.flatMap((day) => day.slots.map((slot) => slot.id))]),
     ...evidence.experiments.map((experiment) => experiment.id),
     ...evidence.recentBodyMeasurements.map((measurement) => measurement.id),
+    ...(evidence.semanticContext?.matches.flatMap((match) => match.provenanceRefs) ?? []),
   ])];
 }
 
@@ -138,6 +139,26 @@ export function parseMaisNativeRoleOutput(
   };
 }
 
+function reducedSemanticContext(evidence: MaisTrainingEvidencePacket, maximumMatches: number, maximumText: number) {
+  if (!evidence.semanticContext) return null;
+  return {
+    query: evidence.semanticContext.query,
+    documentSetFingerprint: evidence.semanticContext.documentSetFingerprint,
+    indexedDocumentCount: evidence.semanticContext.indexedDocumentCount,
+    matches: evidence.semanticContext.matches.slice(0, maximumMatches).map((match) => ({
+      score: match.score,
+      documentId: match.documentId,
+      documentKind: match.documentKind,
+      documentTitle: match.documentTitle,
+      sectionHeading: match.sectionHeading,
+      text: match.text.slice(0, maximumText),
+      provenanceRefs: match.provenanceRefs,
+    })),
+    estimatedTokens: evidence.semanticContext.estimatedTokens,
+    omittedMatchCount: evidence.semanticContext.omittedMatchCount,
+  };
+}
+
 function reducedTrainingEvidence(evidence: MaisTrainingEvidencePacket | null): unknown {
   if (!evidence) return null;
   return {
@@ -168,6 +189,8 @@ function reducedTrainingEvidence(evidence: MaisTrainingEvidencePacket | null): u
       .map(([exerciseId, exposures]) => [exerciseId, exposures.slice(-3)])),
     exercises: evidence.exercises,
     experiments: evidence.experiments,
+    investigationCandidates: evidence.investigationCandidates.slice(0, 4),
+    semanticContext: reducedSemanticContext(evidence, 5, 900),
     warnings: evidence.warnings,
   };
 }
@@ -197,6 +220,8 @@ function minimalTrainingEvidence(evidence: MaisTrainingEvidencePacket | null): u
         mode: exposure.mode,
         derivedMetrics: exposure.derivedMetrics,
       }))])),
+    investigationCandidates: evidence.investigationCandidates.slice(0, 2),
+    semanticContext: reducedSemanticContext(evidence, 3, 500),
     warnings: evidence.warnings,
   };
 }
@@ -257,7 +282,12 @@ function compactRolePacket(
       ...common,
       triggerEvents: common.triggerEvents.map((event) => ({ id: event.id, type: event.type, occurredAt: event.occurredAt, entityRefs: event.entityRefs })),
       priorArtifacts: [],
-      trainingEvidence: evidence ? { directRefs: evidence.directRefs, warnings: [...evidence.warnings, 'Training evidence exceeded this model context and was reduced to references.'] } : null,
+      trainingEvidence: evidence ? {
+        directRefs: evidence.directRefs,
+        investigationCandidates: evidence.investigationCandidates.slice(0, 1),
+        semanticContext: reducedSemanticContext(evidence, 2, 350),
+        warnings: [...evidence.warnings, 'Training evidence exceeded this model context and was reduced to references.'],
+      } : null,
     },
   ];
 
