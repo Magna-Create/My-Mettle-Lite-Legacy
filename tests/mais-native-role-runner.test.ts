@@ -107,6 +107,8 @@ const evidenceProvider: MaisTrainingEvidenceProvider = {
       routines: [],
       experiments: [],
       recentBodyMeasurements: [],
+      investigationCandidates: [],
+      semanticContext: null,
       warnings: [],
     };
   },
