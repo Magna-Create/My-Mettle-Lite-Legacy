@@ -136,7 +136,7 @@ describe('MAIS native role runner', () => {
     expect(result.summary).toBe('Deterministic fallback.');
     expect(result.artifact?.content.execution).toMatchObject({
       source: 'deterministic_fallback',
-      intendedModelId: 'google.gemma-4-e4b-it',
+      intendedModelId: 'google.gemma-4-e2b-it',
     });
   });
 
