@@ -48,7 +48,7 @@
         "additionalProperties": false,
         "required": ["runtime", "format", "backends"],
         "properties": {
-          "runtime": { "enum": ["litert-lm", "executorch", "litert", "other"] },
+          "runtime": { "enum": ["litert-lm", "executorch", "litert", "geniex-qairt", "other"] },
           "format": { "type": "string", "minLength": 1 },
           "quantisation": { "type": "string" },
           "backends": {
@@ -78,7 +78,7 @@
         "conversionRecipe": { "type": "string" }
       }
     },
-    "status": { "enum": ["candidate", "benchmarking", "selected", "rejected", "retired"] },
+    "status": { "enum": ["candidate", "approved", "disabled"] },
     "notes": { "type": "string" }
   }
 }
