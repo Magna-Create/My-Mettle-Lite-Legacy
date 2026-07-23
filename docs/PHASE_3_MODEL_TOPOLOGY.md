@@ -14,11 +14,14 @@ MAIS uses the smallest competent component for each task. Agent roles are softwa
 
 Purpose: semantic retrieval over training history, experiments, routines, beliefs and imported research.
 
-- preferred artefact: Qualcomm SM8750 LiteRT build;
-- preferred backend: NPU, CPU fallback;
+- active artefact: generic `embeddinggemma-300M_seq512_mixed-precision.tflite`;
+- active runtime: `localagents-rag:0.3.0` on CPU;
+- tokenizer: `sentencepiece.model`;
 - no prose, recommendations or decisions;
 - vectors remain a regenerable index; raw evidence remains authoritative;
 - gated model files are installed through an explicit local-file import flow.
+
+The initially selected Qualcomm SM8750 AOT file returned a null native model handle through the packaged `GemmaEmbeddingModel` wrapper. The app therefore rejects that combination instead of reporting the files as operational. A future direct LiteRT NPU adapter may reintroduce the SM8750 artefact without changing the semantic-memory contracts.
 
 ### Gemma 4 E2B IT
 
@@ -60,7 +63,7 @@ Purpose: infrequent deep analysis.
 - monthly external-research request drafting;
 - runs only for recognised complex tasks, explicit user requests or bounded overnight work.
 
-The app installs the complete multi-file GenieX bundle through resumable Hugging Face downloads. Native GenieX execution remains the final target-device integration gate; until that adapter passes, deep episodes fall back deterministically rather than attempting to load the bundle through LiteRT-LM.
+The app installs the complete multi-file GenieX bundle through resumable Hugging Face downloads. Runtime Lab can re-verify all 15 files at any time. That verifies pack integrity only; native GenieX execution remains the final target-device integration gate. Until that adapter passes, deep episodes fall back deterministically rather than attempting to load the bundle through LiteRT-LM.
 
 Qwen produces structured Workbench artefacts rather than final UI prose. It never applies a database mutation directly.
 
@@ -74,7 +77,7 @@ The following are not part of the Phase 3 production topology:
 - MedGemma: outside the performance-optimisation scope;
 - CodeGemma and unverified fitness fine-tunes.
 
-App upgrades delete the retired E4B model, partial download and verification record from app-private storage.
+App upgrades delete the retired E4B model, partial download and verification record from app-private storage. They also remove the incompatible EmbeddingGemma Qualcomm AOT import so it cannot be mistaken for the active generic retrieval model.
 
 ## Routing
 
