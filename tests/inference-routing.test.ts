@@ -39,11 +39,11 @@ describe('MAIS deterministic inference routing', () => {
 });
 
 describe('MAIS capability-based model topology', () => {
-  it('uses E2B for standard analyst work and Qwen for deep analyst work', () => {
+  it('uses E2B for standard analyst work and Qwen3-4B for deep analyst work', () => {
     expect(capabilityForRole('analyst', 'standard')).toBe('everyday_language');
     expect(selectMaisModel('analyst', 'standard').modelId).toBe('google.gemma-4-e2b-it');
     expect(capabilityForRole('analyst', 'deep')).toBe('deep_reasoning');
-    expect(selectMaisModel('analyst', 'deep').modelId).toBe('qwen.qwen3-8b');
+    expect(selectMaisModel('analyst', 'deep').modelId).toBe('qwen.qwen3-4b');
   });
 
   it('keeps retrieval isolated to EmbeddingGemma', () => {
