@@ -146,26 +146,26 @@
     ]
   },
   {
-    "artifactId": "google.embeddinggemma-300m.qualcomm-sm8750.seq512",
+    "artifactId": "google.embeddinggemma-300m.generic.seq512",
     "modelId": "google.embeddinggemma",
-    "displayName": "EmbeddingGemma 300M · Qualcomm SM8750",
-    "runtime": "litert",
-    "runtimeVersion": "unselected",
-    "backendCandidates": ["npu", "cpu"],
-    "defaultBackend": "npu",
+    "displayName": "EmbeddingGemma 300M · CPU",
+    "runtime": "localagents-rag",
+    "runtimeVersion": "0.3.0",
+    "backendCandidates": ["cpu"],
+    "defaultBackend": "cpu",
     "roleSlots": ["retrieval"],
     "contextTokens": 512,
     "sourceRepository": "litert-community/embeddinggemma-300m",
     "sourceRevision": "main",
     "downloadUrl": "",
-    "fileName": "embeddinggemma-300M_seq512_mixed-precision.qualcomm.sm8750.tflite",
+    "fileName": "embeddinggemma-300M_seq512_mixed-precision.tflite",
     "format": ".tflite",
-    "approximateBytes": 192937984,
+    "approximateBytes": 187000000,
     "integrityMode": "manual",
     "sha256": "",
     "licence": "Gemma licence — user acceptance required on Hugging Face",
     "downloadPolicy": "manual",
     "status": "access_required",
-    "notes": "Semantic-retrieval artefact for Snapdragon 8 Elite. It is imported through Android's document picker after the user accepts the source licence."
+    "notes": "Wrapper-compatible seq512 LiteRT model for semantic retrieval. The Qualcomm SM8750 AOT file is not loaded through the deprecated localagents-rag wrapper after its native initialiser returned a null model handle; a direct LiteRT NPU adapter remains separate work."
   }
 ]
