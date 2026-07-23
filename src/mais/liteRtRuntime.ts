@@ -95,6 +95,9 @@ export async function runMaisLiteRtPrompt(
   requireNative();
   if (artifact.runtime !== 'litert-lm') throw new Error(`${artifact.displayName} is not a LiteRT-LM generative model.`);
   if (!artifact.backendCandidates.includes(backend)) throw new Error(`${artifact.displayName} does not register ${backend.toUpperCase()} as a candidate backend.`);
+  if (backend === 'npu' && !artifact.fileName.includes('_qualcomm_')) {
+    throw new Error(`${artifact.displayName} is a generic CPU/GPU artefact and cannot be opened through the Qualcomm NPU executor. Install and select the dedicated _qualcomm_sm8750.litertlm build.`);
+  }
   return nativePlugin.runBaseline({
     modelId: artifact.modelId,
     fileName: artifact.fileName,
