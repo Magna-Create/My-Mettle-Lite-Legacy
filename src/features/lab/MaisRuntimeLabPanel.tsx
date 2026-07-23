@@ -217,7 +217,7 @@ export function MaisRuntimeLabPanel() {
       </header>
 
       <p className="mais-runtime-note">
-        Everyday E2B work remains CPU-first. Its generic CPU/GPU build and Qualcomm SM8750 NPU build are separate same-model benchmarks. Qwen installs as a 12K GenieX QAIRT NPU pack; native generation stays gated until its dedicated Android adapter passes.
+        Everyday E2B work remains CPU-first. Its generic CPU/GPU build and Qualcomm SM8750 NPU build are separate same-model benchmarks. Qwen installs as a 12K GenieX QAIRT NPU pack; its pack can be fully re-verified here, while generation remains gated until the dedicated Android QAIRT adapter passes.
       </p>
 
       {error && <p className="mais-runtime-error" role="alert">{error}</p>}
@@ -231,6 +231,7 @@ export function MaisRuntimeLabPanel() {
           const directDownload = canDirectlyDownloadMaisArtifact(artifact);
           const canDownload = directDownload && !busy && status?.state !== 'ready' && status?.state !== 'unverified';
           const canVerify = !busy && status?.state === 'unverified';
+          const canReverifyPack = artifact.runtime === 'geniex-qairt' && !busy && status?.state === 'ready';
           const canDelete = !busy && !running && Boolean(status?.installed || status?.partialBytes);
           const selected = selectedArtifactId === artifact.artifactId;
           const roleText = artifact.roleSlots.join(' · ');
@@ -271,7 +272,7 @@ export function MaisRuntimeLabPanel() {
               {artifact.runtime === 'geniex-qairt' && (
                 <p className="mais-runtime-note">
                   {status?.state === 'ready'
-                    ? 'The complete 12K GenieX pack is installed. Native inference becomes available after the matching QAIRT adapter is added and validated.'
+                    ? 'All 15 published files are installed and can be re-verified below. This proves pack integrity, not text generation; operational inference requires the matching native GenieX/QAIRT adapter.'
                     : 'This downloads the complete multi-file 12K GenieX bundle. It is not loaded through LiteRT-LM.'}
                 </p>
               )}
@@ -289,6 +290,9 @@ export function MaisRuntimeLabPanel() {
                 )}
                 {canVerify && (
                   <button className="primary-action compact" type="button" onClick={() => void runArtifactOperation(artifact, () => verifyMaisModelArtifact(artifact))}>Verify model</button>
+                )}
+                {canReverifyPack && (
+                  <button className="primary-action compact" type="button" onClick={() => void runArtifactOperation(artifact, () => verifyMaisModelArtifact(artifact))}>Verify 12K pack</button>
                 )}
                 {artifact.runtime === 'litert-lm' && status?.state === 'ready' && (
                   <button className="text-button" type="button" onClick={() => setSelectedArtifactId(artifact.artifactId)}>Select for benchmark</button>
