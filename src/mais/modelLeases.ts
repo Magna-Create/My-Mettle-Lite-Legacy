@@ -3,7 +3,7 @@ import { createId } from '../domain/ids';
 import type { MaisModelTier, MaisRole } from './contracts';
 
 export type MaisModelRole = MaisRole | 'retrieval' | 'multimodal';
-export type MaisModelRuntimeName = 'litert' | 'litert-lm' | 'executorch';
+export type MaisModelRuntimeName = 'litert' | 'litert-lm' | 'executorch' | 'geniex-qairt';
 export type MaisModelCapability = 'retrieval' | 'everyday_language' | 'deep_reasoning' | 'multimodal';
 
 export interface MaisRuntimeCandidate {
@@ -95,10 +95,10 @@ function preferredModelIds(role: MaisModelRole, tier: MaisModelTier): string[] {
     case 'retrieval':
       return ['google.embeddinggemma'];
     case 'deep_reasoning':
-      // Qwen3-8B is a temporary, CPU-only 2K development stand-in. It will be
-      // replaced by the custom Qwen3-4B Thinking 12K artefact without changing
-      // the rest of MAIS because callers request this capability, not a binary.
-      return ['qwen.qwen3-8b', 'google.gemma-4-e2b-it'];
+      // The capability now resolves to the published 12K Qwen3-4B GenieX QAIRT
+      // bundle. The surrounding Heart requests a capability rather than a binary,
+      // so an 8K fallback can be introduced later without changing task contracts.
+      return ['qwen.qwen3-4b', 'google.gemma-4-e2b-it'];
     case 'multimodal':
       return ['google.gemma-4-e2b-it'];
     default:
@@ -173,7 +173,7 @@ export class MaisModelLeaseManager {
       await this.runtimeAdapter.load({
         model,
         runtime: lease.runtime,
-        backend: lease.backend,
+        backend,
         contextTokens: lease.contextTokens,
       });
       lease.status = 'active';
