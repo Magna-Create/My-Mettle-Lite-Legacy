@@ -66,10 +66,17 @@ describe('MAIS model artefact registry', () => {
     expect(canDirectlyDownloadMaisArtifact(qwen)).toBe(true);
   });
 
-  it('keeps both EmbeddingGemma files as gated imports', () => {
-    const embedding = getMaisModelArtifact('google.embeddinggemma-300m.qualcomm-sm8750.seq512');
+  it('keeps the wrapper-compatible EmbeddingGemma model and tokenizer as gated imports', () => {
+    const embedding = getMaisModelArtifact('google.embeddinggemma-300m.generic.seq512');
     const tokenizer = getEmbeddingGemmaTokenizerArtifact();
-    expect(embedding).toMatchObject({ defaultBackend: 'npu', downloadPolicy: 'manual', format: '.tflite' });
+    expect(embedding).toMatchObject({
+      defaultBackend: 'cpu',
+      runtime: 'localagents-rag',
+      downloadPolicy: 'manual',
+      format: '.tflite',
+      fileName: 'embeddinggemma-300M_seq512_mixed-precision.tflite',
+    });
+    expect(embedding.fileName).not.toContain('qualcomm');
     expect(tokenizer).toMatchObject({ fileName: 'sentencepiece.model', downloadPolicy: 'manual', format: '.model' });
     expect(canDirectlyDownloadMaisArtifact(embedding)).toBe(false);
     expect(canDirectlyDownloadMaisArtifact(tokenizer)).toBe(false);
