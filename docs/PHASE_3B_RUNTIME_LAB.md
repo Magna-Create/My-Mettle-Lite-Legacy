@@ -4,20 +4,46 @@ Status: active runtime evaluation.
 
 Phase 3A proved the Heart, Workbench, persistence, capability protocol, model leases and resource governor with deterministic model-role simulators. Phase 3B replaces those simulated boundaries incrementally with measured Android runtimes and real local models.
 
-## Accepted first path
+## Accepted runtime paths
 
-The first production candidate is **Gemma 4 E2B IT** through **LiteRT-LM 0.14.0**.
+### Everyday model — Gemma 4 E2B IT
+
+E2B remains the first active production language model through LiteRT-LM 0.14.0.
+
+Two separately installable artefacts represent the same logical model:
+
+- `gemma-4-E2B-it.litertlm` — generic CPU/GPU build;
+- `gemma-4-E2B-it_qualcomm_sm8750.litertlm` — Qualcomm NPU build for Snapdragon 8 Elite.
 
 Reasons:
 
-- official mobile `.litertlm` artefact;
+- published mobile `.litertlm` artefacts;
 - current Android Kotlin SDK and Gradle package;
 - explicit `Engine` initialise/close lifecycle;
-- CPU, GPU and NPU backend support;
-- native function calling and reasoning support;
-- small enough to establish the complete lifecycle before E4B and Qwen3-8B.
+- controlled CPU, GPU and NPU comparison;
+- native function-calling and reasoning support;
+- small enough for frequent bounded foreground work.
 
-ExecuTorch remains the comparison runtime for Qwen3-8B. It is not added until the LiteRT-LM lifecycle is proven.
+The generic artefact on CPU remains the production default until repeated device results justify switching to the hardware-specific NPU build.
+
+### Deep model — Qwen3-4B Thinking 12K
+
+The deep model is a custom W4A16 GenieX QAIRT bundle hosted at:
+
+```text
+MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K
+```
+
+It was compiled for Snapdragon 8 Elite for Galaxy with:
+
+- QAIRT `2.45.0.260326154327`;
+- 12,288-token context;
+- sequence lengths 128 / 1;
+- Qualcomm NPU/HTP execution target.
+
+Qwen is not a LiteRT-LM file. Its install lifecycle is implemented separately from its native GenieX execution adapter.
+
+Gemma 4 E4B and Qwen3-8B are retired from the active model laboratory.
 
 ## Artefact policy
 
@@ -27,25 +53,21 @@ Each model lives in app-private Android data and is identified by a repository m
 
 - stable artefact and model IDs;
 - source repository and revision;
-- download URL;
-- filename and format;
-- expected SHA-256;
+- one or more download URLs;
+- filenames and formats;
+- expected sizes;
+- pinned SHA-256 values or an explicit temporary trust-on-first-use policy;
 - licence;
 - runtime and version;
-- backend candidates;
-- expected size.
+- backend candidates.
 
 Normal signed APK updates preserve installed model data. Uninstalling the app or using Android **Clear data** removes models. **Clear cache** does not.
 
-## 3B.1 — Verified installation
+The upgrade that removes E4B deletes its final file, partial file and verification sidecar without touching the training database.
 
-The first artefact is the official LiteRT Community Gemma 4 E2B IT package:
+## Verified installation
 
-- model: `google.gemma-4-e2b-it`;
-- runtime: LiteRT-LM 0.14.0;
-- file: `gemma-4-E2B-it.litertlm`;
-- expected SHA-256: `181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c`;
-- licence: Apache-2.0.
+### Single-file artefacts
 
 The native installer supports:
 
@@ -60,9 +82,36 @@ The native installer supports:
 - verification sidecar metadata;
 - complete deletion.
 
-The target-device pass confirmed interrupted-network recovery, retained partial bytes, resumed transfer, full verification and persistence after force-stop and cache clearing.
+The generic E2B file is pinned to:
 
-## 3B.2 — Real inference baseline
+```text
+ab7838cdfc8f77e54d8ca45eadceb20452d9f01e4bfade03e5dce27911b27e42
+```
+
+The Qualcomm SM8750 E2B file is pinned to:
+
+```text
+41dd675fbe735b6029012b5576a5716bac614fd8156de0128db4c9dff3cebd4e
+```
+
+### Multi-file Qwen pack
+
+The TypeScript model-pack layer composes the existing single-file native downloader into a sequential resumable bundle installer.
+
+The logical pack contains:
+
+- four compiled context binaries;
+- `genie_config.json`;
+- HTP backend configuration;
+- model metadata;
+- tokenizer files;
+- sample prompt.
+
+The pack reports Ready only when every required member is installed and verified. Cancellation retains the active member's partial bytes. Delete removes every final, partial and verification file.
+
+The first public revision uses trust on first use per member. A validated Hugging Face tag and declared per-file hashes are required before the release is considered final.
+
+## Real E2B inference baseline
 
 The app pins:
 
@@ -70,9 +119,7 @@ The app pins:
 - Kotlin Gradle plugin 2.2.20;
 - kotlinx-coroutines 1.11.0.
 
-The first runtime gate is deliberately manual. The verified Gemma file can be run through CPU or GPU without granting the model autonomous Heart work.
-
-Each baseline performs:
+Each E2B baseline performs:
 
 ```text
 verify installed artefact
@@ -99,19 +146,47 @@ The result records:
 - generated output;
 - cancellation or failure.
 
-Only one baseline may run at once. Results persist in app-private data and survive process death. The GPU path declares optional OpenCL/VNDK libraries; clean GPU failure is acceptable during evaluation and does not invalidate a working CPU path.
+Only one baseline may run at once. Results persist in app-private data and survive process death.
 
-Initial later benchmark contexts remain:
+The valid comparison matrix is:
+
+1. generic E2B / CPU;
+2. generic E2B / GPU;
+3. Qualcomm SM8750 E2B / NPU.
+
+The NPU path declares optional OpenCL/VNDK libraries, requests `Backend.NPU` directly and does not silently fall back.
+
+## Qwen GenieX execution gate
+
+Installing the Qwen pack does not claim that it can already execute through the LiteRT-LM engine.
+
+The pending native adapter must:
+
+1. load the exported GenieX QAIRT bundle;
+2. use the matching QAIRT runtime libraries;
+3. preserve the exclusive model lease;
+4. stream output with cancellation;
+5. expose load, prefill, first-token, decode and unload telemetry;
+6. separate any model thinking channel from the structured final MAIS artefact;
+7. close every native handle on cancellation, failure and process teardown;
+8. fail cleanly without CPU/GPU fallback when the NPU path is unavailable.
+
+Until this adapter passes, deep episodes use the deterministic fallback and record Qwen as the intended model.
+
+## Context gates
+
+Initial benchmark contexts are:
 
 - 2K ordinary Governor packet;
-- 4K Analyst packet;
-- 8K high-value analysis packet.
+- 4K standard E2B packet;
+- 8K high-value Qwen packet;
+- 12,288-token Qwen ceiling for justified deep work.
 
-Those broader packets begin only after the fixed baseline proves load/generate/unload reliability.
+A long advertised context is not a reason to fill it. The Context Compiler should supply the smallest complete typed packet.
 
 ## Report Card export
 
-The previous browser-Blob export was ignored by Android WebView. Android now writes Report Cards natively through MediaStore into:
+Android writes Report Cards natively through MediaStore into:
 
 ```text
 Downloads/My Mettle
@@ -121,27 +196,28 @@ The UI confirms the exact filename and location after writing.
 
 ## Current autonomy boundary
 
-The MAIS Heart still uses the deterministic Phase 3A role runner. This is intentional.
-
 A real model may enter autonomous work only after:
 
-1. at least one backend produces valid local output;
-2. load/generate/unload telemetry is stable;
-3. force-stop and cancellation release the engine correctly;
-4. output is persisted and inspectable;
-5. a deterministic fallback remains available.
+1. its exact installed artefact is verified;
+2. at least one intended backend produces valid local output;
+3. load/generate/unload telemetry is stable;
+4. force-stop and cancellation release the runtime correctly;
+5. output is persisted and inspectable;
+6. a deterministic fallback remains available.
 
-## Later Phase 3B gates
+E2B satisfies the implemented LiteRT-LM execution path. Qwen remains behind the separate GenieX device gate.
 
-- route one bounded Heart role through the selected real backend;
-- Gemma 4 E4B general reasoning and audit comparison;
-- EmbeddingGemma retrieval integration;
-- Qwen3-8B through LiteRT-LM and ExecuTorch;
-- cross-family audit tests;
-- tool-call reliability;
-- capability proposal generation;
-- generated-analysis programme generation;
-- final model-selection report.
+## Remaining Phase 3B gates
+
+- benchmark generic E2B on CPU/GPU;
+- benchmark the SM8750 E2B build on NPU;
+- confirm no silent NPU fallback;
+- install/resume/delete/reinstall the Qwen multi-file pack;
+- integrate matching GenieX QAIRT Android execution;
+- run Qwen3-4B 12K memory, speed and stability tests;
+- pin a stable Hugging Face revision and per-file hashes;
+- complete cross-family audit and tool-call reliability tests;
+- complete the final model-selection report.
 
 ## Resource policy
 
@@ -155,9 +231,9 @@ A real model may enter autonomous work only after:
 
 ## Explicit non-goals
 
-- polished model-management UI;
+- polished final model-management UI;
 - background model downloads after the app process is killed;
 - automatic use of generated training recommendations;
 - unrestricted internet access for MAIS;
-- shipping multiple model weights inside the APK;
+- shipping model weights inside the APK;
 - committing model files to Git.
