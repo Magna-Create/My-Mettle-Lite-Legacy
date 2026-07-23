@@ -86,18 +86,6 @@ jobs:
         run: npm run android:sync
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
-      - name: Inspect localagents-rag embedding API
-        working-directory: android
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./gradlew :app:dependencies --configuration debugRuntimeClasspath --no-daemon >/tmp/localagents-dependencies.log
-          aar="$(find "$HOME/.gradle/caches" -type f -name 'localagents-rag-0.3.0.aar' | head -n 1)"
-          test -n "$aar"
-          echo "AAR: $aar"
-          unzip -p "$aar" classes.jar > /tmp/localagents-rag-classes.jar
-          jar tf /tmp/localagents-rag-classes.jar | grep 'GemmaEmbeddingModel'
-          javap -classpath /tmp/localagents-rag-classes.jar -p -c com.google.ai.edge.localagents.rag.models.GemmaEmbeddingModel
       - name: Assemble debug APK
         id: android-build
         working-directory: android
@@ -111,6 +99,38 @@ jobs:
             exit "$status"
           fi
           cat android-build-output.log
+      - name: Inspect localagents-rag embedding API
+        if: always()
+        working-directory: android
+        shell: bash
+        run: |
+          set +e
+          report="$GITHUB_WORKSPACE/embedding-api-diagnostic.txt"
+          {
+            echo "Resolved localagents-rag files:"
+            find "$HOME/.gradle/caches/modules-2/files-2.1/com.google.ai.edge.localagents/localagents-rag/0.3.0" -type f -print 2>&1
+            aar="$(find "$HOME/.gradle/caches/modules-2/files-2.1/com.google.ai.edge.localagents/localagents-rag/0.3.0" -type f -name '*.aar' | head -n 1)"
+            echo "AAR: $aar"
+            if [ -n "$aar" ]; then
+              unzip -p "$aar" classes.jar > /tmp/localagents-rag-classes.jar
+              echo
+              echo "Matching classes:"
+              jar tf /tmp/localagents-rag-classes.jar | grep -E 'GemmaEmbeddingModel|EmbeddingModel' || true
+              echo
+              echo "GemmaEmbeddingModel API and bytecode:"
+              javap -classpath /tmp/localagents-rag-classes.jar -p -c com.google.ai.edge.localagents.rag.models.GemmaEmbeddingModel 2>&1
+            fi
+          } > "$report" 2>&1
+          cat "$report"
+          exit 0
+      - name: Upload EmbeddingGemma API diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: embedding-api-diagnostic
+          path: embedding-api-diagnostic.txt
+          if-no-files-found: error
+          retention-days: 3
       - name: Upload Android failure log
         if: failure() && steps.android-build.outcome == 'failure'
         uses: actions/upload-artifact@v4
@@ -120,6 +140,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
       - name: Upload debug APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: my-mettle-debug-apk
