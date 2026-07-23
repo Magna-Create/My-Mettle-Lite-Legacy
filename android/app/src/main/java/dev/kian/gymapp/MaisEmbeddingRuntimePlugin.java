@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit;
 
 @CapacitorPlugin(name = "MaisEmbeddingRuntime")
 public final class MaisEmbeddingRuntimePlugin extends Plugin {
-    private static final String MODEL_FILE = "embeddinggemma-300M_seq512_mixed-precision.qualcomm.sm8750.tflite";
+    private static final String MODEL_FILE = "embeddinggemma-300M_seq512_mixed-precision.tflite";
     private static final String TOKENIZER_FILE = "sentencepiece.model";
     private static final int SOURCE_DIMENSIONS = 768;
     private static final int MAX_BATCH = 16;
@@ -48,8 +48,8 @@ public final class MaisEmbeddingRuntimePlugin extends Plugin {
                 result.put("modelBytes", modelFile.isFile() ? modelFile.length() : 0L);
                 result.put("tokenizerBytes", tokenizerFile.isFile() ? tokenizerFile.length() : 0L);
                 result.put("sourceDimensions", SOURCE_DIMENSIONS);
-                result.put("backend", "litert-aot-precompiled");
-                result.put("acceleratorClaim", "unverified_until_device_probe");
+                result.put("backend", "localagents-rag-cpu");
+                result.put("acceleratorClaim", "cpu_xnnpack_candidate");
                 result.put("initialized", model != null);
                 result.put("initializedAtEpochMs", initializedAtMs);
                 call.resolve(result);
@@ -102,14 +102,14 @@ public final class MaisEmbeddingRuntimePlugin extends Plugin {
                 result.put("vectors", vectors);
                 result.put("dimensions", dimensions);
                 result.put("sourceDimensions", SOURCE_DIMENSIONS);
-                result.put("backend", "litert-aot-precompiled");
-                result.put("acceleratorClaim", "unverified_until_device_probe");
+                result.put("backend", "localagents-rag-cpu");
+                result.put("acceleratorClaim", "cpu_xnnpack_candidate");
                 result.put("loadMs", loadMs);
                 result.put("totalMs", elapsedMs(startedAt));
                 result.put("batchSize", inputs.size());
                 call.resolve(result);
             } catch (Exception error) {
-                call.reject(rootMessage(error), error);
+                call.reject(userFacingMessage(error), error);
             }
         });
     }
@@ -117,7 +117,7 @@ public final class MaisEmbeddingRuntimePlugin extends Plugin {
     private GemmaEmbeddingModel requireModel() {
         File modelFile = modelFile();
         File tokenizerFile = tokenizerFile();
-        if (!modelFile.isFile()) throw new IllegalStateException("Import the EmbeddingGemma .tflite model before building the semantic index.");
+        if (!modelFile.isFile()) throw new IllegalStateException("Import the generic EmbeddingGemma seq512 .tflite model before building the semantic index.");
         if (!tokenizerFile.isFile()) throw new IllegalStateException("Import sentencepiece.model before building the semantic index.");
         long stamp = modelFile.lastModified() ^ tokenizerFile.lastModified() ^ modelFile.length() ^ tokenizerFile.length();
         synchronized (MODEL_LOCK) {
@@ -169,6 +169,14 @@ public final class MaisEmbeddingRuntimePlugin extends Plugin {
 
     private long elapsedMs(long startedAtNanos) {
         return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
+    }
+
+    private String userFacingMessage(Throwable error) {
+        String message = rootMessage(error);
+        if (message.contains("Embedding model is null")) {
+            return "EmbeddingGemma could not initialise this .tflite file. Import embeddinggemma-300M_seq512_mixed-precision.tflite; the qualcomm.sm8750 AOT file is not compatible with the current localagents-rag wrapper.";
+        }
+        return message;
     }
 
     private String rootMessage(Throwable error) {
