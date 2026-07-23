@@ -2,7 +2,7 @@
   {
     "artifactId": "google.gemma-4-e2b-it.litertlm.default",
     "modelId": "google.gemma-4-e2b-it",
-    "displayName": "Gemma 4 E2B IT",
+    "displayName": "Gemma 4 E2B IT · CPU/GPU",
     "runtime": "litert-lm",
     "runtimeVersion": "0.14.0",
     "backendCandidates": ["cpu", "gpu"],
@@ -10,63 +10,140 @@
     "roleSlots": ["everyday_language", "triage", "coach", "memory_curator"],
     "contextTokens": 4096,
     "sourceRepository": "litert-community/gemma-4-E2B-it-litert-lm",
-    "sourceRevision": "6e5c4f1",
-    "downloadUrl": "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm?download=true",
+    "sourceRevision": "58ffed3022af739e498f07af986c7a1c23560fa3",
+    "downloadUrl": "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/58ffed3022af739e498f07af986c7a1c23560fa3/gemma-4-E2B-it.litertlm?download=true",
     "fileName": "gemma-4-E2B-it.litertlm",
     "format": ".litertlm",
     "approximateBytes": 2590000000,
     "integrityMode": "sha256",
-    "sha256": "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c",
+    "sha256": "ab7838cdfc8f77e54d8ca45eadceb20452d9f01e4bfade03e5dce27911b27e42",
     "licence": "Apache-2.0",
     "downloadPolicy": "direct",
     "status": "approved",
-    "notes": "Everyday language and bounded triage model. CPU is the default because measured cold-load cost is substantially lower than GPU on the target phone."
+    "notes": "Generic LiteRT-LM build for the CPU and GPU baselines. CPU remains the ordinary-work default because measured cold-load cost is substantially lower on the target phone."
   },
   {
-    "artifactId": "google.gemma-4-e4b-it.litertlm.default",
-    "modelId": "google.gemma-4-e4b-it",
-    "displayName": "Gemma 4 E4B IT · benchmark only",
+    "artifactId": "google.gemma-4-e2b-it.litertlm.qualcomm-sm8750",
+    "modelId": "google.gemma-4-e2b-it",
+    "displayName": "Gemma 4 E2B IT · Qualcomm SM8750 NPU",
     "runtime": "litert-lm",
     "runtimeVersion": "0.14.0",
-    "backendCandidates": ["gpu", "cpu"],
-    "defaultBackend": "gpu",
-    "roleSlots": ["benchmark_only"],
-    "contextTokens": 8192,
-    "sourceRepository": "litert-community/gemma-4-E4B-it-litert-lm",
-    "sourceRevision": "28299f3",
-    "downloadUrl": "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm?download=true",
-    "fileName": "gemma-4-E4B-it.litertlm",
+    "backendCandidates": ["npu"],
+    "defaultBackend": "npu",
+    "roleSlots": ["everyday_language", "triage", "coach", "memory_curator", "npu_benchmark"],
+    "contextTokens": 4096,
+    "sourceRepository": "litert-community/gemma-4-E2B-it-litert-lm",
+    "sourceRevision": "84b6978eff6e4eea02825bc2ee4ea48579f13109",
+    "downloadUrl": "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/84b6978eff6e4eea02825bc2ee4ea48579f13109/gemma-4-E2B-it_qualcomm_sm8750.litertlm?download=true",
+    "fileName": "gemma-4-E2B-it_qualcomm_sm8750.litertlm",
     "format": ".litertlm",
-    "approximateBytes": 3659530240,
+    "approximateBytes": 3016294400,
     "integrityMode": "sha256",
-    "sha256": "0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0",
+    "sha256": "41dd675fbe735b6029012b5576a5716bac614fd8156de0128db4c9dff3cebd4e",
     "licence": "Apache-2.0",
     "downloadPolicy": "direct",
-    "status": "benchmark_only",
-    "notes": "Retained only for comparison during development. MAIS does not route production work to this model."
+    "status": "approved",
+    "notes": "Hardware-specific LiteRT-LM build for Snapdragon 8 Elite / SM8750. It is a separate NPU artefact of the same E2B model, allowing a controlled CPU/GPU-versus-NPU comparison without changing the language model."
   },
   {
-    "artifactId": "qwen.qwen3-8b.litertlm.mixed-int4",
-    "modelId": "qwen.qwen3-8b",
-    "displayName": "Qwen3-8B · temporary deep thinker",
-    "runtime": "litert-lm",
-    "runtimeVersion": "0.14.0",
-    "backendCandidates": ["cpu", "gpu"],
-    "defaultBackend": "cpu",
+    "artifactId": "qwen.qwen3-4b.geniex-qairt.w4a16.sm8750.ctx12288",
+    "modelId": "qwen.qwen3-4b",
+    "displayName": "Qwen3-4B Thinking · 12K · Snapdragon 8 Elite NPU",
+    "runtime": "geniex-qairt",
+    "runtimeVersion": "QAIRT 2.45.0.260326154327",
+    "backendCandidates": ["npu"],
+    "defaultBackend": "npu",
     "roleSlots": ["deep_reasoning", "coding_analyst", "auditor", "research_request"],
-    "contextTokens": 2048,
-    "sourceRepository": "litert-community/Qwen3-8B",
-    "sourceRevision": "71ff705",
-    "downloadUrl": "https://huggingface.co/litert-community/Qwen3-8B/resolve/main/qwen3_8b_mixed_int4.litertlm?download=true",
-    "fileName": "qwen3_8b_mixed_int4.litertlm",
-    "format": ".litertlm",
-    "approximateBytes": 4887412736,
+    "contextTokens": 12288,
+    "sourceRepository": "MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K",
+    "sourceRevision": "main",
+    "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/genie_config.json?download=true",
+    "fileName": "genie_config.json",
+    "format": "geniex-qairt-bundle",
+    "approximateBytes": 3119678958,
     "integrityMode": "trust_on_first_use",
     "sha256": "",
     "licence": "Apache-2.0",
     "downloadPolicy": "direct",
-    "status": "temporary_development_standin",
-    "notes": "Temporary 2K stand-in for the planned Qwen3-4B Thinking 12K artefact. CPU is the safe backend because repeated GPU runs crashed the target phone."
+    "status": "approved_pending_runtime",
+    "notes": "Custom W4A16 GenieX QAIRT bundle compiled for Snapdragon 8 Elite for Galaxy with a 12,288-token context. The installer downloads and verifies every required bundle member; native GenieX execution is the next device-integration step.",
+    "files": [
+      {
+        "fileName": "added_tokens.json",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/added_tokens.json?download=true",
+        "approximateBytes": 707
+      },
+      {
+        "fileName": "config.json",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/config.json?download=true",
+        "approximateBytes": 727
+      },
+      {
+        "fileName": "genie_config.json",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/genie_config.json?download=true",
+        "approximateBytes": 1598
+      },
+      {
+        "fileName": "htp_backend_ext_config.json",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/htp_backend_ext_config.json?download=true",
+        "approximateBytes": 217
+      },
+      {
+        "fileName": "merges.txt",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/merges.txt?download=true",
+        "approximateBytes": 1671853
+      },
+      {
+        "fileName": "metadata.json",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/metadata.json?download=true",
+        "approximateBytes": 70314
+      },
+      {
+        "fileName": "part1_of_4.bin",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/part1_of_4.bin?download=true",
+        "approximateBytes": 777973760
+      },
+      {
+        "fileName": "part2_of_4.bin",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/part2_of_4.bin?download=true",
+        "approximateBytes": 644145152
+      },
+      {
+        "fileName": "part3_of_4.bin",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/part3_of_4.bin?download=true",
+        "approximateBytes": 644145152
+      },
+      {
+        "fileName": "part4_of_4.bin",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/part4_of_4.bin?download=true",
+        "approximateBytes": 1037459456
+      },
+      {
+        "fileName": "sample_prompt.txt",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/sample_prompt.txt?download=true",
+        "approximateBytes": 160
+      },
+      {
+        "fileName": "special_tokens_map.json",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/special_tokens_map.json?download=true",
+        "approximateBytes": 613
+      },
+      {
+        "fileName": "tokenizer.json",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/tokenizer.json?download=true",
+        "approximateBytes": 11422654
+      },
+      {
+        "fileName": "tokenizer_config.json",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/tokenizer_config.json?download=true",
+        "approximateBytes": 9762
+      },
+      {
+        "fileName": "vocab.json",
+        "downloadUrl": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K/resolve/main/vocab.json?download=true",
+        "approximateBytes": 2776833
+      }
+    ]
   },
   {
     "artifactId": "google.embeddinggemma-300m.qualcomm-sm8750.seq512",
