@@ -86,6 +86,18 @@ jobs:
         run: npm run android:sync
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
+      - name: Inspect localagents-rag embedding API
+        working-directory: android
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :app:dependencies --configuration debugRuntimeClasspath --no-daemon >/tmp/localagents-dependencies.log
+          aar="$(find "$HOME/.gradle/caches" -type f -name 'localagents-rag-0.3.0.aar' | head -n 1)"
+          test -n "$aar"
+          echo "AAR: $aar"
+          unzip -p "$aar" classes.jar > /tmp/localagents-rag-classes.jar
+          jar tf /tmp/localagents-rag-classes.jar | grep 'GemmaEmbeddingModel'
+          javap -classpath /tmp/localagents-rag-classes.jar -p -c com.google.ai.edge.localagents.rag.models.GemmaEmbeddingModel
       - name: Assemble debug APK
         id: android-build
         working-directory: android
