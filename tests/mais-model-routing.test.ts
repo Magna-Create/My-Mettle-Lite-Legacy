@@ -25,16 +25,16 @@ describe('MAIS role routing', () => {
     expect(selectMaisModel('auditor', 'standard').modelId).toBe('google.gemma-4-e2b-it');
   });
 
-  it('routes coding and deep reasoning to the temporary Qwen stand-in', () => {
-    expect(selectMaisModel('coding_analyst', 'deep').modelId).toBe('qwen.qwen3-8b');
-    expect(selectMaisModel('analyst', 'deep').modelId).toBe('qwen.qwen3-8b');
+  it('routes coding and deep reasoning to the published Qwen3-4B model', () => {
+    expect(selectMaisModel('coding_analyst', 'deep').modelId).toBe('qwen.qwen3-4b');
+    expect(selectMaisModel('analyst', 'deep').modelId).toBe('qwen.qwen3-4b');
   });
 
   it('routes semantic retrieval to EmbeddingGemma', () => {
     expect(selectMaisModel('retrieval', 'light').modelId).toBe('google.embeddinggemma');
   });
 
-  it('uses the safe backend order and real compiled context ceiling', async () => {
+  it('uses CPU for ordinary E2B work and the compiled Qwen NPU/context ceiling for deep work', async () => {
     const runtime = new RecordingRuntime();
     const manager = new MaisModelLeaseManager(runtime, createMaisModelLeaseState());
     const e2b = await manager.acquire({ taskId: 'quick', role: 'governor', tier: 'light' });
@@ -46,9 +46,11 @@ describe('MAIS role routing', () => {
     expect(standard.backend).toBe('cpu');
     await manager.release(standard.id);
 
-    const qwen = await manager.acquire({ taskId: 'deep', role: 'coding_analyst', tier: 'deep', contextTokens: 8192 });
-    expect(qwen.backend).toBe('cpu');
-    expect(qwen.contextTokens).toBe(2048);
+    const qwen = await manager.acquire({ taskId: 'deep', role: 'coding_analyst', tier: 'deep', contextTokens: 16_000 });
+    expect(qwen.modelId).toBe('qwen.qwen3-4b');
+    expect(qwen.runtime).toBe('geniex-qairt');
+    expect(qwen.backend).toBe('npu');
+    expect(qwen.contextTokens).toBe(12_288);
     await manager.release(qwen.id);
   });
 });
