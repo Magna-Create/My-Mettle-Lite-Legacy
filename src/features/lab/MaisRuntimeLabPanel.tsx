@@ -217,7 +217,7 @@ export function MaisRuntimeLabPanel() {
       </header>
 
       <p className="mais-runtime-note">
-        Each role resolves to a capability slot rather than a hard-coded binary. Small frequent work defaults to CPU; normal and deep reasoning default to GPU. NPU remains an explicit compatibility probe until a model-specific accelerated path passes on this phone.
+        Everyday E2B work remains CPU-first. Its generic CPU/GPU build and Qualcomm SM8750 NPU build are separate same-model benchmarks. Qwen installs as a 12K GenieX QAIRT NPU pack; native generation stays gated until its dedicated Android adapter passes.
       </p>
 
       {error && <p className="mais-runtime-error" role="alert">{error}</p>}
@@ -234,6 +234,7 @@ export function MaisRuntimeLabPanel() {
           const canDelete = !busy && !running && Boolean(status?.installed || status?.partialBytes);
           const selected = selectedArtifactId === artifact.artifactId;
           const roleText = artifact.roleSlots.join(' · ');
+          const isPack = Boolean(artifact.files?.length);
 
           return (
             <article className={`mais-runtime-model mais-model-card ${selected ? 'is-selected' : ''}`} key={artifact.artifactId}>
@@ -267,10 +268,20 @@ export function MaisRuntimeLabPanel() {
                 <p className="mais-runtime-note">Access must be accepted at the source before this gated retrieval model can be installed.</p>
               )}
 
+              {artifact.runtime === 'geniex-qairt' && (
+                <p className="mais-runtime-note">
+                  {status?.state === 'ready'
+                    ? 'The complete 12K GenieX pack is installed. Native inference becomes available after the matching QAIRT adapter is added and validated.'
+                    : 'This downloads the complete multi-file 12K GenieX bundle. It is not loaded through LiteRT-LM.'}
+                </p>
+              )}
+
               <div className="mais-runtime-actions">
                 {canDownload && (
                   <button className="primary-action compact" type="button" onClick={() => void runArtifactOperation(artifact, () => downloadMaisModelArtifact(artifact))}>
-                    {status?.state === 'partial' ? 'Resume download' : 'Download model'}
+                    {status?.state === 'partial'
+                      ? isPack ? 'Resume model pack' : 'Resume download'
+                      : isPack ? 'Download model pack' : 'Download model'}
                   </button>
                 )}
                 {downloading && (
@@ -292,7 +303,7 @@ export function MaisRuntimeLabPanel() {
                       }
                     }}
                   >
-                    Delete model
+                    {isPack ? 'Delete model pack' : 'Delete model'}
                   </button>
                 )}
               </div>
