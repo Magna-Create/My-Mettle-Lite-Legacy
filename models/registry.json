@@ -25,15 +25,15 @@
     "modelId": "google.gemma-4-e2b-it",
     "displayName": "Gemma 4 E2B IT",
     "provider": "Google",
-    "source": "https://developers.google.com/edge/litert-lm/models/gemma-4",
-    "revision": "litert-community/gemma-4-E2B-it-litert-lm:6e5c4f1",
+    "source": "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm",
+    "revision": "generic:58ffed3022af739e498f07af986c7a1c23560fa3; qualcomm-sm8750:84b6978eff6e4eea02825bc2ee4ea48579f13109",
     "licence": "Apache-2.0",
     "roles": ["governor", "analyst", "auditor", "coach", "memory_curator", "multimodal"],
     "runtimeCandidates": [
       {
         "runtime": "litert-lm",
         "format": ".litertlm",
-        "backends": ["cpu", "gpu"]
+        "backends": ["cpu", "gpu", "npu"]
       }
     ],
     "context": {
@@ -41,50 +41,28 @@
       "maisDefaultTokens": 4096
     },
     "status": "approved",
-    "notes": "Everyday intelligence and language model. It handles bounded evidence integration, triage, extraction, summaries and presentation. CPU is the default from measured S25 Ultra cold-load behaviour. It escalates recognised deep work rather than replacing the deep thinker."
+    "notes": "Everyday intelligence and language model. The generic artefact provides CPU/GPU baselines and CPU remains the ordinary-work default. The separate Qualcomm SM8750 artefact provides an NPU-only comparison using the same model family and prompt contract. E2B escalates recognised deep work to Qwen rather than replacing it."
   },
   {
-    "modelId": "google.gemma-4-e4b-it",
-    "displayName": "Gemma 4 E4B IT",
-    "provider": "Google",
-    "source": "https://developers.google.com/edge/litert-lm/models/gemma-4",
-    "revision": "litert-community/gemma-4-E4B-it-litert-lm:28299f3",
-    "licence": "Apache-2.0",
-    "roles": ["analyst", "auditor", "coach", "memory_curator", "multimodal"],
-    "runtimeCandidates": [
-      {
-        "runtime": "litert-lm",
-        "format": ".litertlm",
-        "backends": ["gpu", "cpu"]
-      }
-    ],
-    "context": {
-      "nativeTokens": 32768,
-      "maisDefaultTokens": 8192
-    },
-    "status": "disabled",
-    "notes": "Retained as a benchmark artefact only. It no longer owns a production MAIS capability because its intended role overlaps with E2B and the dedicated Qwen deep thinker."
-  },
-  {
-    "modelId": "qwen.qwen3-8b",
-    "displayName": "Qwen3-8B · temporary deep thinker",
+    "modelId": "qwen.qwen3-4b",
+    "displayName": "Qwen3-4B Thinking · 12K",
     "provider": "Qwen",
-    "source": "https://huggingface.co/Qwen/Qwen3-8B",
-    "revision": "litert-community/Qwen3-8B:71ff705 mixed-int4",
+    "source": "https://huggingface.co/MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K",
+    "revision": "main — pin to validated release tag after the first target-device pass",
     "licence": "Apache-2.0",
     "roles": ["analyst", "coding_analyst", "auditor", "research_broker"],
     "runtimeCandidates": [
       {
-        "runtime": "litert-lm",
-        "format": ".litertlm",
-        "backends": ["cpu", "gpu"]
+        "runtime": "geniex-qairt",
+        "format": "geniex-qairt-bundle",
+        "backends": ["npu"]
       }
     ],
     "context": {
-      "nativeTokens": 2048,
-      "maisDefaultTokens": 2048
+      "nativeTokens": 12288,
+      "maisDefaultTokens": 12288
     },
     "status": "approved",
-    "notes": "Temporary 2K development stand-in for the future Qwen3-4B Thinking 12K artefact. It owns recognised deep analysis, experiment design, generated widget code and research-request drafting. CPU is selected because repeated GPU runs crashed the target phone."
+    "notes": "Production deep-reasoning model. This custom W4A16 bundle was compiled through Qualcomm AI Hub for Snapdragon 8 Elite for Galaxy with QAIRT 2.45.0.260326154327 and a 12,288-token context. Installation is supported now; native GenieX execution and target-device validation remain the final runtime gate."
   }
 ]
