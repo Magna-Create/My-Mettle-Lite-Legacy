@@ -8,10 +8,11 @@ import java.io.File;
 
 public class MainActivity extends BridgeActivity {
     private static final String RETIRED_E4B_FILE = "gemma-4-E4B-it.litertlm";
+    private static final String RETIRED_EMBEDDING_AOT_FILE = "embeddinggemma-300M_seq512_mixed-precision.qualcomm.sm8750.tflite";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        removeRetiredGemmaE4B();
+        removeRetiredModelFiles();
         registerPlugin(RestTimerNotificationsPlugin.class);
         registerPlugin(MaisDeviceStatePlugin.class);
         registerPlugin(MaisModelRuntimePlugin.class);
@@ -22,11 +23,16 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
     }
 
-    private void removeRetiredGemmaE4B() {
+    private void removeRetiredModelFiles() {
         File modelDirectory = new File(getFilesDir(), "mais-models");
-        deleteIfPresent(new File(modelDirectory, RETIRED_E4B_FILE));
-        deleteIfPresent(new File(modelDirectory, RETIRED_E4B_FILE + ".part"));
-        deleteIfPresent(new File(modelDirectory, RETIRED_E4B_FILE + ".verified.json"));
+        removeArtifactFiles(modelDirectory, RETIRED_E4B_FILE);
+        removeArtifactFiles(modelDirectory, RETIRED_EMBEDDING_AOT_FILE);
+    }
+
+    private void removeArtifactFiles(File modelDirectory, String fileName) {
+        deleteIfPresent(new File(modelDirectory, fileName));
+        deleteIfPresent(new File(modelDirectory, fileName + ".part"));
+        deleteIfPresent(new File(modelDirectory, fileName + ".verified.json"));
     }
 
     private void deleteIfPresent(File file) {
