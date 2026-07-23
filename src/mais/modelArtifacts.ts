@@ -5,11 +5,19 @@ export type MaisModelArtifactState = 'absent' | 'partial' | 'downloading' | 'unv
 export type MaisArtifactIntegrityMode = 'sha256' | 'trust_on_first_use' | 'manual';
 export type MaisArtifactDownloadPolicy = 'direct' | 'manual';
 
+export interface MaisModelArtifactFileDefinition {
+  fileName: string;
+  downloadUrl: string;
+  approximateBytes: number;
+  integrityMode?: MaisArtifactIntegrityMode | undefined;
+  sha256?: string | undefined;
+}
+
 export interface MaisModelArtifactDefinition {
   artifactId: string;
   modelId: string;
   displayName: string;
-  runtime: 'litert-lm' | 'litert' | string;
+  runtime: 'litert-lm' | 'litert' | 'geniex-qairt' | string;
   runtimeVersion: string;
   backendCandidates: string[];
   defaultBackend: string;
@@ -27,6 +35,7 @@ export interface MaisModelArtifactDefinition {
   downloadPolicy: MaisArtifactDownloadPolicy;
   status: string;
   notes: string;
+  files?: MaisModelArtifactFileDefinition[] | undefined;
 }
 
 export interface MaisModelArtifactStatus {
@@ -86,9 +95,25 @@ interface DownloadCall extends ArtifactCall {
   approximateBytes: number;
 }
 
+interface ResolvedArtifactFile extends MaisModelArtifactFileDefinition {
+  childArtifactId: string;
+  integrityMode: MaisArtifactIntegrityMode;
+  sha256: string;
+}
+
+interface BundleProgressMetadata {
+  parentArtifactId: string;
+  bytesBeforeFile: number;
+  fileApproximateBytes: number;
+  totalApproximateBytes: number;
+  finalFile: boolean;
+}
+
 const nativePlugin = registerPlugin<MaisModelRuntimePlugin>('MaisModelRuntime');
 const importPlugin = registerPlugin<MaisModelImportPlugin>('MaisModelImport');
 const registry = artifactsJson as MaisModelArtifactDefinition[];
+const activeChildDownloadByArtifact = new Map<string, string>();
+const bundleProgressByChild = new Map<string, BundleProgressMetadata>();
 
 const embeddingGemmaTokenizer: MaisModelArtifactDefinition = {
   artifactId: 'google.embeddinggemma.sentencepiece-tokenizer',
@@ -119,6 +144,10 @@ export function getMaisModelArtifacts(): MaisModelArtifactDefinition[] {
 }
 
 export function getMaisGenerativeArtifacts(): MaisModelArtifactDefinition[] {
+  return getMaisModelArtifacts().filter((artifact) => ['litert-lm', 'geniex-qairt'].includes(artifact.runtime));
+}
+
+export function getMaisLiteRtGenerativeArtifacts(): MaisModelArtifactDefinition[] {
   return getMaisModelArtifacts().filter((artifact) => artifact.runtime === 'litert-lm');
 }
 
@@ -127,7 +156,7 @@ export function getEmbeddingGemmaTokenizerArtifact(): MaisModelArtifactDefinitio
 }
 
 export function getFirstMaisRuntimeArtifact(): MaisModelArtifactDefinition {
-  const artifact = registry[0];
+  const artifact = registry.find((candidate) => ['litert-lm', 'geniex-qairt'].includes(candidate.runtime));
   if (!artifact) throw new Error('No MAIS runtime artefact is registered.');
   return structuredClone(artifact);
 }
@@ -138,16 +167,39 @@ export function getMaisModelArtifact(artifactId: string): MaisModelArtifactDefin
   return structuredClone(artifact);
 }
 
-export function canDirectlyDownloadMaisArtifact(artifact: MaisModelArtifactDefinition): boolean {
-  return artifact.downloadPolicy === 'direct' && artifact.downloadUrl.startsWith('https://');
+export function getMaisModelArtifactFiles(artifact: MaisModelArtifactDefinition): MaisModelArtifactFileDefinition[] {
+  if (artifact.files?.length) return structuredClone(artifact.files);
+  return [{
+    fileName: artifact.fileName,
+    downloadUrl: artifact.downloadUrl,
+    approximateBytes: artifact.approximateBytes,
+    integrityMode: artifact.integrityMode,
+    sha256: artifact.sha256,
+  }];
 }
 
-function callFor(artifact: MaisModelArtifactDefinition): ArtifactCall {
+function resolvedFilesFor(artifact: MaisModelArtifactDefinition): ResolvedArtifactFile[] {
+  const files = getMaisModelArtifactFiles(artifact);
+  const bundle = files.length > 1;
+  return files.map((file, index) => ({
+    ...file,
+    childArtifactId: bundle ? `${artifact.artifactId}.file.${index + 1}` : artifact.artifactId,
+    integrityMode: file.integrityMode ?? artifact.integrityMode,
+    sha256: file.sha256 ?? artifact.sha256,
+  }));
+}
+
+export function canDirectlyDownloadMaisArtifact(artifact: MaisModelArtifactDefinition): boolean {
+  return artifact.downloadPolicy === 'direct'
+    && resolvedFilesFor(artifact).every((file) => file.downloadUrl.startsWith('https://'));
+}
+
+function callForFile(file: ResolvedArtifactFile): ArtifactCall {
   return {
-    artifactId: artifact.artifactId,
-    fileName: artifact.fileName,
-    sha256: artifact.sha256,
-    integrityMode: artifact.integrityMode,
+    artifactId: file.childArtifactId,
+    fileName: file.fileName,
+    sha256: file.sha256,
+    integrityMode: file.integrityMode,
   };
 }
 
@@ -155,23 +207,68 @@ function requireNative(): void {
   if (!Capacitor.isNativePlatform()) throw new Error('Model installation is available in the Android app only.');
 }
 
+function absentStatus(artifactId: string): MaisModelArtifactStatus {
+  return {
+    artifactId,
+    state: 'absent',
+    installed: false,
+    verified: false,
+    bytes: 0,
+    partialBytes: 0,
+    availableBytes: 0,
+    modelPath: null,
+    actualSha256: null,
+  };
+}
+
+function aggregateStatuses(
+  artifact: MaisModelArtifactDefinition,
+  files: ResolvedArtifactFile[],
+  statuses: MaisModelArtifactStatus[],
+): MaisModelArtifactStatus {
+  if (statuses.length === 1) return { ...statuses[0]!, artifactId: artifact.artifactId };
+
+  const everyReady = statuses.every((status) => status.state === 'ready');
+  const everyInstalled = statuses.every((status) => status.installed);
+  const anyDownloading = statuses.some((status) => status.state === 'downloading');
+  const anyVerifying = statuses.some((status) => status.state === 'verifying');
+  const anyFailed = statuses.some((status) => status.state === 'failed');
+  const anyRetained = statuses.some((status) => status.installed || status.partialBytes > 0);
+
+  let state: MaisModelArtifactState = 'absent';
+  if (everyReady) state = 'ready';
+  else if (anyDownloading) state = 'downloading';
+  else if (anyVerifying) state = 'verifying';
+  else if (anyFailed) state = 'failed';
+  else if (everyInstalled) state = 'unverified';
+  else if (anyRetained) state = 'partial';
+
+  const entrypointIndex = Math.max(0, files.findIndex((file) => file.fileName === artifact.fileName));
+  const entrypointStatus = statuses[entrypointIndex] ?? statuses[0];
+  const retainedBytes = statuses.reduce((sum, status) => sum + status.bytes + status.partialBytes, 0);
+
+  return {
+    artifactId: artifact.artifactId,
+    state,
+    installed: everyInstalled,
+    verified: everyReady,
+    bytes: statuses.reduce((sum, status) => sum + status.bytes, 0),
+    partialBytes: everyReady ? 0 : retainedBytes,
+    availableBytes: Math.min(...statuses.map((status) => status.availableBytes)),
+    modelPath: everyReady ? entrypointStatus?.modelPath ?? null : null,
+    actualSha256: null,
+    sourceFileName: everyReady ? artifact.fileName : null,
+    cancelled: statuses.some((status) => status.cancelled),
+  };
+}
+
 export async function readMaisModelArtifactStatus(
   artifact: MaisModelArtifactDefinition,
 ): Promise<MaisModelArtifactStatus> {
-  if (!Capacitor.isNativePlatform()) {
-    return {
-      artifactId: artifact.artifactId,
-      state: 'absent',
-      installed: false,
-      verified: false,
-      bytes: 0,
-      partialBytes: 0,
-      availableBytes: 0,
-      modelPath: null,
-      actualSha256: null,
-    };
-  }
-  return nativePlugin.getStatus(callFor(artifact));
+  if (!Capacitor.isNativePlatform()) return absentStatus(artifact.artifactId);
+  const files = resolvedFilesFor(artifact);
+  const statuses = await Promise.all(files.map((file) => nativePlugin.getStatus(callForFile(file))));
+  return aggregateStatuses(artifact, files, statuses);
 }
 
 export async function readAllMaisModelArtifactStatuses(): Promise<Map<string, MaisModelArtifactStatus>> {
@@ -189,17 +286,44 @@ export async function downloadMaisModelArtifact(
   if (!canDirectlyDownloadMaisArtifact(artifact)) {
     throw new Error(`${artifact.displayName} requires a manual licence/access step before installation.`);
   }
-  return nativePlugin.downloadModel({
-    ...callFor(artifact),
-    downloadUrl: artifact.downloadUrl,
-    approximateBytes: artifact.approximateBytes,
-  });
+
+  const files = resolvedFilesFor(artifact);
+  const totalApproximateBytes = files.reduce((sum, file) => sum + file.approximateBytes, 0);
+  let bytesBeforeFile = 0;
+
+  for (const [index, file] of files.entries()) {
+    bundleProgressByChild.set(file.childArtifactId, {
+      parentArtifactId: artifact.artifactId,
+      bytesBeforeFile,
+      fileApproximateBytes: file.approximateBytes,
+      totalApproximateBytes,
+      finalFile: index === files.length - 1,
+    });
+
+    let current = await nativePlugin.getStatus(callForFile(file));
+    if (current.state === 'unverified') current = await nativePlugin.verifyModel(callForFile(file));
+    if (current.state !== 'ready') {
+      activeChildDownloadByArtifact.set(artifact.artifactId, file.childArtifactId);
+      current = await nativePlugin.downloadModel({
+        ...callForFile(file),
+        downloadUrl: file.downloadUrl,
+        approximateBytes: file.approximateBytes,
+      });
+      activeChildDownloadByArtifact.delete(artifact.artifactId);
+      if (current.cancelled) break;
+    }
+    bytesBeforeFile += file.approximateBytes;
+  }
+
+  activeChildDownloadByArtifact.delete(artifact.artifactId);
+  return readMaisModelArtifactStatus(artifact);
 }
 
 export async function importMaisModelArtifact(
   artifact: MaisModelArtifactDefinition,
 ): Promise<MaisModelArtifactStatus> {
   requireNative();
+  if (artifact.files?.length) throw new Error(`${artifact.displayName} is a multi-file pack and cannot be imported as one local file.`);
   if (artifact.downloadPolicy !== 'manual' || !['.tflite', '.model', '.litertlm'].includes(artifact.format)) {
     throw new Error(`${artifact.displayName} is not configured for local-file import.`);
   }
@@ -221,26 +345,55 @@ export async function verifyMaisModelArtifact(
   artifact: MaisModelArtifactDefinition,
 ): Promise<MaisModelArtifactStatus> {
   requireNative();
-  return nativePlugin.verifyModel(callFor(artifact));
+  for (const file of resolvedFilesFor(artifact)) await nativePlugin.verifyModel(callForFile(file));
+  return readMaisModelArtifactStatus(artifact);
 }
 
 export async function cancelMaisModelDownload(artifactId: string): Promise<boolean> {
   requireNative();
-  return (await nativePlugin.cancelDownload({ artifactId })).requested;
+  const activeId = activeChildDownloadByArtifact.get(artifactId) ?? artifactId;
+  return (await nativePlugin.cancelDownload({ artifactId: activeId })).requested;
 }
 
 export async function deleteMaisModelArtifact(
   artifact: MaisModelArtifactDefinition,
 ): Promise<MaisModelArtifactStatus> {
   requireNative();
-  return nativePlugin.deleteModel(callFor(artifact));
+  const activeId = activeChildDownloadByArtifact.get(artifact.artifactId);
+  if (activeId) await nativePlugin.cancelDownload({ artifactId: activeId });
+  for (const file of resolvedFilesFor(artifact)) await nativePlugin.deleteModel(callForFile(file));
+  activeChildDownloadByArtifact.delete(artifact.artifactId);
+  return readMaisModelArtifactStatus(artifact);
 }
 
 export async function subscribeMaisModelDownload(
   listener: (event: MaisModelDownloadProgress) => void,
 ): Promise<() => Promise<void>> {
   if (!Capacitor.isNativePlatform()) return async () => undefined;
-  const handle = await nativePlugin.addListener('modelDownloadProgress', listener);
+  const handle = await nativePlugin.addListener('modelDownloadProgress', (event) => {
+    const metadata = bundleProgressByChild.get(event.artifactId);
+    if (!metadata) {
+      listener(event);
+      return;
+    }
+    const downloadedWithinFile = metadata.fileApproximateBytes > 0
+      ? Math.min(event.downloadedBytes, metadata.fileApproximateBytes)
+      : event.downloadedBytes;
+    const downloadedBytes = Math.min(
+      metadata.totalApproximateBytes,
+      metadata.bytesBeforeFile + downloadedWithinFile,
+    );
+    const state = event.state === 'ready' && !metadata.finalFile ? 'downloading' : event.state;
+    listener({
+      artifactId: metadata.parentArtifactId,
+      state,
+      downloadedBytes,
+      totalBytes: metadata.totalApproximateBytes,
+      percent: metadata.totalApproximateBytes > 0
+        ? Math.min(100, downloadedBytes * 100 / metadata.totalApproximateBytes)
+        : null,
+    });
+  });
   return async () => handle.remove();
 }
 
