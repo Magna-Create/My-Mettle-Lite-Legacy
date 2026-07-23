@@ -1,6 +1,6 @@
 # My Mettle — Product Roadmap
 
-_Last updated: 21 July 2026_
+_Last updated: 23 July 2026_
 
 This document is the live product roadmap and the primary planning reference for development.
 
@@ -264,14 +264,11 @@ Transform the functional Phase 3 surfaces into the accepted My Mettle experience
 - Intelligence Activity, model/resource and research surfaces;
 - final copy, motion, haptics, accessibility and loading states.
 
-### Phase 4 — Character and generative visual system
+### Phase 4 — Character and embodied visual system
 
-- base character identity, proportions and body model;
-- consistent face, clothing and rendering language;
-- exercise pose generation/control pipeline;
-- dot, particle or 2.5D treatment;
-- exercise-card imagery;
-- character progression, caching and correction.
+Phase 4 is a separate graphics, generative-media and personalisation development programme. Its accepted design intent, constraints, capture/generation direction, 2.5D asset contract, Filament/Vulkan renderer, motion, HDR and resource policies are defined in [`PHASE_4_CHARACTER_DESIGN_TECH_PACK.md`](./PHASE_4_CHARACTER_DESIGN_TECH_PACK.md).
+
+The detailed implementation plan will be written separately as a concise sequence of real development steps after the design and technical package is accepted. Phase 4 should begin in an isolated native Android character-stage demo before controlled integration into the production app.
 
 ### Phase 5 — Cinematic integration
 
