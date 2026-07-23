@@ -139,12 +139,12 @@ export function EmbeddingGemmaImportPanel() {
       </header>
 
       <p>
-        EmbeddingGemma needs both the Qualcomm SM8750 model and its SentencePiece tokenizer. My Mettle copies each selected file into private app storage; the originals remain untouched.
+        Import the generic seq512 model and its SentencePiece tokenizer. The Qualcomm SM8750 AOT file is not compatible with the current localagents-rag wrapper and is intentionally rejected here rather than failing with a null native model.
       </p>
 
       <dl className="settings-fact-list">
-        <div><dt>Runtime path</dt><dd>{runtimeStatus?.backend ?? 'LiteRT AOT-precompiled'}</dd></div>
-        <div><dt>Accelerator claim</dt><dd>{runtimeStatus?.acceleratorClaim ?? 'Unverified until device probe'}</dd></div>
+        <div><dt>Runtime path</dt><dd>{runtimeStatus?.backend ?? 'localagents-rag CPU'}</dd></div>
+        <div><dt>Acceleration</dt><dd>{runtimeStatus?.acceleratorClaim ?? 'CPU/XNNPACK candidate'}</dd></div>
         <div><dt>Embedding window</dt><dd>512 tokens</dd></div>
         <div><dt>Stored dimensions</dt><dd>256 of {runtimeStatus?.sourceDimensions ?? 768}</dd></div>
         <div><dt>Files ready</dt><dd>{Number(modelReady) + Number(tokenizerReady)}/2</dd></div>
@@ -157,7 +157,7 @@ export function EmbeddingGemmaImportPanel() {
           artifact={modelArtifact}
           status={modelStatus}
           busy={busyArtifactId === modelArtifact.artifactId}
-          importLabel=".tflite file"
+          importLabel="generic seq512 .tflite file"
           onImport={() => void run(modelArtifact, setModelStatus, () => importMaisModelArtifact(modelArtifact))}
           onVerify={() => void run(modelArtifact, setModelStatus, () => verifyMaisModelArtifact(modelArtifact))}
           onDelete={() => {
