@@ -67,11 +67,11 @@ describe('MAIS capability protocol', () => {
 });
 
 describe('MAIS model leases', () => {
-  it('routes deep coding work to Qwen3-8B and guarantees one active model', async () => {
+  it('routes deep coding work to Qwen3-4B and guarantees one active model', async () => {
     const runtime = new SimulatedMaisModelRuntime();
     const manager = new MaisModelLeaseManager(runtime);
     const lease = await manager.acquire({ taskId: 'task_1', role: 'coding_analyst', tier: 'deep', now });
-    expect(lease.modelId).toBe('qwen.qwen3-8b');
+    expect(lease.modelId).toBe('qwen.qwen3-4b');
     await expect(manager.acquire({ taskId: 'task_2', role: 'governor', tier: 'light', now })).rejects.toThrow(/one active/i);
     await manager.release(lease.id, now);
     expect(runtime.loadedModelId).toBeNull();
