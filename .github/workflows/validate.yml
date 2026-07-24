@@ -10,9 +10,6 @@ name: Validate
     branches:
       - main
 
-permissions:
-  contents: write
-
 jobs:
   web:
     name: Test and build web app
@@ -20,12 +17,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Validate private runtime scripts
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash -n scripts/package-qairt-android-runtime.sh
-          bash -n scripts/install-qairt-build-assets.sh
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -80,8 +71,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -91,38 +80,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install NDK and CMake for open JNI bridge
-        shell: bash
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
-      - name: Build ARM64 GenieX JNI bridge
-        shell: bash
-        run: |
-          set -euo pipefail
-          source_dir="$GITHUB_WORKSPACE/android/app/src/main/cpp/geniex"
-          build_dir="$RUNNER_TEMP/mais-geniex-build"
-          cmake_bin="$ANDROID_SDK_ROOT/cmake/3.22.1/bin/cmake"
-          ndk_dir="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
-          "$cmake_bin" \
-            -S "$source_dir" \
-            -B "$build_dir" \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE="$ndk_dir/build/cmake/android.toolchain.cmake" \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-24 \
-            -DANDROID_STL=c++_static
-          "$cmake_bin" --build "$build_dir" --config Release --parallel 2
-          destination="$GITHUB_WORKSPACE/android/app/src/main/jniLibs/arm64-v8a"
-          mkdir -p "$destination"
-          cp "$build_dir/libmais_geniex.so" "$destination/libmais_geniex.so"
-          file "$destination/libmais_geniex.so"
-          if readelf -d "$destination/libmais_geniex.so" | grep -q 'libc++_shared.so'; then
-            echo "ERROR: GenieX bridge still depends on libc++_shared.so" >&2
-            exit 1
-          fi
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Build and synchronise Capacitor
@@ -138,40 +95,15 @@ jobs:
           ./gradlew assembleDebug --no-daemon > android-build-output.log 2>&1
           status=$?
           if [ "$status" -ne 0 ]; then
-            tail -n 220 android-build-output.log
+            tail -n 260 android-build-output.log
             exit "$status"
           fi
           cat android-build-output.log
-      - name: Verify GenieX bridge is packaged
+      - name: Verify bundled GenieX runtime
         shell: bash
         run: |
           set -euo pipefail
-          unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep 'lib/arm64-v8a/libmais_geniex.so'
-      - name: Vendor compiled bridge on feature branch
-        if: >-
-          (github.event_name == 'push' && startsWith(github.ref_name, 'agent/')) ||
-          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
-        shell: bash
-        env:
-          TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: |
-          set -euo pipefail
-          binary="$GITHUB_WORKSPACE/android/app/src/main/jniLibs/arm64-v8a/libmais_geniex.so"
-          staged="$RUNNER_TEMP/libmais_geniex.so"
-          cp "$binary" "$staged"
-          git fetch origin "$TARGET_BRANCH"
-          git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
-          mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          cp "$staged" android/app/src/main/jniLibs/arm64-v8a/libmais_geniex.so
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add android/app/src/main/jniLibs/arm64-v8a/libmais_geniex.so
-          if git diff --cached --quiet; then
-            echo "GenieX bridge binary is already current."
-          else
-            git commit -m "Vendor ARM64 GenieX JNI bridge"
-            git push origin "HEAD:$TARGET_BRANCH"
-          fi
+          unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/arm64-v8a/lib(npu_jni|geniex_plugin_qairt)\.so'
       - name: Upload Android failure log
         if: failure() && steps.android-build.outcome == 'failure'
         uses: actions/upload-artifact@v4
