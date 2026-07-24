@@ -27,17 +27,19 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 unzip -q "$ARCHIVE" -d "$work"
 source_root="$work/qairt-build-assets"
+manifest="$source_root/android/app/src/main/assets/qairt/qairt-runtime.json"
+native_source="$source_root/android/app/src/main/jniLibs/arm64-v8a"
 
 if [[ ! -f "$source_root/SHA256SUMS.txt" ]]; then
   echo "ERROR: QAIRT package has no SHA256SUMS.txt." >&2
   exit 1
 fi
-if [[ ! -f "$source_root/android/app/src/main/assets/qairt/qairt-runtime.json" ]]; then
+if [[ ! -f "$manifest" ]]; then
   echo "ERROR: QAIRT package has no runtime manifest." >&2
   exit 1
 fi
 
-python - "$source_root/android/app/src/main/assets/qairt/qairt-runtime.json" "$EXPECTED_VERSION" <<'PY'
+python - "$manifest" "$EXPECTED_VERSION" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -46,6 +48,8 @@ expected = sys.argv[2]
 actual = manifest.get("qairtVersion")
 if actual != expected:
     raise SystemExit(f"ERROR: QAIRT package version is {actual!r}; expected {expected!r}.")
+if manifest.get("htpArchitecture") != "v73":
+    raise SystemExit("ERROR: This S25 Ultra build requires Hexagon v73 assets.")
 PY
 
 (
@@ -53,43 +57,35 @@ PY
   sha256sum --check SHA256SUMS.txt
 )
 
-arm64_source="$source_root/android/app/src/main/jniLibs/arm64-v8a"
-hexagon_source="$source_root/android/app/src/main/assets/qairt/hexagon"
-arm64_destination="$PROJECT_ROOT/android/app/src/main/jniLibs/arm64-v8a"
-asset_destination="$PROJECT_ROOT/android/app/src/main/assets/qairt"
-
 for required in libGenie.so libQnnSystem.so libQnnHtp.so libQnnHtpPrepare.so; do
-  if [[ ! -f "$arm64_source/$required" ]]; then
+  if [[ ! -f "$native_source/$required" ]]; then
     echo "ERROR: QAIRT package is missing $required." >&2
     exit 1
   fi
 done
 
 shopt -s nullglob
-stubs=("$arm64_source"/libQnnHtpV*Stub.so)
-skels=("$hexagon_source"/libQnnHtpV*Skel.so)
+stubs=("$native_source"/libQnnHtpV*Stub.so)
+skels=("$native_source"/libQnnHtpV*Skel.so)
 shopt -u nullglob
 if (( ${#stubs[@]} == 0 )); then
   echo "ERROR: QAIRT package has no ARM64 HTP stub library." >&2
   exit 1
 fi
 if (( ${#skels[@]} == 0 )); then
-  echo "ERROR: QAIRT package has no Hexagon HTP skeleton library." >&2
+  echo "ERROR: QAIRT package has no Hexagon v73 HTP skeleton library." >&2
   exit 1
 fi
 
-mkdir -p "$arm64_destination" "$asset_destination/hexagon"
-find "$arm64_destination" -maxdepth 1 -type f \( -name 'libGenie.so' -o -name 'libQnn*.so' \) -delete
-rm -rf "$asset_destination/hexagon"
-mkdir -p "$asset_destination/hexagon"
+native_destination="$PROJECT_ROOT/android/app/src/main/jniLibs/arm64-v8a"
+asset_destination="$PROJECT_ROOT/android/app/src/main/assets/qairt"
+mkdir -p "$native_destination" "$asset_destination"
 
-cp -a "$arm64_source/." "$arm64_destination/"
-cp -a "$hexagon_source/." "$asset_destination/hexagon/"
-cp "$source_root/android/app/src/main/assets/qairt/qairt-runtime.json" "$asset_destination/qairt-runtime.json"
+find "$native_destination" -maxdepth 1 -type f \( -name 'libGenie.so' -o -name 'libQnn*.so' \) -delete
+cp -a "$native_source/." "$native_destination/"
+cp "$manifest" "$asset_destination/qairt-runtime.json"
 
 printf '\nQAIRT %s build assets staged locally.\n' "$EXPECTED_VERSION"
-printf 'ARM64 native libraries:\n'
-find "$arm64_destination" -maxdepth 1 -type f \( -name 'libGenie.so' -o -name 'libQnn*.so' \) -printf '  %f\t%s bytes\n' | sort
-printf 'Hexagon assets:\n'
-find "$asset_destination/hexagon" -maxdepth 1 -type f -printf '  %f\t%s bytes\n' | sort
-printf '\nThese files are ignored by Git and will be packaged only into your local APK.\n'
+printf 'APK native libraries:\n'
+find "$native_destination" -maxdepth 1 -type f \( -name 'libGenie.so' -o -name 'libQnn*.so' \) -printf '  %f\t%s bytes\n' | sort
+printf '\nThese licensed files are ignored by Git and will be included only in your local APK.\n'
