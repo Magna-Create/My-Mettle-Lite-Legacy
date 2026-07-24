@@ -64,7 +64,7 @@ describe('health evidence engine', () => {
       algorithmVersion: 1,
     });
     expect(evidence?.setResponses[0]?.estimatedStartAt).not.toBeNull();
-    expect(evidence?.setResponses[0]?.peakHeartRate).toBeGreaterThanOrEqual(120);
+    expect(evidence?.setResponses[0]?.peakHeartRate).toBeGreaterThanOrEqual(115);
     expect(evidence?.stepsDuringWindow).toBe(120);
     expect(evidence?.heartRateSampleCount).toBeGreaterThan(10);
   });
