@@ -105,7 +105,7 @@ export interface NativeHealthWindow {
 
 interface MaisHealthConnectPlugin {
   getStatus(): Promise<NativeHealthStatus>;
-  requestPermissions(options: { scope: HealthPermissionScope }): Promise<{
+  requestHealthAccess(options: { scope: HealthPermissionScope }): Promise<{
     completed: boolean;
     grantedPermissions: string[];
     groups: NativeHealthPermissionGroups;
@@ -142,7 +142,7 @@ export async function readHealthConnectStatus(): Promise<NativeHealthStatus> {
 
 export async function requestHealthConnectPermissions(scope: HealthPermissionScope): Promise<NativeHealthStatus> {
   if (!healthConnectIsNative()) throw new Error('Health Connect is only available in the Android app.');
-  await NativeHealthConnect.requestPermissions({ scope });
+  await NativeHealthConnect.requestHealthAccess({ scope });
   return NativeHealthConnect.getStatus();
 }
 
