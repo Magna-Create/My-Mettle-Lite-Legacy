@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { withMaisHighPriorityWork } from './highPriorityWork';
 import type { MaisEmbeddingRuntime } from './semanticIndexCoordinator';
 import type { MaisEmbeddingRecord } from './semanticMemory';
 
@@ -106,7 +107,8 @@ export class NativeMaisEmbeddingRuntime implements MaisEmbeddingRuntime {
   }): Promise<ArrayLike<number>[]> {
     if (!this.isAvailable()) throw new Error('EmbeddingGemma is available in the Android app only.');
     if (input.texts.length === 0) return [];
-    return validateResult(await nativePlugin.embed(input), input.texts.length, input.dimensions);
+    return withMaisHighPriorityWork('embedding-index', `Embedding ${input.texts.length} ${input.purpose} item${input.texts.length === 1 ? '' : 's'}`, async () =>
+      validateResult(await nativePlugin.embed(input), input.texts.length, input.dimensions));
   }
 }
 
@@ -133,38 +135,40 @@ export async function runNativeMaisEmbeddingProbe(): Promise<MaisEmbeddingProbeR
     };
   }
   try {
-    const dimensions = 256 as const;
-    const documentResult = await nativePlugin.embed({
-      texts: [
-        'Hack squat performance improved while knee comfort remained good across comparable exposures.',
-        'The user prefers a light carbohydrate meal before an evening workout.',
-      ],
-      purpose: 'document',
-      dimensions,
+    return await withMaisHighPriorityWork('embedding-index', 'Running the EmbeddingGemma probe', async () => {
+      const dimensions = 256 as const;
+      const documentResult = await nativePlugin.embed({
+        texts: [
+          'Hack squat performance improved while knee comfort remained good across comparable exposures.',
+          'The user prefers a light carbohydrate meal before an evening workout.',
+        ],
+        purpose: 'document',
+        dimensions,
+      });
+      const documents = validateResult(documentResult, 2, dimensions);
+      const queryResult = await nativePlugin.embed({
+        texts: ['What does the evidence say about hack squat performance and knee comfort?'],
+        purpose: 'query',
+        dimensions,
+      });
+      const [query] = validateResult(queryResult, 1, dimensions);
+      const matchingScore = dot(query!, documents[0]!);
+      const unrelatedScore = dot(query!, documents[1]!);
+      return {
+        success: true,
+        dimensions,
+        sourceDimensions: documentResult.sourceDimensions,
+        backend: documentResult.backend,
+        acceleratorClaim: documentResult.acceleratorClaim,
+        documentLoadMs: documentResult.loadMs,
+        documentTotalMs: documentResult.totalMs,
+        queryLoadMs: queryResult.loadMs,
+        queryTotalMs: queryResult.totalMs,
+        matchingScore,
+        unrelatedScore,
+        margin: matchingScore - unrelatedScore,
+      };
     });
-    const documents = validateResult(documentResult, 2, dimensions);
-    const queryResult = await nativePlugin.embed({
-      texts: ['What does the evidence say about hack squat performance and knee comfort?'],
-      purpose: 'query',
-      dimensions,
-    });
-    const [query] = validateResult(queryResult, 1, dimensions);
-    const matchingScore = dot(query!, documents[0]!);
-    const unrelatedScore = dot(query!, documents[1]!);
-    return {
-      success: true,
-      dimensions,
-      sourceDimensions: documentResult.sourceDimensions,
-      backend: documentResult.backend,
-      acceleratorClaim: documentResult.acceleratorClaim,
-      documentLoadMs: documentResult.loadMs,
-      documentTotalMs: documentResult.totalMs,
-      queryLoadMs: queryResult.loadMs,
-      queryTotalMs: queryResult.totalMs,
-      matchingScore,
-      unrelatedScore,
-      margin: matchingScore - unrelatedScore,
-    };
   } catch (reason) {
     return {
       success: false,
