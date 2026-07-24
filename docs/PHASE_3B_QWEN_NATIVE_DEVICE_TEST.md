@@ -76,19 +76,7 @@ The supported GenieX adapter performs one fresh lifecycle:
 8. stop and destroy the native model wrapper during cleanup;
 9. record process memory after unload.
 
-The result card should report:
-
-- model load time;
-- time to first token;
-- generation and total time;
-- unload time;
-- peak PSS;
-- whether thinking was observed;
-- reasoning character count without storing the reasoning transcript;
-- prompt and generated token counts;
-- prefill and decoding rates;
-- stop reason;
-- final response.
+The result card should report model load, time to first token, generation, total and unload time, peak PSS, thinking status, token counts, prefill and decoding rates, stop reason and final response.
 
 ## Pass conditions
 
@@ -114,15 +102,7 @@ adb logcat -c
 adb logcat | grep -E 'GenieX|QAIRT|Qnn|HTP|CDSP|dev.kian.gymapp'
 ```
 
-Useful failure classes include:
-
-- GenieX SDK or QAIRT plugin initialisation failure;
-- model manifest or path incompatibility;
-- incompatible context binaries;
-- HTP/CDSP firmware or device compatibility failure;
-- output budget exhausted before the final response;
-- memory allocation failure at 12,288 context;
-- generation succeeds but destruction fails.
+Useful failure classes include GenieX/QAIRT initialisation, model-manifest or context-binary incompatibility, HTP/CDSP firmware compatibility, output-budget exhaustion, 12K memory allocation and destruction failure.
 
 ## Safety boundary
 
