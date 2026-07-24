@@ -15,6 +15,7 @@ public class MainActivity extends BridgeActivity {
         removeRetiredModelFiles();
         registerPlugin(RestTimerNotificationsPlugin.class);
         registerPlugin(MaisDeviceStatePlugin.class);
+        registerPlugin(MaisHealthConnectPlugin.class);
         registerPlugin(MaisModelRuntimePlugin.class);
         registerPlugin(MaisModelImportPlugin.class);
         registerPlugin(MaisReportExportPlugin.class);
