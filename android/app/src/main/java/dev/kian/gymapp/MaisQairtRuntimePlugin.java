@@ -23,6 +23,7 @@ import java.util.List;
 public final class MaisQairtRuntimePlugin extends Plugin {
     static final String QAIRT_VERSION = "2.45.0.260326154327";
     private static final String ASSET_MANIFEST = "qairt/qairt-runtime.json";
+    private static volatile File cachedNativeDirectory;
     private static final List<String> REQUIRED_HOST_LIBRARIES = Arrays.asList(
         "libGenie.so",
         "libQnnSystem.so",
@@ -41,7 +42,9 @@ public final class MaisQairtRuntimePlugin extends Plugin {
 
     static File arm64Directory(Context context) {
         String nativeLibraryDirectory = context.getApplicationInfo().nativeLibraryDir;
-        return nativeLibraryDirectory == null ? new File("") : new File(nativeLibraryDirectory);
+        File resolved = nativeLibraryDirectory == null ? new File("") : new File(nativeLibraryDirectory);
+        cachedNativeDirectory = resolved;
+        return resolved;
     }
 
     static File hexagonDirectory(Context context) {
@@ -50,6 +53,17 @@ public final class MaisQairtRuntimePlugin extends Plugin {
         // loader receives this extracted filesystem directory through
         // ADSP_LIBRARY_PATH.
         return arm64Directory(context);
+    }
+
+    static File hexagonDirectory(File ignoredLegacyFilesDirectory) {
+        // Compatibility overload for the first Genie adapter revision. Every
+        // native run resolves arm64Directory(Context) immediately before this
+        // method, so the same PackageManager-controlled directory is reused.
+        File resolved = cachedNativeDirectory;
+        if (resolved == null) {
+            throw new IllegalStateException("The APK native library directory has not been resolved.");
+        }
+        return resolved;
     }
 
     private JSObject status() {
