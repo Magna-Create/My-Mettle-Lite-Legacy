@@ -94,8 +94,9 @@ Completed implementation:
 - LiteRT-LM generative runtime and measured telemetry;
 - role/capability model routing with deterministic fallback;
 - Gemma 4 E2B ordinary language and triage path;
-- Qwen deep path only after an explicit Governor `deep_analysis` route;
-- temporary current Qwen 2K artefact isolated behind a capability boundary for later replacement by Qwen3-4B Thinking 12K;
+- custom Qwen3-4B Thinking 12K model-pack installation and verification;
+- supported Qualcomm GenieX Android runtime delivered through Maven and the normal APK/AAB;
+- thinking-enabled Qwen streaming, profiling, cancellation and deterministic destruction;
 - EmbeddingGemma model + SentencePiece import and native local embedding runtime;
 - incremental semantic indexing over training history, beliefs, memories, imported research and analyses;
 - bounded retrieval injected into role packets with provenance;
@@ -116,9 +117,9 @@ Completed implementation:
 
 Current model topology:
 
-- **EmbeddingGemma 300M** — semantic indexing and retrieval;
-- **Gemma 4 E2B IT** — ordinary language, triage and bounded standard roles;
-- **Qwen deep capability** — current 2K stand-in during integration, to be replaced with a custom Qwen3-4B Thinking 12K artefact before the first proper Phase 3 test.
+- **EmbeddingGemma 300M** — CPU semantic indexing and retrieval; future custom NPU encoder after the shared Qualcomm path is proven;
+- **Gemma 4 E2B IT** — generic LiteRT-LM CPU/GPU ordinary language and triage; future custom GenieX NPU export;
+- **Qwen3-4B Thinking 12K** — custom W4A16 QAIRT bundle through the Maven-delivered GenieX Android runtime, gated on repeated S25 Ultra device validation.
 
 Explicitly excluded from the intended topology:
 
@@ -127,7 +128,8 @@ Explicitly excluded from the intended topology:
 - CodeGemma;
 - unvalidated fitness fine-tunes;
 - Gemma E4B as a permanent role;
-- Qwen3-8B as the production deep model.
+- Qwen3-8B as the production deep model;
+- end-user QAIRT SDK, WSL or private runtime-staging requirements.
 
 #### Phase 3G — Integrated intelligence alpha
 
