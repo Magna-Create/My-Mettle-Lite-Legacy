@@ -22,7 +22,12 @@ fi
 QAIRT_ROOT="$(cd "$QAIRT_ROOT" && pwd)"
 ARM64_SOURCE="$QAIRT_ROOT/lib/aarch64-android"
 HEXAGON_SOURCE="$QAIRT_ROOT/lib/hexagon-v${HTP_ARCH}/unsigned"
+READELF="$(command -v llvm-readelf || command -v readelf || true)"
 
+if [[ -z "$READELF" ]]; then
+  echo "ERROR: llvm-readelf or readelf is required to validate Android native dependencies." >&2
+  exit 1
+fi
 if [[ ! -d "$ARM64_SOURCE" ]]; then
   echo "ERROR: ARM64 QAIRT libraries not found: $ARM64_SOURCE" >&2
   exit 1
@@ -84,6 +89,70 @@ for path in "${stub_files[@]}"; do
 done
 for path in "${skel_files[@]}"; do
   cp -L "$path" "$native_destination/$(basename "$path")"
+done
+
+is_android_system_library() {
+  case "$1" in
+    libc.so|libdl.so|liblog.so|libm.so|libandroid.so|libz.so|libEGL.so|libGLESv2.so|libvulkan.so|libnativewindow.so|libsync.so|libbinder_ndk.so)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+find_ndk_libcxx() {
+  local root candidate
+  for root in "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}"; do
+    [[ -n "$root" ]] || continue
+    candidate="$root/toolchains/llvm/prebuilt"
+    while IFS= read -r path; do
+      [[ -f "$path" ]] && { printf '%s\n' "$path"; return 0; }
+    done < <(find "$candidate" -path '*/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so' -type f 2>/dev/null | sort -V -r)
+  done
+  if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
+    while IFS= read -r path; do
+      [[ -f "$path" ]] && { printf '%s\n' "$path"; return 0; }
+    done < <(find "$ANDROID_SDK_ROOT/ndk" -path '*/toolchains/llvm/prebuilt/*/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so' -type f 2>/dev/null | sort -V -r)
+  fi
+  return 1
+}
+
+copy_dependency() {
+  local dependency="$1"
+  local source=""
+
+  if [[ -f "$native_destination/$dependency" ]] || is_android_system_library "$dependency"; then
+    return 0
+  fi
+  if [[ -f "$ARM64_SOURCE/$dependency" ]]; then
+    source="$ARM64_SOURCE/$dependency"
+  elif [[ "$dependency" == "libc++_shared.so" ]]; then
+    source="$(find_ndk_libcxx || true)"
+  fi
+
+  if [[ -z "$source" || ! -f "$source" ]]; then
+    echo "ERROR: QAIRT requires $dependency, but it was not found beside the SDK libraries or in an Android NDK." >&2
+    echo "Set ANDROID_NDK_HOME or ANDROID_SDK_ROOT, then rerun the packager." >&2
+    exit 1
+  fi
+
+  cp -L "$source" "$native_destination/$dependency"
+  printf 'Added transitive dependency: %s\n' "$dependency"
+}
+
+# Resolve dependencies recursively for Android host libraries. Hexagon skeletons
+# are DSP binaries and must not be interpreted as AArch64 shared objects.
+while true; do
+  before="$(find "$native_destination" -maxdepth 1 -type f | wc -l)"
+  while IFS= read -r host_library; do
+    while IFS= read -r dependency; do
+      [[ -n "$dependency" ]] && copy_dependency "$dependency"
+    done < <("$READELF" -d "$host_library" 2>/dev/null | sed -n 's/.*Shared library: \[\([^]]*\)\].*/\1/p')
+  done < <(find "$native_destination" -maxdepth 1 -type f -name '*.so' ! -name '*Skel.so' | sort)
+  after="$(find "$native_destination" -maxdepth 1 -type f | wc -l)"
+  [[ "$after" == "$before" ]] && break
 done
 
 cat > "$asset_root/qairt-runtime.json" <<EOF
