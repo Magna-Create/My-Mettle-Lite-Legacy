@@ -22,6 +22,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MaisLiteRtRuntimePlugin.class);
         registerPlugin(MaisEmbeddingRuntimePlugin.class);
         registerPlugin(MaisGenieXRuntimePlugin.class);
+        registerPlugin(MaisDeveloperToolsPlugin.class);
         super.onCreate(savedInstanceState);
     }
 
