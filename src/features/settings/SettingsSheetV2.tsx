@@ -7,6 +7,7 @@ import { MaisRuntimeLabPanel } from '../lab/MaisRuntimeLabPanel';
 import { DataSettingsPanel } from './DataSettingsPanel';
 import { EmbeddingGemmaImportPanel } from './EmbeddingGemmaImportPanel';
 import { QairtRuntimeImportPanel } from './QairtRuntimeImportPanel';
+import { QwenGenieXRuntimePanel } from './QwenGenieXRuntimePanel';
 import { ResearchSettingsPanel } from './ResearchSettingsPanel';
 import { TimerSettingsPanel } from './TimerSettingsPanel';
 import './intelligence-settings.css';
@@ -93,7 +94,7 @@ export function SettingsSheetV2({
       </nav>}
 
       {screen === 'timer' && <TimerSettingsPanel timer={database.settings.restTimer} onUpdate={(patch) => onUpdateSettings({ restTimer: patch })} />}
-      {screen === 'models' && <div className="intelligence-settings-stack"><EmbeddingGemmaImportPanel /><QairtRuntimeImportPanel /><MaisRuntimeLabPanel /></div>}
+      {screen === 'models' && <div className="intelligence-settings-stack"><EmbeddingGemmaImportPanel /><QairtRuntimeImportPanel /><MaisRuntimeLabPanel /><QwenGenieXRuntimePanel /></div>}
       {screen === 'research' && <ResearchSettingsPanel
         research={maisSnapshot?.research ?? { requests: [], reports: [], rollingWindowDays: 30, maxRequestsPerWindow: 3, cooldownDays: 7 }}
         onExportRequest={onExportResearchRequest}
