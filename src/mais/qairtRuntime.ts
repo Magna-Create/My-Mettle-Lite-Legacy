@@ -2,6 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 
 export interface MaisQairtRuntimeStatus {
   version: string;
+  source: 'apk-build-assets';
   installed: boolean;
   ready: boolean;
   bridgeLoaded: boolean;
@@ -16,20 +17,15 @@ export interface MaisQairtRuntimeStatus {
 
 interface MaisQairtRuntimePlugin {
   getStatus(): Promise<MaisQairtRuntimeStatus>;
-  pickAndImport(): Promise<MaisQairtRuntimeStatus>;
-  deleteRuntime(): Promise<MaisQairtRuntimeStatus>;
 }
 
 const nativePlugin = registerPlugin<MaisQairtRuntimePlugin>('MaisQairtRuntime');
-
-function requireNative(): void {
-  if (!Capacitor.isNativePlatform()) throw new Error('QAIRT runtime installation is available in the Android app only.');
-}
 
 export async function readMaisQairtRuntimeStatus(): Promise<MaisQairtRuntimeStatus> {
   if (!Capacitor.isNativePlatform()) {
     return {
       version: '2.45.0.260326154327',
+      source: 'apk-build-assets',
       installed: false,
       ready: false,
       bridgeLoaded: false,
@@ -43,14 +39,4 @@ export async function readMaisQairtRuntimeStatus(): Promise<MaisQairtRuntimeStat
     };
   }
   return nativePlugin.getStatus();
-}
-
-export async function importMaisQairtRuntime(): Promise<MaisQairtRuntimeStatus> {
-  requireNative();
-  return nativePlugin.pickAndImport();
-}
-
-export async function deleteMaisQairtRuntime(): Promise<MaisQairtRuntimeStatus> {
-  requireNative();
-  return nativePlugin.deleteRuntime();
 }
