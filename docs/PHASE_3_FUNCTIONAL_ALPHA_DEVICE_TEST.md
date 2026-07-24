@@ -7,17 +7,15 @@ Run this gate on the target Galaxy S25 Ultra after installing the consolidated d
 - Existing training history and installed model files remain present across the APK update.
 - Settings → Intelligence → Local models lists:
   - Gemma 4 E2B IT · CPU/GPU;
-  - Gemma 4 E2B IT · Qualcomm SM8750 NPU;
+  - Gemma 4 E2B IT · Qualcomm SM8750 NPU compatibility artefact;
   - Qwen3-4B Thinking · 12K · Snapdragon 8 Elite NPU;
   - EmbeddingGemma 300M · CPU;
-  - QAIRT 2.45 runtime status;
-  - Qwen3-4B native NPU benchmark.
+  - Qwen3-4B GenieX benchmark.
 - The Qwen repository is `MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K`.
-- Qwen is a multi-file GenieX QAIRT bundle, not a LiteRT-LM file.
-- EmbeddingGemma setup contains both:
+- GenieX Android is bundled through Gradle/Maven Central; no external QAIRT runtime setup is required.
+- EmbeddingGemma setup contains:
   - `embeddinggemma-300M_seq512_mixed-precision.tflite`;
   - `sentencepiece.model`.
-- The private QAIRT 2.45 Android build assets have been staged before building the APK, following `docs/PHASE_3B_QWEN_NATIVE_DEVICE_TEST.md`.
 
 ## 1. Upgrade persistence and retired-model cleanup
 
@@ -25,10 +23,10 @@ Run this gate on the target Galaxy S25 Ultra after installing the consolidated d
 2. Open Brief, Progress, Lab and Library.
 3. Confirm training history, routine, settings, installed models and prior MAIS state remain present.
 4. Confirm Gemma 4 E4B no longer appears in the model pack.
-5. Confirm the retired Qualcomm EmbeddingGemma AOT import is no longer treated as the active retrieval model.
+5. Confirm the retired Qualcomm EmbeddingGemma AOT import is no longer treated as active.
 6. Force-stop and reopen once.
 
-Pass: no data reset, boot loop or unnecessary redownload; retired E4B storage is reclaimed.
+Pass: no data reset, boot loop or unnecessary model redownload.
 
 ## 2. Settings structure
 
@@ -36,7 +34,8 @@ Open **Settings → Intelligence**.
 
 Pass when:
 
-- Local models contains model installation, retrieval, QAIRT status and benchmark controls;
+- Local models contains model installation, retrieval and benchmark controls;
+- no private QAIRT ZIP/import panel exists;
 - Research exchange contains the rolling three-request budget and import/export controls;
 - Activity & diagnostics contains the Heart and Report Card controls;
 - Lab contains experiments rather than runtime diagnostics.
@@ -45,43 +44,26 @@ Pass when:
 
 ### Gemma E2B generic CPU/GPU
 
-1. Install or resume `gemma-4-E2B-it.litertlm`.
+1. Install or reuse `gemma-4-E2B-it.litertlm`.
 2. Confirm SHA-256 verification succeeds against:
 
    `ab7838cdfc8f77e54d8ca45eadceb20452d9f01e4bfade03e5dce27911b27e42`
 
-### Gemma E2B Qualcomm SM8750 NPU
+### Gemma E2B Qualcomm SM8750
 
-1. Install or resume `gemma-4-E2B-it_qualcomm_sm8750.litertlm`.
-2. Confirm the downloaded size is approximately 3,016,294,400 bytes.
-3. Confirm SHA-256 verification succeeds against:
-
-   `41dd675fbe735b6029012b5576a5716bac614fd8156de0128db4c9dff3cebd4e`
-
-This public LiteRT-LM NPU artefact currently fails engine creation with `TF_LITE_AUX not found` on the target phone. Record it as an upstream runtime/package incompatibility rather than retrying repeatedly. It is not the production NPU path; a custom GenieX/QAIRT E2B build follows after the Qwen native pipeline passes.
+The public LiteRT-LM NPU artefact currently fails engine creation with `TF_LITE_AUX not found` on the target phone. Record this as an upstream package/runtime incompatibility and do not retry repeatedly. A custom E2B GenieX build follows after Qwen proves the shared Qualcomm path.
 
 ### Qwen3-4B Thinking 12K
 
-1. Start the Qwen installation.
-2. Interrupt it during one of the four large context binaries.
-3. Reopen the app and resume.
-4. Confirm all required bundle members finish in app-private storage, including:
-   - `genie_config.json`;
-   - `htp_backend_ext_config.json`;
-   - `metadata.json`;
-   - `part1_of_4.bin` through `part4_of_4.bin`;
-   - tokenizer files.
-5. Confirm the aggregate installed size is approximately 3.12 GB.
-6. Confirm the pack reaches **Verified and ready** only after every member is present and individually hashed.
-7. Tap **Verify 12K pack** and confirm it returns to **Verified and ready**.
+1. Start or resume the Qwen installation.
+2. Confirm all 15 required members finish in app-private storage, including the four context binaries, configuration and tokenizer files.
+3. Confirm incomplete packs never report Ready.
+4. Confirm aggregate size is approximately 3.12 GB.
+5. Tap **Verify 12K pack** and confirm it returns to **Verified and ready**.
 
-The initial public repository revision uses trust-on-first-use per-file hashes. After the native device pass, publish a stable Hugging Face tag and pin every file hash in the app registry.
-
-Pass: partial downloads resume, incomplete packs never appear ready, verification covers all 15 files and normal app interaction remains responsive.
+Pass: partial downloads resume, verification covers every member and normal app interaction remains responsive.
 
 ## 4. EmbeddingGemma runtime probe
-
-Open **Settings → Intelligence → Local models → EmbeddingGemma**.
 
 Use:
 
@@ -94,15 +76,10 @@ Do not use the Qualcomm SM8750 AOT `.tflite` file with the current `localagents-
 
 1. Confirm both files show Ready.
 2. Run the semantic retrieval probe.
-3. Record:
-   - runtime path;
-   - document and query latency;
-   - matching score;
-   - unrelated score;
-   - margin.
-4. Run the probe a second time after force-stop/reopen.
+3. Record document/query latency and ranking scores.
+4. Run again after force-stop/reopen.
 
-Current confirmed device result:
+Current confirmed result:
 
 - matching score: `0.7881`;
 - unrelated score: `0.2535`;
@@ -110,54 +87,33 @@ Current confirmed device result:
 - document pass: `1040 ms`;
 - query pass: `408 ms`.
 
-Pass when the relevant training passage ranks above the unrelated passage, vectors use the expected 256 stored dimensions and no native crash occurs.
+## 5. Gemma E2B generic comparison
 
-## 5. Gemma E2B generic backend comparison
+1. Run the generic CPU baseline twice.
+2. Run the generic GPU baseline twice.
+3. Confirm no NPU control is offered for the generic file.
+4. Record load, first chunk, generation, unload, total time, peak PSS and output validity.
 
-Use the same bounded prompt, sampler settings and output limit for every run.
+Retain CPU as the ordinary-work default until the custom GenieX E2B build is measured.
 
-1. Run the generic artefact CPU baseline twice.
-2. Run the generic artefact GPU baseline twice.
-3. Confirm no NPU control is offered for the generic CPU/GPU file.
+## 6. Qwen GenieX Android runtime gate
 
-For every run record:
-
-- model load time;
-- first-chunk latency;
-- generation time;
-- unload time;
-- total time;
-- peak PSS;
-- output validity;
-- app and launcher stability.
-
-Pass when each successful result identifies its actual backend. Retain generic E2B on CPU as the ordinary-work default until a custom GenieX NPU build is compiled and measured.
-
-## 6. Qwen native GenieX/QAIRT runtime gate
-
-Follow the complete setup and failure-capture procedure in:
+Follow:
 
 ```text
 docs/PHASE_3B_QWEN_NATIVE_DEVICE_TEST.md
 ```
 
-1. Confirm **QAIRT 2.45** reports **Runtime ready**.
-2. Confirm the open JNI bridge is loaded.
+1. Confirm Runtime delivery reports **Bundled with app**.
+2. Confirm GenieX Android reports `0.3.5` and the QAIRT plugin is available.
 3. Confirm the Qwen pack is verified.
-4. Run **Qwen NPU baseline** once.
-5. Record:
-   - runtime and QAIRT version;
-   - load time;
-   - first callback/TTFT;
-   - prompt-processing rate;
-   - token-generation rate;
-   - peak process memory;
-   - unload time and reclaimed memory;
-   - final output;
-   - sustained stability.
-6. Force-stop and reopen, then run once more after a clean first pass.
+4. Confirm Thinking mode is enabled.
+5. Run **Qwen thinking baseline** once.
+6. Record runtime version, load time, TTFT, prompt/decode rate, token counts, peak PSS, unload time, final output and stop reason.
+7. Test **Stop Qwen run** once during a separate run.
+8. Force-stop/reopen and run once more after a clean first pass.
 
-Pass when Qwen creates a Genie dialog, generates non-empty text through the intended Qualcomm NPU/HTP path, unloads cleanly and does not destabilise System UI. Until this passes repeatedly, deep roles continue to produce a deterministic fallback record.
+Pass when Qwen loads through the Maven-delivered GenieX runtime, thinks, generates non-empty final text on NPU, supports clean cancellation, destroys the wrapper and does not destabilise System UI.
 
 ## 7. Ordinary session path
 
@@ -167,123 +123,54 @@ Expected bounded path:
 
 1. `session_completed` is journalled;
 2. Governor runs through E2B or clean deterministic fallback;
-3. ordinary integration remains on the light/standard route unless the Governor explicitly returns `deep_analysis`;
+3. ordinary integration remains light/standard unless the Governor explicitly requests deep analysis;
 4. Analyst and Auditor artefacts persist;
-5. any accepted belief appears in Progress with provenance and uncertainty;
+5. accepted beliefs appear with provenance and uncertainty;
 6. no permanent routine change occurs.
-
-Pass: the app remains responsive, only one generative model is leased at a time, and force-stop/reopen preserves the task and artefacts.
 
 ## 8. Explicit deep-analysis path
 
-Use the Activity & diagnostics test control or a sufficiently complex real session case to produce a Governor `deep_analysis` route.
-
-Expected expanded path:
-
-1. Governor;
-2. Analyst;
-3. Coding Analyst using Qwen3-4B Thinking 12K only after the native GenieX gate passes repeatedly, otherwise a recorded deterministic fallback;
-4. deterministic analysis execution against an immutable snapshot;
-5. Auditor challenge;
-6. Coach reversible experiment draft.
+After the Qwen device gate passes repeatedly, trigger a deep-analysis route.
 
 Pass when:
 
-- Qwen is not loaded unless the deep route is explicit;
-- generated analysis is a `MaisAnalysisRecipeV1`, not arbitrary executable code;
-- the analysis input, programme and result persist after model unload;
-- a valid Coach draft appears in Lab as a **proposed** experiment;
-- the base routine remains unchanged.
+- Qwen is loaded only for an explicit deep route;
+- generated analysis is a validated `MaisAnalysisRecipeV1`, not arbitrary executable code;
+- the analysis input, programme and result persist after unload;
+- Coach output remains a proposed reversible experiment;
+- the base routine remains unchanged without explicit approval.
 
-A Qwen failure must produce a clean fallback record and must not crash the app or launcher.
+Until the gate passes, Qwen failures must produce a clean deterministic fallback record.
 
 ## 9. Lab experiment lifecycle
 
-1. Review the proposed experiment and its provenance, success criteria and stop conditions.
+1. Review the proposed experiment and provenance.
 2. Activate it explicitly.
 3. Complete the next matching session.
-4. Confirm the experiment becomes ready for decision.
-5. Allow the queued evaluation task to run.
-6. Confirm Lab shows an inspectable recommendation: adopt, extend, reject or defer.
-7. Choose either promote or keep baseline yourself.
+4. Confirm evaluation becomes ready.
+5. Review adopt, extend, reject or defer.
+6. Apply a decision explicitly.
 
-Pass when:
-
-- the temporary condition affects only the tested session;
-- completion automatically journals `experiment_threshold_reached`;
-- the recommendation does not act by itself;
-- promotion creates a new routine version only after confirmation;
-- rejection leaves the base routine unchanged and creates durable rejection memory.
+Pass: recommendations never mutate the base routine by themselves.
 
 ## 10. Research exchange
 
-When a research request exists:
+1. Export a research request.
+2. Confirm JSON appears in `Downloads/My Mettle`.
+3. Import a valid cited `MaisResearchReportEnvelopeV1`.
+4. Reject a malformed or uncited report.
 
-1. Export it from Settings.
-2. Confirm the JSON appears in `Downloads/My Mettle`.
-3. Inspect that it contains the precise question, local context, desired evidence and required response envelope.
-4. Import a valid cited `MaisResearchReportEnvelopeV1` test report.
-5. Reject an unused request as a separate test where available.
+Pass: rolling allowance is three requests per 30 days and imported evidence remains traceable to citations.
 
-Pass when:
+## 11. Resource and recovery behaviour
 
-- the rolling budget reports three requests per 30 days;
-- every imported claim refers to a listed citation;
-- the imported report is queued as `external_research_imported` and becomes retrievable local evidence;
-- malformed or uncited reports are rejected without changing state.
+Repeat a pending task with Battery Saver on, during an active workout, after backgrounding and after force-stop/reopen.
 
-## 11. Functional surfaces
+Pass: work is deferred or checkpointed, model leases do not overlap and training data remains intact.
 
-### Brief
+## 12. Report Card
 
-Confirm it shows only relevant current items: current finding, active intervention, queued deep task or pending research.
-
-### Progress
-
-Confirm it shows:
-
-- belief status and calibrated confidence;
-- support and counter-evidence separately;
-- unresolved questions;
-- reproducible analysis records;
-- provenance IDs.
-
-### Lab
-
-Confirm it shows:
-
-- proposed, active and ready-for-decision experiments;
-- model proposal provenance;
-- success and stop criteria;
-- completed-experiment recommendations;
-- explicit user actions only.
-
-## 12. Resource and recovery behaviour
-
-Repeat one pending task under each condition:
-
-- Battery Saver on;
-- active workout interaction;
-- app backgrounded;
-- force-stop during or between role steps;
-- reopen after interruption.
-
-Pass when work is deferred or checkpointed according to policy, model leases do not overlap, and the task resumes or fails cleanly without losing training data.
-
-## 13. Report Card
-
-Export a Report Card after the tests.
-
-Confirm it includes:
-
-- events, tasks, episodes and checkpoints;
-- model leases and measured runtime data;
-- semantic manifests and retrieval diagnostics;
-- beliefs, evidence, unresolved questions and rejection memory;
-- analysis inputs, programmes and runs;
-- memories, Lab proposals and experiment recommendations;
-- research requests/reports;
-- no hidden reasoning or chain-of-thought fields.
+Confirm the export contains events, tasks, model leases, runtime telemetry, semantic retrieval diagnostics, beliefs/evidence, analysis records, experiments and research artefacts—without hidden reasoning fields.
 
 ## Stop conditions
 
