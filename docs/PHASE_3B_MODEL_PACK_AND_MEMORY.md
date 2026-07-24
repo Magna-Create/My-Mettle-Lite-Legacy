@@ -1,6 +1,6 @@
 # Phase 3B — MAIS Model Pack, Role Routing and Semantic Memory
 
-Status: native Qwen device-validation candidate.
+Status: Qwen device-validation candidate.
 
 ## Target topology
 
@@ -14,7 +14,7 @@ These are capability slots. The registry may replace a model or runtime without 
 
 ## Working retrieval path
 
-EmbeddingGemma now uses:
+EmbeddingGemma uses:
 
 ```text
 embeddinggemma-300M_seq512_mixed-precision.tflite
@@ -44,7 +44,7 @@ Measured previously on the target phone:
 
 Frequent short E2B episodes therefore default to CPU. GPU remains available for explicit longer comparisons.
 
-The public `gemma-4-E2B-it_qualcomm_sm8750.litertlm` NPU package is no longer treated as a production candidate. It reaches the LiteRT-LM NPU executor but fails engine creation with `TF_LITE_AUX not found`. The next E2B NPU route is a custom GenieX/QAIRT export after Qwen passes the native device gate.
+The public `gemma-4-E2B-it_qualcomm_sm8750.litertlm` NPU package is no longer treated as a production candidate. It reaches the LiteRT-LM NPU executor but fails engine creation with `TF_LITE_AUX not found`. The next E2B NPU route is a custom GenieX/QAIRT export after Qwen passes the device gate.
 
 ## Qwen3-4B Thinking · 12K
 
@@ -62,37 +62,40 @@ The installer supports:
 - explicit complete-pack re-verification;
 - complete deletion and clean reinstall.
 
-## Native GenieX QAIRT Android adapter
+## Supported GenieX Android adapter
+
+The runtime is consumed normally from Maven Central:
+
+```gradle
+implementation 'com.qualcomm.qti:geniex-android:0.3.5'
+```
 
 Implemented:
 
-1. open C++17 JNI bridge with no redistributed Qualcomm headers or linked SDK binaries;
-2. statically linked Android C++ runtime so the bridge is self-contained;
-3. private QAIRT 2.45 packager for local SDK assets;
-4. transitive Android shared-library dependency validation;
-5. Termux staging script with version, target and SHA-256 checks;
-6. Qualcomm-style `arm64-v8a` packaging with legacy extraction;
-7. v73 HTP stub/skeleton detection for Snapdragon 8 Elite;
-8. dynamic loading of QNN host libraries and `libGenie.so`;
-9. in-memory absolute path rewriting for tokenizer, backend extension and all four context binaries;
-10. Genie configuration, profiler and dialog lifecycle;
-11. explicit Qwen thinking mode through `/think`;
-12. final-output extraction after the model's reasoning section;
-13. ephemeral reasoning handling: only the final answer and reasoning-length telemetry are retained;
-14. load, first-callback, generation, unload, total and PSS telemetry;
-15. QAIRT profiler parsing where metrics are supplied;
-16. persistent final-result/error reporting;
-17. dedicated Settings status and native benchmark panels.
+1. GenieX SDK initialisation from the APK;
+2. automatic QAIRT plugin registration;
+3. direct use of the existing verified Qwen bundle directory;
+4. `LlmWrapper` creation with model-default QAIRT context values;
+5. explicit NPU compute selection;
+6. chat-template application with thinking enabled;
+7. token streaming through Kotlin Flow;
+8. supported stop-stream cancellation;
+9. profiler capture for TTFT, prompt/decode time, token counts and rates;
+10. final-output extraction after the model's reasoning section;
+11. ephemeral reasoning handling: only the final answer and reasoning-length telemetry are retained;
+12. deterministic wrapper destruction and process-memory telemetry;
+13. persistent final-result/error reporting;
+14. dedicated Settings status and benchmark controls.
 
-The open JNI bridge passes native compilation and is packaged in the ARM64 APK. Licensed QAIRT assets remain excluded from Git and CI; the final runtime test therefore requires a local APK built with the user's matching SDK package.
+The runtime ships inside every ordinary APK/AAB resolved by Gradle. There is no private QAIRT SDK, runtime ZIP, custom JNI bridge, WSL setup or per-user build dependency.
 
 ## Runtime safety
 
-- only one Qwen native baseline may run at once;
-- thinking is enabled for every native Qwen baseline and future deep role call;
+- only one Qwen baseline may run at once;
+- thinking is enabled for every Qwen baseline and future deep role call;
 - raw reasoning content is not persisted, displayed or exported;
-- the current probe is intentionally non-cancellable until Qualcomm's exact dialog-signal ABI is validated;
-- dialog/configuration/profiler handles are released after every run;
+- cancellation uses GenieX's supported `stopStream()` path;
+- destruction happens only in final cleanup;
 - Qwen is not yet called by autonomous MAIS roles;
 - deep episodes continue to record deterministic fallback until repeated on-device success;
 - failed runtime setup does not mutate training state.
@@ -104,7 +107,7 @@ The historical `createDeterministicMaisRoleRunner` entry point creates a hybrid 
 1. select the role model from `models/registry.json`;
 2. check whether its exact artefact is installed and verified;
 3. compile a bounded typed training-evidence packet;
-4. run one fresh local conversation only when the compatible native runtime is approved;
+4. run one fresh local conversation only when the compatible runtime is approved;
 5. validate strict role JSON;
 6. filter provenance references against supplied IDs;
 7. persist the final artefact plus runtime telemetry, not the model's private reasoning transcript;
@@ -153,18 +156,18 @@ Each indexing pass compares stable document hashes. Unchanged documents keep the
 
 ## Remaining gate
 
-1. obtain the matching QAIRT 2.45 SDK package locally;
-2. create and transfer the private Android build-assets ZIP;
-3. build the APK in Termux with those assets;
-4. confirm QAIRT status is Ready;
-5. create the Qwen Genie dialog;
-6. confirm `/think` produces reasoning followed by non-empty final text on NPU;
-7. confirm the reasoning transcript is discarded and only final output/telemetry remain;
+1. build and install the ordinary APK;
+2. confirm GenieX and the QAIRT plugin initialise from the bundled Maven dependency;
+3. verify the Qwen 12K pack;
+4. load the Qwen wrapper on NPU;
+5. confirm thinking produces reasoning followed by non-empty final text;
+6. confirm the reasoning transcript is discarded and only final output/telemetry remain;
+7. test supported cancellation;
 8. unload cleanly;
 9. repeat after force-stop/reopen;
 10. record performance, memory and stability;
 11. pin a validated Hugging Face tag and per-file hashes;
-12. only then enable Qwen inside the autonomous native role runner.
+12. only then enable Qwen inside the autonomous role runner.
 
 Detailed procedure:
 
