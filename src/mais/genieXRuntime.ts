@@ -1,5 +1,8 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
-import type { MaisModelArtifactDefinition } from './modelArtifacts';
+import {
+  readMaisModelArtifactStatus,
+  type MaisModelArtifactDefinition,
+} from './modelArtifacts';
 
 export type MaisGenieXRunState = 'loading' | 'generating' | 'completed' | 'failed';
 
@@ -113,6 +116,10 @@ export async function runMaisGenieXBaseline(
   requireNative();
   if (artifact.runtime !== 'geniex-qairt') throw new Error(`${artifact.displayName} is not a GenieX QAIRT model pack.`);
   if (artifact.modelId !== 'qwen.qwen3-4b') throw new Error('The current native GenieX adapter supports Qwen3-4B only.');
+  const installation = await readMaisModelArtifactStatus(artifact);
+  if (installation.state !== 'ready' || !installation.verified) {
+    throw new Error('Verify the complete Qwen3-4B 12K pack before starting native inference.');
+  }
   return nativePlugin.runBaseline({ modelId: artifact.modelId });
 }
 
