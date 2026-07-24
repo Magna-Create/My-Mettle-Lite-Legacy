@@ -6,8 +6,8 @@ android {
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "dev.kian.gymapp"
-        // Health Connect 1.1 requires Android 8.0 / API 26 or newer.
-        minSdkVersion 26
+        // GenieX Android 0.3.5 requires API 27; Health Connect requires API 26.
+        minSdkVersion 27
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
