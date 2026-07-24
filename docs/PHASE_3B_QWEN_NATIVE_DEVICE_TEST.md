@@ -26,25 +26,29 @@ Use the exact SDK line used for compilation:
 
 Do not commit or publish Qualcomm runtime binaries in the My Mettle repository.
 
-From WSL or Linux, after installing that QAIRT SDK:
+The ARM64 QAIRT libraries are executable native code, so they are staged into the Android project before Gradle builds the APK. Android then installs them in its protected native-library directory. Hexagon v73 skeletons are packaged as APK assets and copied into app-private DSP storage on first use.
+
+## 1. Create the private build-assets ZIP on the PC
+
+From WSL or Linux, after installing the matching QAIRT SDK:
 
 ```bash
 cd ~/path/to/My-Mettle
 
 bash scripts/package-qairt-android-runtime.sh \
   /path/to/qairt/2.45.0.260326154327 \
-  /mnt/c/Users/<WINDOWS_USER>/Downloads/my-mettle-qairt-2.45-android.zip
+  /mnt/c/Users/<WINDOWS_USER>/Downloads/my-mettle-qairt-2.45-build-assets.zip
 ```
 
-For Snapdragon 8 Elite the script defaults to Hexagon v73. Override only when targeting another chipset:
+For Snapdragon 8 Elite the script defaults to Hexagon v73. Override only when deliberately targeting another chipset:
 
 ```bash
 MY_METTLE_HTP_ARCH=73 bash scripts/package-qairt-android-runtime.sh \
   /path/to/qairt/2.45.0.260326154327 \
-  my-mettle-qairt-2.45-android.zip
+  my-mettle-qairt-2.45-build-assets.zip
 ```
 
-The archive contains only the local runtime libraries needed by the app:
+The private ZIP contains:
 
 - `libGenie.so`;
 - QNN system, HTP and prepare libraries;
@@ -52,9 +56,9 @@ The archive contains only the local runtime libraries needed by the app:
 - Hexagon v73 HTP skeleton libraries;
 - a local manifest and SHA-256 listing.
 
-## APK build
+Transfer this ZIP to the phone's Downloads folder. It is a private build input, not an app-import file.
 
-Pull the Phase 3 branch and build in Termux:
+## 2. Stage QAIRT and build in Termux
 
 ```bash
 cd ~/projects/My-Mettle
@@ -62,6 +66,9 @@ cd ~/projects/My-Mettle
 git fetch origin
 git checkout agent/phase-3b-model-runtime-lab
 git reset --hard origin/agent/phase-3b-model-runtime-lab
+
+bash scripts/install-qairt-build-assets.sh \
+  /sdcard/Download/my-mettle-qairt-2.45-build-assets.zip
 
 npm install
 npm run android:sync
@@ -74,9 +81,11 @@ cp app/build/outputs/apk/debug/app-debug.apk \
   /sdcard/Download/My-Mettle-Qwen-Native.apk
 ```
 
-Install over the existing application. Do not uninstall or clear app data.
+The staging script verifies the package hashes and exact QAIRT version, then places the licensed files into Git-ignored Android source directories. They are included only in the locally built APK.
 
-## Setup in My Mettle
+Install the APK over the existing application. Do not uninstall or clear app data.
+
+## 3. Setup in My Mettle
 
 Open:
 
@@ -84,28 +93,28 @@ Open:
 Settings → Intelligence → Local models
 ```
 
-1. Confirm the Qwen3-4B 12K pack is verified.
-2. Tap **Verify 12K pack** once.
-3. Under **QAIRT 2.45**, tap **Import QAIRT runtime ZIP**.
-4. Select `my-mettle-qairt-2.45-android.zip`.
-5. Confirm:
+1. Confirm **QAIRT 2.45** reports **Runtime ready**.
+2. Confirm:
    - JNI bridge: Loaded;
-   - runtime files: present for ARM64 and DSP;
-   - status: Runtime ready.
-6. Open **Qwen3-4B · 12K · NPU**.
-7. Tap **Run Qwen NPU baseline**.
+   - runtime source: Local APK build assets;
+   - ARM64 and DSP runtime files are present.
+3. Confirm the Qwen3-4B 12K pack is verified.
+4. Tap **Verify 12K pack** once.
+5. Open **Qwen3-4B · 12K · NPU**.
+6. Tap **Run Qwen NPU baseline**.
 
 ## Expected first-pass behaviour
 
 The run performs one fresh lifecycle:
 
 1. rewrite model/config paths to app-private absolute paths;
-2. load the imported QAIRT/QNN runtime;
-3. create a Genie dialog from `genie_config.json`;
-4. submit one correctly tagged Qwen prompt with thinking disabled for the bounded baseline;
-5. capture final text and profiler data;
-6. free dialog, config and profiler handles;
-7. record process memory after unload.
+2. load QAIRT/QNN host libraries from Android's installed native-library directory;
+3. expose the extracted Hexagon v73 skeleton directory through `ADSP_LIBRARY_PATH`;
+4. create a Genie dialog from `genie_config.json`;
+5. submit one correctly tagged Qwen prompt with thinking disabled for the bounded baseline;
+6. capture final text and profiler data;
+7. free dialog, config and profiler handles;
+8. record process memory after unload.
 
 The result card should report:
 
@@ -123,7 +132,7 @@ The result card should report:
 The first native gate passes when:
 
 - `libmais_geniex.so` loads from the APK;
-- imported QAIRT 2.45 libraries are accepted;
+- packaged QAIRT 2.45 libraries are accepted;
 - the four QNN context binaries create a Genie dialog;
 - generation returns non-empty final text;
 - backend remains the Qualcomm NPU/HTP path;
@@ -145,7 +154,7 @@ Useful failure classes include:
 - Android linker namespace or missing `.so` dependency;
 - incompatible QAIRT/QNN version;
 - missing Hexagon v73 stub or skeleton;
-- HTP/CDSP firmware incompatibility;
+- HTP/CDSP firmware or device meta-build incompatibility;
 - invalid context-binary path;
 - Genie config/schema incompatibility;
 - memory allocation failure at 12,288 context;
