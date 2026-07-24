@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
+import { withMaisHighPriorityWork } from './highPriorityWork';
 import type { MaisModelArtifactDefinition } from './modelArtifacts';
 
 export type MaisLiteRtBackend = 'cpu' | 'gpu' | 'npu';
@@ -98,14 +99,15 @@ export async function runMaisLiteRtPrompt(
   if (backend === 'npu' && !artifact.fileName.includes('_qualcomm_')) {
     throw new Error(`${artifact.displayName} is a generic CPU/GPU artefact and cannot be opened through the Qualcomm NPU executor. Install and select the dedicated _qualcomm_sm8750.litertlm build.`);
   }
-  return nativePlugin.runBaseline({
-    modelId: artifact.modelId,
-    fileName: artifact.fileName,
-    backend,
-    maxNumTokens: options.maxNumTokens ?? artifact.contextTokens,
-    prompt: options.prompt,
-    systemInstruction: options.systemInstruction,
-  });
+  return withMaisHighPriorityWork('model-generation', `Running ${artifact.displayName} on ${backend.toUpperCase()}`, () =>
+    nativePlugin.runBaseline({
+      modelId: artifact.modelId,
+      fileName: artifact.fileName,
+      backend,
+      maxNumTokens: options.maxNumTokens ?? artifact.contextTokens,
+      prompt: options.prompt,
+      systemInstruction: options.systemInstruction,
+    }));
 }
 
 export async function cancelMaisLiteRtRun(): Promise<boolean> {
