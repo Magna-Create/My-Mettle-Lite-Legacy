@@ -127,7 +127,7 @@ export function QwenGenieXRuntimePanel() {
         <p className="mais-runtime-note">Missing Qwen files: {runtimeStatus.missingModelFiles.join(', ')}</p>
       ) : null}
       {artifactStatus && artifactStatus.state !== 'ready' ? (
-        <p className="mais-runtime-note">Run **Verify 12K pack** in the model card before native inference.</p>
+        <p className="mais-runtime-note">Run <strong>Verify 12K pack</strong> in the model card before native inference.</p>
       ) : null}
       {runtimeStatus?.bridgeError ? <p className="mais-runtime-error">JNI bridge: {runtimeStatus.bridgeError}</p> : null}
       {error ? <p className="mais-runtime-error" role="alert">{error}</p> : null}
