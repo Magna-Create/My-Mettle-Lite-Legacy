@@ -44,7 +44,7 @@ export function QairtRuntimeImportPanel() {
       </header>
 
       <p>
-        Qualcomm’s licensed ARM64 runtime must be staged into the Android project before Gradle builds this APK. The host libraries then load from Android’s protected native-library directory; Hexagon v73 skeletons are copied from signed APK assets into private DSP storage on first use.
+        Qualcomm’s licensed runtime must be staged into the Android project before Gradle builds this APK. Genie, QNN host libraries, HTP stubs and Hexagon v73 skeletons are then extracted by Android into the app’s protected native-library directory, matching Qualcomm’s ChatApp layout.
       </p>
 
       <dl className="settings-fact-list">
