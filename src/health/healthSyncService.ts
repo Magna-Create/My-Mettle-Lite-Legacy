@@ -21,7 +21,7 @@ export class HealthEvidenceService {
 
   async syncRecentSessions(
     database: AppDatabase,
-    options: { includeContext?: boolean; includeSupplementary?: boolean; maximumSessions?: number } = {},
+    options: { includeContext?: boolean | undefined; includeSupplementary?: boolean | undefined; maximumSessions?: number | undefined } = {},
   ): Promise<{ snapshot: MaisHealthEvidenceSnapshot; windows: NativeHealthWindow[]; syncedSessionIds: string[] }> {
     const sessions = database.sessions
       .filter((session) => session.status === 'completed' && session.completedAt && !session.discardedAt)
@@ -58,15 +58,15 @@ export class HealthEvidenceService {
 
   async addManualBodyComposition(input: {
     recordedAt: string;
-    bodyFatPercent?: number;
-    basalMetabolicRateKcal?: number;
-    skeletalMuscleMassKg?: number;
-    leanMassKg?: number;
-    visceralFatRating?: number;
-    weightKg?: number;
+    bodyFatPercent?: number | undefined;
+    basalMetabolicRateKcal?: number | undefined;
+    skeletalMuscleMassKg?: number | undefined;
+    leanMassKg?: number | undefined;
+    visceralFatRating?: number | undefined;
+    weightKg?: number | undefined;
     source: MaisManualBodyCompositionRecord['source'];
-    sourceLabel?: string;
-    note?: string;
+    sourceLabel?: string | undefined;
+    note?: string | undefined;
   }): Promise<MaisHealthEvidenceSnapshot> {
     const values = [
       input.bodyFatPercent,
