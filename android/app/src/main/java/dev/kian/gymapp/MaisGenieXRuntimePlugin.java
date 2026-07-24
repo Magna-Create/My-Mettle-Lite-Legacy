@@ -144,9 +144,14 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
             firstChunkMs = MaisGenieXNative.nativeGetLastFirstChunkMs(handle);
             profileJson = nullToEmpty(MaisGenieXNative.nativeGetLastProfileJson(handle));
             thinkingCharacters = countThinkingCharacters(rawOutput);
+            if (!hasCompletedThinkingSection(rawOutput) || thinkingCharacters <= 0) {
+                throw new IllegalStateException(
+                    "Qwen did not complete a thinking section before its final response. The output budget may have ended during reasoning."
+                );
+            }
             finalOutput = extractFinalOutput(rawOutput);
             if (finalOutput.isEmpty()) {
-                throw new IllegalStateException("Qwen completed without returning a final response after thinking.");
+                throw new IllegalStateException("Qwen completed thinking without returning a final response.");
             }
             peakPss = Math.max(peakPss, currentPssBytes());
         } catch (Throwable error) {
@@ -355,6 +360,10 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
         return false;
     }
 
+    private boolean hasCompletedThinkingSection(String raw) {
+        return nullToEmpty(raw).lastIndexOf("</think>") >= 0;
+    }
+
     private int countThinkingCharacters(String raw) {
         String output = nullToEmpty(raw);
         int closingThink = output.lastIndexOf("</think>");
@@ -369,7 +378,8 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
     private String extractFinalOutput(String raw) {
         String output = nullToEmpty(raw).trim();
         int closingThink = output.lastIndexOf("</think>");
-        if (closingThink >= 0) output = output.substring(closingThink + "</think>".length()).trim();
+        if (closingThink < 0) return "";
+        output = output.substring(closingThink + "</think>".length()).trim();
         return output.replace("<|im_end|>", "").trim();
     }
 
