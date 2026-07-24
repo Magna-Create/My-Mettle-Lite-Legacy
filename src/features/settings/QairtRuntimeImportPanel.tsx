@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  deleteMaisQairtRuntime,
-  importMaisQairtRuntime,
   readMaisQairtRuntimeStatus,
   type MaisQairtRuntimeStatus,
 } from '../../mais/qairtRuntime';
@@ -11,7 +9,7 @@ function statusLabel(status: MaisQairtRuntimeStatus | null): string {
   if (!status) return 'Checking';
   if (status.ready) return 'Runtime ready';
   if (status.installed) return 'Runtime incomplete';
-  return 'Setup required';
+  return 'Build assets missing';
 }
 
 export function QairtRuntimeImportPanel() {
@@ -20,27 +18,20 @@ export function QairtRuntimeImportPanel() {
   const [error, setError] = useState<string | null>(null);
 
   async function refresh(): Promise<void> {
-    setStatus(await readMaisQairtRuntimeStatus());
-  }
-
-  useEffect(() => {
-    void refresh().catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : 'QAIRT runtime status could not be read.');
-    });
-  }, []);
-
-  async function run(operation: () => Promise<MaisQairtRuntimeStatus>): Promise<void> {
     setBusy(true);
     setError(null);
     try {
-      setStatus(await operation());
+      setStatus(await readMaisQairtRuntimeStatus());
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : 'QAIRT runtime operation failed.';
-      if (message !== 'QAIRT runtime import cancelled.') setError(message);
+      setError(reason instanceof Error ? reason.message : 'QAIRT runtime status could not be read.');
     } finally {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    void refresh();
+  }, []);
 
   return (
     <section className="paper-card intelligence-model-import" aria-labelledby="qairt-runtime-title">
@@ -53,41 +44,27 @@ export function QairtRuntimeImportPanel() {
       </header>
 
       <p>
-        Qwen’s compiled model pack does not contain Qualcomm’s licensed Android runtime libraries. Create the local runtime ZIP from your matching QAIRT SDK, then import it here. My Mettle stores it privately and never uploads it.
+        Qualcomm’s licensed ARM64 runtime must be staged into the Android project before Gradle builds this APK. The host libraries then load from Android’s protected native-library directory; Hexagon v73 skeletons are copied from signed APK assets into private DSP storage on first use.
       </p>
 
       <dl className="settings-fact-list">
         <div><dt>Required build</dt><dd>{status?.version ?? '2.45.0.260326154327'}</dd></div>
+        <div><dt>Runtime source</dt><dd>Local APK build assets</dd></div>
         <div><dt>JNI bridge</dt><dd>{status?.bridgeLoaded ? 'Loaded' : 'Unavailable'}</dd></div>
         <div><dt>Runtime files</dt><dd>{status ? `${status.arm64Files.length} ARM64 · ${status.hexagonFiles.length} DSP` : 'Checking'}</dd></div>
-        <div><dt>Private storage</dt><dd>{status?.bytes ? formatModelBytes(status.bytes) : '0 MB'}</dd></div>
+        <div><dt>Packaged storage</dt><dd>{status?.bytes ? formatModelBytes(status.bytes) : '0 MB'}</dd></div>
       </dl>
 
       {status?.missing.length ? (
-        <p className="mais-runtime-note">Missing: {status.missing.join(', ')}</p>
+        <p className="mais-runtime-note">
+          Missing: {status.missing.join(', ')}. Stage the private QAIRT build-assets ZIP in Termux, rebuild the APK and install it over this version.
+        </p>
       ) : null}
       {status?.bridgeError ? <p className="mais-runtime-error">JNI bridge: {status.bridgeError}</p> : null}
       {error ? <p className="mais-runtime-error" role="alert">{error}</p> : null}
 
       <div className="mais-runtime-actions">
-        <button className="primary-action compact" type="button" disabled={busy} onClick={() => void run(importMaisQairtRuntime)}>
-          {busy ? 'Importing…' : status?.installed ? 'Replace QAIRT runtime ZIP' : 'Import QAIRT runtime ZIP'}
-        </button>
-        {status?.installed ? (
-          <button
-            className="text-button danger-text"
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              if (window.confirm('Delete the imported QAIRT runtime from My Mettle? The Qwen model pack will remain installed.')) {
-                void run(deleteMaisQairtRuntime);
-              }
-            }}
-          >
-            Delete runtime
-          </button>
-        ) : null}
-        <button className="text-button" type="button" disabled={busy} onClick={() => void refresh()}>Refresh</button>
+        <button className="text-button" type="button" disabled={busy} onClick={() => void refresh()}>{busy ? 'Checking…' : 'Refresh'}</button>
       </div>
     </section>
   );
