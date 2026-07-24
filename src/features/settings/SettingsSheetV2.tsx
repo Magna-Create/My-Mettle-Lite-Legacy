@@ -7,7 +7,6 @@ import { MaisRuntimeLabPanel } from '../lab/MaisRuntimeLabPanel';
 import { DataSettingsPanel } from './DataSettingsPanel';
 import { EmbeddingGemmaImportPanel } from './EmbeddingGemmaImportPanel';
 import { HealthEvidenceSettingsPanel } from './HealthEvidenceSettingsPanel';
-import { QairtRuntimeImportPanel } from './QairtRuntimeImportPanel';
 import { QwenGenieXRuntimePanel } from './QwenGenieXRuntimePanel';
 import { ResearchSettingsPanel } from './ResearchSettingsPanel';
 import { TimerSettingsPanel } from './TimerSettingsPanel';
@@ -93,14 +92,14 @@ export function SettingsSheetV2({
 
       {screen === 'intelligence' && <nav className="settings-navigation">
         <Row title="Health evidence" detail="Health Connect, Samsung-origin records and manual body composition" onClick={() => setScreen('health')} />
-        <Row title="Local models" detail="Install, import, benchmark and remove model artefacts" onClick={() => setScreen('models')} />
+        <Row title="Local models" detail="Install, verify, benchmark and remove model artefacts" onClick={() => setScreen('models')} />
         <Row title="Research exchange" detail="Export research and analysis-tool requests for ChatGPT" onClick={() => setScreen('research')} />
         <Row title="Activity & diagnostics" detail="Heartbeat, role execution, task ledger and report export" onClick={() => setScreen('activity')} />
       </nav>}
 
       {screen === 'timer' && <TimerSettingsPanel timer={database.settings.restTimer} onUpdate={(patch) => onUpdateSettings({ restTimer: patch })} />}
       {screen === 'health' && <HealthEvidenceSettingsPanel database={database} />}
-      {screen === 'models' && <div className="intelligence-settings-stack"><EmbeddingGemmaImportPanel /><QairtRuntimeImportPanel /><MaisRuntimeLabPanel /><QwenGenieXRuntimePanel /></div>}
+      {screen === 'models' && <div className="intelligence-settings-stack"><EmbeddingGemmaImportPanel /><MaisRuntimeLabPanel /><QwenGenieXRuntimePanel /></div>}
       {screen === 'research' && <ResearchSettingsPanel
         research={maisSnapshot?.research ?? { requests: [], reports: [], rollingWindowDays: 30, maxRequestsPerWindow: 3, cooldownDays: 0 }}
         onExportRequest={onExportResearchRequest}
