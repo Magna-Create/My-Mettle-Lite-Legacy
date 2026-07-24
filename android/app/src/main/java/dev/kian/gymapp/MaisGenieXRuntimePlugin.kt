@@ -238,14 +238,15 @@ class MaisGenieXRuntimePlugin : Plugin() {
             val active = wrapper
             activeWrapper.set(null)
             if (active != null) {
-                runCatching { active.stopStream() }
-                runCatching { active.destroy() }
-                    .onFailure { closeError ->
-                        if (failure == null && state == "completed") {
-                            state = "failed"
-                            failure = "Qwen generated output but failed to unload cleanly: ${rootMessage(closeError)}"
-                        }
-                    }
+                val destroyFailure = try {
+                    active.destroy().exceptionOrNull()
+                } catch (error: Throwable) {
+                    error
+                }
+                if (destroyFailure != null && failure == null && state == "completed") {
+                    state = "failed"
+                    failure = "Qwen generated output but failed to unload cleanly: ${rootMessage(destroyFailure)}"
+                }
             }
             unloadMs = System.currentTimeMillis() - unloadStarted
             peakPss = maxOf(peakPss, currentPssBytes())
@@ -311,7 +312,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
         result.put("thinkingEnabled", true)
         result.put("bundleReady", missing.isEmpty())
         result.put("missingModelFiles", missingArray)
-        result.put("runtimeInstalled", true)
+        result.put("runtimeInstalled", ready)
         result.put("bridgeLoaded", ready)
         result.put("bridgeError", sdkError ?: JSONObject.NULL)
         result.put("lastResult", readLastResult())
