@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
+import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.roundToLong
@@ -59,6 +60,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
 
     private val runtimeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val running = AtomicBoolean(false)
+    private val preparing = AtomicBoolean(false)
     private val cancelRequested = AtomicBoolean(false)
     private val activeWrapper = AtomicReference<LlmWrapper?>(null)
     private val sdkLock = Any()
@@ -79,6 +81,96 @@ class MaisGenieXRuntimePlugin : Plugin() {
     }
 
     @PluginMethod
+    fun prepareModel(call: PluginCall) {
+        val modelId = call.getString("modelId")?.trim().orEmpty()
+        if (modelId != MODEL_ID) {
+            call.reject("The GenieX adapter currently supports Qwen3-4B only.")
+            return
+        }
+        if (!ensureSdkReady()) {
+            call.reject(sdkError ?: "The bundled GenieX runtime could not initialise.")
+            return
+        }
+        val missing = missingModelFiles()
+        if (missing.isNotEmpty()) {
+            call.reject("The Qwen3-4B 12K pack is incomplete: ${missing.joinToString()}.")
+            return
+        }
+        if (running.get()) {
+            call.reject("Qwen inference is active; its GenieX model cache cannot be prepared now.")
+            return
+        }
+        if (!preparing.compareAndSet(false, true)) {
+            call.reject("The Qwen model is already being prepared for GenieX.")
+            return
+        }
+
+        runtimeScope.launch {
+            val startedAt = System.currentTimeMillis()
+            var imported = false
+            var modelPath: String? = null
+            var failure: String? = null
+            recordStage("prepare-request", "started", "Preparing the verified local Qwen bundle.")
+            emitProgress(modelId, "preparing", 0L, 0)
+            try {
+                val resolved = resolveGenieXModelPaths(modelId, allowImport = true)
+                imported = resolved.imported
+                modelPath = resolved.paths.model_path
+                recordStage(
+                    "prepare-complete",
+                    "completed",
+                    if (imported) "GenieX imported the local bundle." else "Existing GenieX cache is valid.",
+                )
+            } catch (error: Throwable) {
+                failure = rootMessage(error)
+                recordStage("prepare-failed", "failed", failure)
+            } finally {
+                preparing.set(false)
+            }
+
+            val result = JSObject().apply {
+                put("success", failure == null)
+                put("state", if (failure == null) "completed" else "failed")
+                put("modelId", modelId)
+                put("imported", imported)
+                put("totalMs", System.currentTimeMillis() - startedAt)
+                put("sourceBundleBytes", directoryBytes(modelDirectory()))
+                put("cachedBundleBytes", directoryBytes(genieXDataDirectory()))
+                put("modelPath", modelPath ?: JSONObject.NULL)
+                put("error", failure ?: JSONObject.NULL)
+            }
+            emitProgress(modelId, if (failure == null) "completed" else "failed", 0L, 0)
+            call.resolve(result)
+        }
+    }
+
+    @PluginMethod
+    fun clearPreparedModel(call: PluginCall) {
+        val modelId = call.getString("modelId")?.trim().orEmpty()
+        if (modelId != MODEL_ID) {
+            call.reject("The GenieX adapter currently supports Qwen3-4B only.")
+            return
+        }
+        if (running.get() || preparing.get()) {
+            call.reject("Wait for the active Qwen operation to finish before clearing its GenieX cache.")
+            return
+        }
+
+        runtimeScope.launch {
+            try {
+                recordStage("cache-clear", "started", "Removing the prepared GenieX model cache.")
+                ModelManagerWrapper.init(genieXDataDirectory().absolutePath).getOrThrow()
+                ModelManagerWrapper.remove(GENIEX_MODEL_KEY)
+                recordStage("cache-clear", "completed", "Prepared GenieX model cache removed.")
+                call.resolve(JSObject().apply { put("cleared", true) })
+            } catch (error: Throwable) {
+                recordStage("cache-clear", "failed", rootMessage(error))
+                call.reject(rootMessage(error), asException(error))
+            }
+        }
+    }
+
+    @PluginMethod
     fun runBaseline(call: PluginCall) {
         val modelId = call.getString("modelId")?.trim().orEmpty()
         if (modelId != MODEL_ID) {
@@ -94,6 +186,21 @@ class MaisGenieXRuntimePlugin : Plugin() {
             call.reject("The Qwen3-4B 12K pack is incomplete: ${missing.joinToString()}.")
             return
         }
+        if (preparing.get()) {
+            call.reject("The Qwen model is still being prepared for GenieX.")
+            return
+        }
+
+        val resolvedPaths = try {
+            preparedModelPaths()
+        } catch (error: Throwable) {
+            call.reject(rootMessage(error), asException(error))
+            return
+        }
+        if (resolvedPaths == null) {
+            call.reject("Prepare the verified Qwen pack for GenieX before loading the NPU model.")
+            return
+        }
         if (!running.compareAndSet(false, true)) {
             call.reject("A GenieX run is already active.")
             return
@@ -106,7 +213,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
             ?: "You are the bounded native Qwen runtime check for My Mettle. Use thinking mode before answering. Keep the final response concise, factual and limited to supplied evidence."
 
         runtimeScope.launch {
-            executeBaseline(call, modelId, prompt, systemInstruction)
+            executeBaseline(call, modelId, resolvedPaths, prompt, systemInstruction)
         }
     }
 
@@ -119,11 +226,12 @@ class MaisGenieXRuntimePlugin : Plugin() {
 
         val wrapper = activeWrapper.get()
         if (wrapper == null) {
-            call.resolve(cancelResult(false, "The model is still being imported or loaded; generation has not started."))
+            call.resolve(cancelResult(false, "The model is still loading; generation has not started."))
             return
         }
 
         cancelRequested.set(true)
+        recordStage("cancel-request", "started", "User requested supported GenieX stream cancellation.")
         runtimeScope.launch {
             val stopResult = wrapper.stopStream()
             call.resolve(
@@ -144,6 +252,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
     private suspend fun executeBaseline(
         call: PluginCall,
         modelId: String,
+        resolvedPaths: ModelPaths,
         prompt: String,
         systemInstruction: String,
     ) {
@@ -161,10 +270,11 @@ class MaisGenieXRuntimePlugin : Plugin() {
         var failure: String? = null
         var wrapper: LlmWrapper? = null
 
-        emitProgress(modelId, "loading", 0L, 0)
+        recordStage("npu-load-request", "started", "Beginning Qwen LlmWrapper construction from the prepared cache.")
+        emitProgress(modelId, "initialising", 0L, 0)
         try {
-            val resolvedPaths = resolveGenieXModelPaths(modelId)
             val loadStarted = System.currentTimeMillis()
+            emitProgress(modelId, "loading", 0L, 0)
             wrapper = LlmWrapper
                 .builder()
                 .llmCreateInput(
@@ -185,7 +295,9 @@ class MaisGenieXRuntimePlugin : Plugin() {
             activeWrapper.set(wrapper)
             loadMs = System.currentTimeMillis() - loadStarted
             peakPss = maxOf(peakPss, currentPssBytes())
+            recordStage("npu-load-complete", "completed", "Qwen LlmWrapper built in ${loadMs} ms.")
 
+            recordStage("chat-template", "started", "Applying the bounded thinking chat template.")
             val template = wrapper
                 .applyChatTemplate(
                     arrayOf(
@@ -196,8 +308,10 @@ class MaisGenieXRuntimePlugin : Plugin() {
                     enableThinking = true,
                 )
                 .getOrThrow()
+            recordStage("chat-template", "completed", "Prompt template prepared.")
 
             emitProgress(modelId, "generating", loadMs, 0)
+            recordStage("generation", "started", "Beginning supported GenieX token streaming.")
             val output = StringBuilder()
             val generationStarted = System.currentTimeMillis()
             wrapper.generateStreamFlow(
@@ -208,6 +322,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
                     is LlmStreamResult.Token -> {
                         if (firstChunkMs < 0 && streamResult.text.isNotEmpty()) {
                             firstChunkMs = System.currentTimeMillis() - generationStarted
+                            recordStage("first-token", "completed", "First streamed token after ${firstChunkMs} ms.")
                         }
                         output.append(streamResult.text)
                         emitProgress(modelId, "generating", loadMs, output.length)
@@ -220,6 +335,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
 
             if (cancelRequested.get()) {
                 state = "cancelled"
+                recordStage("generation", "cancelled", "Generation stopped through the supported GenieX API.")
             } else {
                 val rawOutput = output.toString().trim()
                 thinkingCharacters = countThinkingCharacters(rawOutput)
@@ -232,20 +348,24 @@ class MaisGenieXRuntimePlugin : Plugin() {
                 if (finalOutput.isEmpty()) {
                     throw IllegalStateException("Qwen completed thinking without returning a final response.")
                 }
+                recordStage("generation", "completed", "Thinking and final output completed in ${generationMs} ms.")
             }
             peakPss = maxOf(peakPss, currentPssBytes())
         } catch (error: Throwable) {
             if (cancelRequested.get()) {
                 state = "cancelled"
+                recordStage("generation", "cancelled", rootMessage(error))
             } else {
                 state = "failed"
                 failure = rootMessage(error)
+                recordStage("runtime-failure", "failed", failure)
             }
         } finally {
             val unloadStarted = System.currentTimeMillis()
             val active = wrapper
             activeWrapper.set(null)
             if (active != null) {
+                recordStage("destroy", "started", "Destroying the GenieX wrapper and releasing native resources.")
                 val destroyFailure = try {
                     val destroyCode = active.destroy()
                     if (destroyCode == 0) null
@@ -256,6 +376,9 @@ class MaisGenieXRuntimePlugin : Plugin() {
                 if (destroyFailure != null && failure == null && state == "completed") {
                     state = "failed"
                     failure = "Qwen generated output but failed to unload cleanly: ${rootMessage(destroyFailure)}"
+                    recordStage("destroy", "failed", failure)
+                } else if (destroyFailure == null) {
+                    recordStage("destroy", "completed", "GenieX wrapper destroyed cleanly.")
                 }
             }
             unloadMs = System.currentTimeMillis() - unloadStarted
@@ -300,27 +423,37 @@ class MaisGenieXRuntimePlugin : Plugin() {
         result.put("profile", profileMetrics(reportedProfile))
         result.put("error", failure ?: JSONObject.NULL)
         writeLastResult(result)
+        recordStage("run-result", state, failure ?: "Native Qwen run reached $state.")
         emitProgress(modelId, state, loadMs, finalOutput.length)
         call.resolve(result)
     }
 
-    private suspend fun resolveGenieXModelPaths(modelId: String): ModelPaths {
+    private suspend fun resolveGenieXModelPaths(modelId: String, allowImport: Boolean): ResolvedModel {
+        recordStage("model-manager-init", "started", "Initialising the GenieX model manager.")
         ModelManagerWrapper.init(genieXDataDirectory().absolutePath).getOrThrow()
+        recordStage("model-manager-init", "completed", "GenieX model manager initialised.")
 
         val cached = ModelManagerWrapper.getPaths(GENIEX_MODEL_KEY)
-        if (cached != null && File(cached.model_path).exists() && File(cached.model_dir).isDirectory) {
-            return cached
+        if (cached != null && validPreparedPaths(cached)) {
+            recordStage("cache-check", "completed", "Valid prepared model cache found.")
+            return ResolvedModel(cached, imported = false)
         }
         if (cached != null) {
+            recordStage("cache-check", "warning", "Stale prepared model entry found; removing it.")
             try {
                 ModelManagerWrapper.remove(GENIEX_MODEL_KEY)
             } catch (_: Throwable) {
-                // A stale cache entry is harmless; the local import below is authoritative.
+                // The authoritative local import below can replace a stale entry.
             }
         }
+        if (!allowImport) {
+            throw IllegalStateException("The verified Qwen pack has not been prepared for GenieX.")
+        }
 
-        emitProgress(modelId, "loading", 0L, 0)
+        emitProgress(modelId, "importing", 0L, 0)
+        recordStage("local-import", "started", "Importing the 15-file local Qwen bundle into GenieX storage.")
         var completed = false
+        var progressEvents = 0
         ModelManagerWrapper.pullFlow(
             ModelPullInput(
                 model_name = GENIEX_MODEL_KEY,
@@ -330,7 +463,11 @@ class MaisGenieXRuntimePlugin : Plugin() {
         ).collect { event ->
             when (event) {
                 is ModelManagerWrapper.PullEvent.Progress -> {
-                    emitProgress(modelId, "loading", 0L, 0)
+                    progressEvents += 1
+                    emitProgress(modelId, "importing", 0L, 0)
+                    if (progressEvents % 8 == 0) {
+                        recordStage("local-import", "progress", "GenieX import progress callback $progressEvents.")
+                    }
                 }
                 ModelManagerWrapper.PullEvent.Completed -> completed = true
                 is ModelManagerWrapper.PullEvent.Error -> {
@@ -342,18 +479,32 @@ class MaisGenieXRuntimePlugin : Plugin() {
             throw IllegalStateException("GenieX local model import ended without completing.")
         }
 
-        return ModelManagerWrapper.getPaths(GENIEX_MODEL_KEY)
+        val paths = ModelManagerWrapper.getPaths(GENIEX_MODEL_KEY)
             ?: throw IllegalStateException("GenieX imported the Qwen bundle but did not return resolved model paths.")
+        if (!validPreparedPaths(paths)) {
+            throw IllegalStateException("GenieX reported completion but the prepared Qwen paths are invalid.")
+        }
+        recordStage("local-import", "completed", "GenieX local import completed after $progressEvents progress callbacks.")
+        return ResolvedModel(paths, imported = true)
     }
+
+    private fun preparedModelPaths(): ModelPaths? {
+        ModelManagerWrapper.init(genieXDataDirectory().absolutePath).getOrThrow()
+        return ModelManagerWrapper.getPaths(GENIEX_MODEL_KEY)?.takeIf(::validPreparedPaths)
+    }
+
+    private fun validPreparedPaths(paths: ModelPaths): Boolean =
+        File(paths.model_path).exists() && File(paths.model_dir).isDirectory
 
     private fun status(): JSObject {
         val missing = missingModelFiles()
         val missingArray = JSArray()
         missing.forEach { missingArray.put(it) }
-        val ready = ensureSdkReady()
+        val runtimeReady = ensureSdkReady()
+        val prepared = runCatching { preparedModelPaths() }.getOrNull()
         return JSObject().apply {
-            put("ready", missing.isEmpty() && ready)
-            put("running", running.get())
+            put("ready", missing.isEmpty() && runtimeReady && prepared != null)
+            put("running", running.get() || preparing.get())
             put("modelId", MODEL_ID)
             put("runtime", "geniex-qairt")
             put("runtimeVersion", runtimeVersion())
@@ -363,10 +514,15 @@ class MaisGenieXRuntimePlugin : Plugin() {
             put("contextTokens", CONTEXT_TOKENS)
             put("thinkingEnabled", true)
             put("bundleReady", missing.isEmpty())
+            put("modelPrepared", prepared != null)
+            put("preparedModelPath", prepared?.model_path ?: JSONObject.NULL)
+            put("sourceBundleBytes", directoryBytes(modelDirectory()))
+            put("cachedBundleBytes", directoryBytes(genieXDataDirectory()))
             put("missingModelFiles", missingArray)
-            put("runtimeInstalled", ready)
-            put("bridgeLoaded", ready)
+            put("runtimeInstalled", runtimeReady)
+            put("bridgeLoaded", runtimeReady)
             put("bridgeError", sdkError ?: JSONObject.NULL)
+            put("lastNativeStage", MaisDiagnosticsStore.last(context) ?: JSONObject.NULL)
             put("lastResult", readLastResult())
         }
     }
@@ -374,6 +530,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
     private fun ensureSdkReady(): Boolean = synchronized(sdkLock) {
         if (sdkReady) return@synchronized true
         sdkError = null
+        recordStage("sdk-init", "started", "Initialising bundled GenieX Android and QAIRT plugin.")
         try {
             GenieXSdk.getInstance().init(
                 context,
@@ -381,17 +538,20 @@ class MaisGenieXRuntimePlugin : Plugin() {
                     override fun onSuccess() {
                         sdkReady = true
                         sdkError = null
+                        recordStage("sdk-init", "completed", "GenieX Android initialised successfully.")
                     }
 
                     override fun onFailure(reason: String) {
                         sdkReady = false
                         sdkError = reason.trim().ifEmpty { "GenieX initialisation failed." }
+                        recordStage("sdk-init", "failed", sdkError)
                     }
                 },
             )
         } catch (error: Throwable) {
             sdkReady = false
             sdkError = rootMessage(error)
+            recordStage("sdk-init", "failed", sdkError)
         }
         sdkReady
     }
@@ -431,6 +591,22 @@ class MaisGenieXRuntimePlugin : Plugin() {
         }
     }
 
+    private fun directoryBytes(root: File): Long {
+        if (!root.exists()) return 0L
+        var bytes = 0L
+        val pending = ArrayDeque<File>()
+        pending.add(root)
+        while (pending.isNotEmpty()) {
+            val current = pending.removeFirst()
+            val children = current.listFiles() ?: continue
+            for (child in children) {
+                if (child.isDirectory) pending.add(child)
+                else if (child.isFile) bytes += child.length()
+            }
+        }
+        return bytes
+    }
+
     private fun hasCompletedThinkingSection(raw: String): Boolean = raw.lastIndexOf("</think>") >= 0
 
     private fun countThinkingCharacters(raw: String): Int {
@@ -459,6 +635,18 @@ class MaisGenieXRuntimePlugin : Plugin() {
         event.put("outputChars", outputChars)
         event.put("capturedAtEpochMs", System.currentTimeMillis())
         notifyListeners("genieXInferenceProgress", event)
+    }
+
+    private fun recordStage(stage: String, state: String, detail: String?) {
+        runCatching {
+            MaisDiagnosticsStore.record(
+                context = context,
+                component = "qwen-geniex",
+                stage = stage,
+                state = state,
+                detail = detail,
+            )
+        }
     }
 
     private fun currentPssBytes(): Long = Debug.getPss() * 1024L
@@ -493,4 +681,6 @@ class MaisGenieXRuntimePlugin : Plugin() {
         while (current.cause != null) current = current.cause!!
         return current.message?.takeIf { it.isNotBlank() } ?: current.javaClass.simpleName
     }
+
+    private data class ResolvedModel(val paths: ModelPaths, val imported: Boolean)
 }
