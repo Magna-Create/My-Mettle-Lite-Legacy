@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import androidx.activity.result.ActivityResult
 import androidx.health.connect.client.HealthConnectClient
-import androidx.health.connect.client.aggregate.AggregateRequest
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.BasalMetabolicRateRecord
 import androidx.health.connect.client.records.BloodGlucoseRecord
@@ -17,6 +16,7 @@ import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.Vo2MaxRecord
+import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.getcapacitor.JSArray
@@ -86,7 +86,7 @@ class MaisHealthConnectPlugin : Plugin() {
     }
 
     @PluginMethod
-    fun requestPermissions(call: PluginCall) {
+    fun requestHealthAccess(call: PluginCall) {
         val status = HealthConnectClient.getSdkStatus(context)
         if (status != HealthConnectClient.SDK_AVAILABLE) {
             call.reject("Health Connect is unavailable or requires an update.")
@@ -417,7 +417,8 @@ class MaisHealthConnectPlugin : Plugin() {
     }
 
     private fun reject(call: PluginCall, reason: Throwable) {
-        activity.runOnUiThread { call.reject(reason.message ?: "Health Connect operation failed.", reason) }
+        val exception = reason as? Exception ?: Exception(reason)
+        activity.runOnUiThread { call.reject(reason.message ?: "Health Connect operation failed.", exception) }
     }
 
     override fun handleOnDestroy() {
