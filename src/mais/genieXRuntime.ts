@@ -4,19 +4,20 @@ import {
   type MaisModelArtifactDefinition,
 } from './modelArtifacts';
 
-export type MaisGenieXRunState = 'loading' | 'generating' | 'completed' | 'failed';
+export type MaisGenieXRunState = 'loading' | 'generating' | 'completed' | 'cancelled' | 'failed';
 
 export interface MaisGenieXProfileMetrics {
   available: boolean;
   timeToFirstTokenMs?: number | null | undefined;
-  timeToFirstTokenMsUnit?: string | null | undefined;
+  promptProcessingTimeMs?: number | null | undefined;
+  decodeTimeMs?: number | null | undefined;
   tokenGenerationRate?: number | null | undefined;
   tokenGenerationRateUnit?: string | null | undefined;
   promptProcessingRate?: number | null | undefined;
   promptProcessingRateUnit?: string | null | undefined;
   promptTokens?: number | null | undefined;
   generatedTokens?: number | null | undefined;
-  parseError?: string | null | undefined;
+  stopReason?: string | null | undefined;
 }
 
 export interface MaisGenieXRunResult {
@@ -25,6 +26,8 @@ export interface MaisGenieXRunResult {
   modelId: string;
   runtime: 'geniex-qairt';
   runtimeVersion: string;
+  sdkVersion: string;
+  distribution: 'maven-central';
   backend: 'npu';
   contextTokens: number;
   thinkingEnabled: true;
@@ -53,6 +56,8 @@ export interface MaisGenieXRuntimeStatus {
   modelId: string;
   runtime: 'geniex-qairt';
   runtimeVersion: string;
+  sdkVersion: string;
+  distribution: 'maven-central';
   backend: 'npu';
   contextTokens: number;
   thinkingEnabled: boolean;
@@ -100,7 +105,9 @@ export async function readMaisGenieXStatus(): Promise<MaisGenieXRuntimeStatus> {
       running: false,
       modelId: 'qwen.qwen3-4b',
       runtime: 'geniex-qairt',
-      runtimeVersion: 'QAIRT 2.45.0.260326154327',
+      runtimeVersion: 'GenieX Android 0.3.5',
+      sdkVersion: '0.3.5',
+      distribution: 'maven-central',
       backend: 'npu',
       contextTokens: 12_288,
       thinkingEnabled: true,
@@ -120,7 +127,7 @@ export async function runMaisGenieXBaseline(
 ): Promise<MaisGenieXRunResult> {
   requireNative();
   if (artifact.runtime !== 'geniex-qairt') throw new Error(`${artifact.displayName} is not a GenieX QAIRT model pack.`);
-  if (artifact.modelId !== 'qwen.qwen3-4b') throw new Error('The current native GenieX adapter supports Qwen3-4B only.');
+  if (artifact.modelId !== 'qwen.qwen3-4b') throw new Error('The current GenieX adapter supports Qwen3-4B only.');
   const installation = await readMaisModelArtifactStatus(artifact);
   if (installation.state !== 'ready' || !installation.verified) {
     throw new Error('Verify the complete Qwen3-4B 12K pack before starting native inference.');
