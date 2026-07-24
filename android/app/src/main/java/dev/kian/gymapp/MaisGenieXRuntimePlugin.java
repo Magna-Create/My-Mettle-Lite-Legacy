@@ -126,7 +126,7 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
             String configJson = buildRuntimeConfig();
             long loadStarted = System.currentTimeMillis();
             handle = MaisGenieXNative.nativeCreate(
-                MaisQairtRuntimePlugin.arm64Directory(getContext().getFilesDir()).getAbsolutePath(),
+                MaisQairtRuntimePlugin.arm64Directory(getContext()).getAbsolutePath(),
                 MaisQairtRuntimePlugin.hexagonDirectory(getContext().getFilesDir()).getAbsolutePath(),
                 configJson
             );
@@ -203,7 +203,7 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
 
     private JSObject status() throws Exception {
         JSONArray missingFiles = missingModelFiles();
-        File arm64 = MaisQairtRuntimePlugin.arm64Directory(getContext().getFilesDir());
+        File arm64 = MaisQairtRuntimePlugin.arm64Directory(getContext());
         File hexagon = MaisQairtRuntimePlugin.hexagonDirectory(getContext().getFilesDir());
         boolean runtimeInstalled = new File(arm64, "libGenie.so").isFile()
             && new File(arm64, "libQnnSystem.so").isFile()
@@ -238,7 +238,7 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
             throw new IllegalStateException("The complete verified Qwen3-4B 12K model pack is not installed.");
         }
         if (!current.getBool("runtimeInstalled")) {
-            throw new IllegalStateException("Import the matching QAIRT 2.45 Android runtime before running Qwen.");
+            throw new IllegalStateException("Build this APK with the matching QAIRT 2.45 Android runtime assets before running Qwen.");
         }
         MaisGenieXNative.requireLoaded();
     }
