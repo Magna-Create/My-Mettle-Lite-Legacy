@@ -2,7 +2,7 @@
 
 Target: Samsung Galaxy S25 Ultra / Snapdragon 8 Elite for Galaxy / Android 15+.
 
-This gate validates the custom `Qwen3-4B` W4A16 bundle with 12,288-token context through Qualcomm Genie and QAIRT. Pack verification alone is not an operational pass. The model must create a native dialog, generate text on the NPU and unload cleanly.
+This gate validates the custom `Qwen3-4B` W4A16 bundle with 12,288-token context through Qualcomm Genie and QAIRT. Pack verification alone is not an operational pass. The model must create a native dialog, think, generate final text on the NPU and unload cleanly.
 
 ## Required assets
 
@@ -114,7 +114,8 @@ Settings → Intelligence → Local models
 3. Confirm the Qwen3-4B 12K pack is verified.
 4. Tap **Verify 12K pack** once.
 5. Open **Qwen3-4B · 12K · NPU**.
-6. Tap **Run Qwen NPU baseline** once.
+6. Confirm **Thinking mode: Enabled**.
+7. Tap **Run Qwen thinking baseline** once.
 
 ## Expected first-pass behaviour
 
@@ -124,10 +125,12 @@ The run performs one fresh lifecycle:
 2. load QAIRT/QNN host libraries from Android's extracted native-library directory;
 3. expose the same extracted directory through `ADSP_LIBRARY_PATH` for the v73 skeleton;
 4. create a Genie configuration, profiler and dialog from `genie_config.json`;
-5. submit one correctly tagged Qwen prompt with thinking disabled for the bounded baseline;
-6. capture final text and profiler data;
-7. free dialog, configuration and profiler handles;
-8. record process memory after unload.
+5. submit one correctly tagged Qwen prompt with the explicit `/think` switch;
+6. allow Qwen to generate its `<think>...</think>` reasoning before the final answer;
+7. discard the reasoning transcript after measuring whether thinking occurred;
+8. persist only the final text, timing, memory and profiler data;
+9. free dialog, configuration and profiler handles;
+10. record process memory after unload.
 
 The result card should report:
 
@@ -137,6 +140,8 @@ The result card should report:
 - unload time;
 - total time;
 - peak PSS;
+- whether thinking output was observed;
+- reasoning character count without storing the reasoning text;
 - profiler TTFT, prompt-processing rate and token-generation rate where supplied by QAIRT;
 - two short final sentences.
 
@@ -147,7 +152,9 @@ The first native gate passes when:
 - `libmais_geniex.so` loads from the APK;
 - packaged QAIRT 2.45 libraries are accepted;
 - the four QNN context binaries create a Genie dialog;
+- thinking mode is enabled and the final answer follows the reasoning section;
 - generation returns non-empty final text;
+- no raw reasoning transcript is persisted;
 - backend remains the Qualcomm NPU/HTP path;
 - the app, launcher and System UI remain alive;
 - native handles unload without error;
@@ -170,9 +177,10 @@ Useful failure classes include:
 - HTP/CDSP firmware or device meta-build incompatibility;
 - invalid context-binary path;
 - Genie configuration/schema incompatibility;
+- output budget exhausted before `</think>` and the final answer;
 - memory allocation failure at 12,288 context;
 - clean generation followed by unload failure.
 
 ## Safety boundary
 
-The native benchmark is deliberately single-run and non-cancellable until Qualcomm's exact dialog-signal ABI is validated. Qwen remains excluded from autonomous MAIS role execution until this device gate passes repeatedly. Deterministic fallback remains active during that period.
+The native benchmark is deliberately single-run and non-cancellable until Qualcomm's exact dialog-signal ABI is validated. Thinking is enabled, but the reasoning transcript is ephemeral and excluded from saved runtime results and Report Card exports. Qwen remains excluded from autonomous MAIS role execution until this device gate passes repeatedly. Deterministic fallback remains active during that period.
