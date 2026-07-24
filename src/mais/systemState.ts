@@ -69,6 +69,17 @@ function normaliseLabProposalState(value: MaisLabProposalState | undefined): Mai
   };
 }
 
+function normaliseResearchState(value: MaisResearchState | undefined): MaisResearchState {
+  const base = createMaisResearchState();
+  return {
+    requests: structuredClone(value?.requests ?? []),
+    reports: structuredClone(value?.reports ?? []),
+    rollingWindowDays: 30,
+    maxRequestsPerWindow: 3,
+    cooldownDays: 0,
+  } satisfies MaisResearchState;
+}
+
 export function normaliseMaisSystemSnapshot(value: unknown, now = new Date().toISOString()): MaisSystemSnapshot {
   const base = createMaisSystemSnapshot(now);
   if (!value || typeof value !== 'object') return base;
@@ -83,7 +94,7 @@ export function normaliseMaisSystemSnapshot(value: unknown, now = new Date().toI
     capabilities: structuredClone(stored.capabilities ?? base.capabilities),
     models: structuredClone(stored.models ?? base.models),
     widgets: structuredClone(stored.widgets ?? base.widgets),
-    research: structuredClone(stored.research ?? base.research),
+    research: normaliseResearchState(stored.research),
     reinforcement: structuredClone(stored.reinforcement ?? base.reinforcement),
     beliefs: structuredClone(stored.beliefs ?? base.beliefs),
     memories: structuredClone(stored.memories ?? base.memories),
