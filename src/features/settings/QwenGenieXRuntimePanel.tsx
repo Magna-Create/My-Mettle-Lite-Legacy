@@ -95,7 +95,7 @@ export function QwenGenieXRuntimePanel() {
   const runtimeReady = runtimeStatus?.ready === true;
   const nativeReady = modelReady && runtimeReady;
   const statusText = busy
-    ? progress?.state === 'generating' ? 'Generating' : 'Loading'
+    ? progress?.state === 'generating' ? 'Thinking & generating' : 'Loading'
     : nativeReady
       ? 'Native runtime ready'
       : modelReady
@@ -113,13 +113,14 @@ export function QwenGenieXRuntimePanel() {
       </header>
 
       <p>
-        This is the operational benchmark for the complete Qwen GenieX pack. It creates the Qualcomm dialog, generates one bounded local response, records profiler and process-memory data, then unloads the model.
+        This is the operational benchmark for the complete Qwen GenieX pack. It runs Qwen in thinking mode, records profiler and process-memory data, returns only the final response, then unloads the model.
       </p>
 
       <dl className="settings-fact-list">
         <div><dt>Model pack</dt><dd>{modelReady ? 'Verified' : artifactStatus?.state ?? 'Checking'}</dd></div>
         <div><dt>QAIRT runtime</dt><dd>{runtimeStatus?.runtimeInstalled ? 'Installed' : 'Missing'}</dd></div>
         <div><dt>JNI bridge</dt><dd>{runtimeStatus?.bridgeLoaded ? 'Loaded' : 'Unavailable'}</dd></div>
+        <div><dt>Thinking mode</dt><dd>Enabled</dd></div>
         <div><dt>Context ceiling</dt><dd>12,288 tokens</dd></div>
       </dl>
 
@@ -134,14 +135,14 @@ export function QwenGenieXRuntimePanel() {
 
       {progress ? (
         <p className="mais-runtime-live" aria-live="polite">
-          <strong>{progress.state}</strong>
+          <strong>{progress.state === 'generating' ? 'thinking & generating' : progress.state}</strong>
           <span>NPU · load {formatDuration(progress.loadMs)} · {progress.outputChars} final characters</span>
         </p>
       ) : null}
 
       <div className="mais-runtime-actions">
         <button className="primary-action compact" type="button" disabled={!nativeReady || busy} onClick={() => void runBaseline()}>
-          {busy ? 'Qwen running…' : 'Run Qwen NPU baseline'}
+          {busy ? 'Qwen thinking…' : 'Run Qwen thinking baseline'}
         </button>
         <button className="text-button" type="button" disabled={busy} onClick={() => void refresh()}>Refresh</button>
       </div>
@@ -149,7 +150,7 @@ export function QwenGenieXRuntimePanel() {
       {result ? (
         <article className={`mais-runtime-result is-${result.state}`}>
           <header>
-            <strong>{result.success ? 'Completed' : 'Failed'} · NPU</strong>
+            <strong>{result.success ? 'Completed' : 'Failed'} · NPU · Thinking</strong>
             <span>{new Date(result.completedAtEpochMs).toLocaleString()}</span>
           </header>
           <dl>
@@ -159,6 +160,9 @@ export function QwenGenieXRuntimePanel() {
             <div><dt>Unload</dt><dd>{formatDuration(result.unloadMs)}</dd></div>
             <div><dt>Total</dt><dd>{formatDuration(result.totalMs)}</dd></div>
             <div><dt>Peak PSS</dt><dd>{formatModelBytes(result.peakPssBytes)}</dd></div>
+            <div><dt>Thinking observed</dt><dd>{result.thinkingObserved ? 'Yes' : 'Not reported'}</dd></div>
+            <div><dt>Thinking characters</dt><dd>{result.thinkingCharacters}</dd></div>
+            <div><dt>Reasoning transcript</dt><dd>{result.reasoningContentStored ? 'Stored' : 'Not stored'}</dd></div>
             <div><dt>TTFT profiler</dt><dd>{metric(result.profile.timeToFirstTokenMs, result.profile.timeToFirstTokenMsUnit)}</dd></div>
             <div><dt>Decode rate</dt><dd>{metric(result.profile.tokenGenerationRate, result.profile.tokenGenerationRateUnit)}</dd></div>
             <div><dt>Prefill rate</dt><dd>{metric(result.profile.promptProcessingRate, result.profile.promptProcessingRateUnit)}</dd></div>
@@ -170,7 +174,7 @@ export function QwenGenieXRuntimePanel() {
       ) : null}
 
       <p className="mais-runtime-note">
-        Cancellation remains disabled until Qualcomm’s exact dialog-signal ABI is verified. This avoids freeing native handles while the NPU is active.
+        Qwen’s reasoning is used during generation but is not persisted or shown. Cancellation remains disabled until Qualcomm’s exact dialog-signal ABI is verified.
       </p>
     </section>
   );
