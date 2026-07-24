@@ -13,7 +13,7 @@ export interface MaisToolRequest {
   reasonExistingToolsFail: string;
   inputFields: string[];
   desiredOutputs: string[];
-  proposedMethod?: string;
+  proposedMethod?: string | undefined;
   assumptions: string[];
   minimumEvidence: string[];
   requiredTests: string[];
@@ -25,8 +25,8 @@ export interface MaisToolRequest {
   monthKey: string;
   createdAt: string;
   expiresAt: string;
-  copiedAt?: string;
-  resolvedAt?: string;
+  copiedAt?: string | undefined;
+  resolvedAt?: string | undefined;
   schemaVersion: 1;
 }
 
@@ -102,16 +102,16 @@ export class MaisToolRequestBroker {
     analyticalQuestion: string;
     missingCapability: string;
     reasonExistingToolsFail: string;
-    inputFields?: string[];
-    desiredOutputs?: string[];
-    proposedMethod?: string;
-    assumptions?: string[];
-    minimumEvidence?: string[];
-    requiredTests?: string[];
+    inputFields?: string[] | undefined;
+    desiredOutputs?: string[] | undefined;
+    proposedMethod?: string | undefined;
+    assumptions?: string[] | undefined;
+    minimumEvidence?: string[] | undefined;
+    requiredTests?: string[] | undefined;
     exampleUse: string;
-    fallbackPreference?: MaisToolFallbackPreference;
-    createdBy?: MaisToolRequest['createdBy'];
-    provenanceRefs?: string[];
+    fallbackPreference?: MaisToolFallbackPreference | undefined;
+    createdBy?: MaisToolRequest['createdBy'] | undefined;
+    provenanceRefs?: string[] | undefined;
   }, now = new Date().toISOString()): MaisToolRequest {
     const title = input.title.trim();
     const analyticalQuestion = input.analyticalQuestion.trim();
