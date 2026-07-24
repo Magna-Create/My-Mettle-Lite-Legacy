@@ -11,4 +11,5 @@ android/app/build/
 # versioned separately as libmais_geniex.so.
 android/app/src/main/jniLibs/arm64-v8a/libGenie.so
 android/app/src/main/jniLibs/arm64-v8a/libQnn*.so
+android/app/src/main/jniLibs/arm64-v8a/libc++_shared.so
 android/app/src/main/assets/qairt/
