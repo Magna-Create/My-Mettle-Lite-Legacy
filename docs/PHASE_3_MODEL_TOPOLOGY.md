@@ -58,6 +58,7 @@ Purpose: infrequent deep analysis.
 - context: 12,288 tokens;
 - prompt/decode sequence lengths: 128 / 1;
 - preferred backend: Qualcomm NPU/HTP;
+- thinking mode: enabled explicitly with `/think`;
 - competing hypotheses, confounds and causal challenges;
 - experiment design and evaluation;
 - generated-analysis and declarative widget-code authoring within validated sandboxes;
@@ -72,10 +73,12 @@ The native Android adapter is implemented as:
 - private QAIRT 2.45 build assets staged locally before APK assembly;
 - Qualcomm-style legacy extraction of Genie, QNN host libraries, HTP stubs and v73 skeletons;
 - absolute runtime rewriting of tokenizer, backend extension and context-binary paths;
-- one bounded dialog lifecycle with profiler, timing and process-memory capture;
-- deterministic cleanup and persistent result/error reporting.
+- one bounded thinking-enabled dialog lifecycle with profiler, timing and process-memory capture;
+- final-answer extraction after the `<think>...</think>` section;
+- ephemeral reasoning content: the transcript is not persisted, displayed or exported;
+- deterministic cleanup and persistent final-result/error reporting.
 
-This is now a target-device validation candidate, not yet a production-proven runtime. Qwen remains outside autonomous role execution until it creates a dialog, generates text and unloads cleanly on the S25 Ultra in repeated tests.
+This is now a target-device validation candidate, not yet a production-proven runtime. Qwen remains outside autonomous role execution until it creates a dialog, thinks, generates final text and unloads cleanly on the S25 Ultra in repeated tests.
 
 Qwen produces structured Workbench artefacts rather than final UI prose. It never applies a database mutation directly.
 
@@ -99,8 +102,9 @@ App upgrades delete the retired E4B model, partial download and verification rec
 2. E2B handles ordinary language work on the generic CPU runtime.
 3. E2B may classify only genuinely ambiguous routes and cannot answer during the routing pass.
 4. Qwen receives longitudinal, causal, contradictory, experiment or routine-change work only after its native device gate passes.
-5. Until then, deep Qwen episodes record a deterministic fallback instead of attempting native inference.
-6. The user may explicitly choose Quick, Deep or Automatic during beta evaluation after the runtime gate passes.
+5. Qwen uses thinking mode for those deep tasks; only its validated final artefact is retained.
+6. Until the gate passes, deep Qwen episodes record a deterministic fallback instead of attempting native inference.
+7. The user may explicitly choose Quick, Deep or Automatic during beta evaluation after the runtime gate passes.
 
 ## External research
 
