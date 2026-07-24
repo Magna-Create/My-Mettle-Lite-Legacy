@@ -76,18 +76,21 @@ Implemented:
 8. dynamic loading of QNN host libraries and `libGenie.so`;
 9. in-memory absolute path rewriting for tokenizer, backend extension and all four context binaries;
 10. Genie configuration, profiler and dialog lifecycle;
-11. bounded non-thinking Qwen prompt;
-12. final-output extraction;
-13. load, first-callback, generation, unload, total and PSS telemetry;
-14. QAIRT profiler parsing where metrics are supplied;
-15. persistent result/error reporting;
-16. dedicated Settings status and native benchmark panels.
+11. explicit Qwen thinking mode through `/think`;
+12. final-output extraction after the model's reasoning section;
+13. ephemeral reasoning handling: only the final answer and reasoning-length telemetry are retained;
+14. load, first-callback, generation, unload, total and PSS telemetry;
+15. QAIRT profiler parsing where metrics are supplied;
+16. persistent final-result/error reporting;
+17. dedicated Settings status and native benchmark panels.
 
 The open JNI bridge passes native compilation and is packaged in the ARM64 APK. Licensed QAIRT assets remain excluded from Git and CI; the final runtime test therefore requires a local APK built with the user's matching SDK package.
 
 ## Runtime safety
 
 - only one Qwen native baseline may run at once;
+- thinking is enabled for every native Qwen baseline and future deep role call;
+- raw reasoning content is not persisted, displayed or exported;
 - the current probe is intentionally non-cancellable until Qualcomm's exact dialog-signal ABI is validated;
 - dialog/configuration/profiler handles are released after every run;
 - Qwen is not yet called by autonomous MAIS roles;
@@ -104,7 +107,7 @@ The historical `createDeterministicMaisRoleRunner` entry point creates a hybrid 
 4. run one fresh local conversation only when the compatible native runtime is approved;
 5. validate strict role JSON;
 6. filter provenance references against supplied IDs;
-7. persist the artefact plus runtime telemetry;
+7. persist the final artefact plus runtime telemetry, not the model's private reasoning transcript;
 8. unload the model;
 9. use the deterministic fallback when any gate fails.
 
@@ -155,12 +158,13 @@ Each indexing pass compares stable document hashes. Unchanged documents keep the
 3. build the APK in Termux with those assets;
 4. confirm QAIRT status is Ready;
 5. create the Qwen Genie dialog;
-6. generate non-empty text on NPU;
-7. unload cleanly;
-8. repeat after force-stop/reopen;
-9. record performance, memory and stability;
-10. pin a validated Hugging Face tag and per-file hashes;
-11. only then enable Qwen inside the autonomous native role runner.
+6. confirm `/think` produces reasoning followed by non-empty final text on NPU;
+7. confirm the reasoning transcript is discarded and only final output/telemetry remain;
+8. unload cleanly;
+9. repeat after force-stop/reopen;
+10. record performance, memory and stability;
+11. pin a validated Hugging Face tag and per-file hashes;
+12. only then enable Qwen inside the autonomous native role runner.
 
 Detailed procedure:
 
