@@ -9,12 +9,15 @@ Run this gate on the target Galaxy S25 Ultra after installing the consolidated d
   - Gemma 4 E2B IT · CPU/GPU;
   - Gemma 4 E2B IT · Qualcomm SM8750 NPU;
   - Qwen3-4B Thinking · 12K · Snapdragon 8 Elite NPU;
-  - EmbeddingGemma 300M · Qualcomm SM8750.
+  - EmbeddingGemma 300M · CPU;
+  - QAIRT 2.45 runtime status;
+  - Qwen3-4B native NPU benchmark.
 - The Qwen repository is `MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K`.
 - Qwen is a multi-file GenieX QAIRT bundle, not a LiteRT-LM file.
 - EmbeddingGemma setup contains both:
-  - `embeddinggemma-300M_seq512_mixed-precision.qualcomm.sm8750.tflite`;
+  - `embeddinggemma-300M_seq512_mixed-precision.tflite`;
   - `sentencepiece.model`.
+- The private QAIRT 2.45 Android build assets have been staged before building the APK, following `docs/PHASE_3B_QWEN_NATIVE_DEVICE_TEST.md`.
 
 ## 1. Upgrade persistence and retired-model cleanup
 
@@ -22,10 +25,7 @@ Run this gate on the target Galaxy S25 Ultra after installing the consolidated d
 2. Open Brief, Progress, Lab and Library.
 3. Confirm training history, routine, settings, installed models and prior MAIS state remain present.
 4. Confirm Gemma 4 E4B no longer appears in the model pack.
-5. Confirm the following retired E4B files are absent from app-private model storage after launch:
-   - `gemma-4-E4B-it.litertlm`;
-   - `gemma-4-E4B-it.litertlm.part`;
-   - `gemma-4-E4B-it.litertlm.verified.json`.
+5. Confirm the retired Qualcomm EmbeddingGemma AOT import is no longer treated as the active retrieval model.
 6. Force-stop and reopen once.
 
 Pass: no data reset, boot loop or unnecessary redownload; retired E4B storage is reclaimed.
@@ -36,7 +36,7 @@ Open **Settings → Intelligence**.
 
 Pass when:
 
-- Local models contains model installation, import, verification and benchmark controls;
+- Local models contains model installation, retrieval, QAIRT status and benchmark controls;
 - Research exchange contains the rolling three-request budget and import/export controls;
 - Activity & diagnostics contains the Heart and Report Card controls;
 - Lab contains experiments rather than runtime diagnostics.
@@ -58,6 +58,8 @@ Pass when:
 
    `41dd675fbe735b6029012b5576a5716bac614fd8156de0128db4c9dff3cebd4e`
 
+This public LiteRT-LM NPU artefact currently fails engine creation with `TF_LITE_AUX not found` on the target phone. Record it as an upstream runtime/package incompatibility rather than retrying repeatedly. It is not the production NPU path; a custom GenieX/QAIRT E2B build follows after the Qwen native pipeline passes.
+
 ### Qwen3-4B Thinking 12K
 
 1. Start the Qwen installation.
@@ -71,49 +73,52 @@ Pass when:
    - tokenizer files.
 5. Confirm the aggregate installed size is approximately 3.12 GB.
 6. Confirm the pack reaches **Verified and ready** only after every member is present and individually hashed.
-7. Delete the pack once, confirm every member is removed, then reinstall it.
+7. Tap **Verify 12K pack** and confirm it returns to **Verified and ready**.
 
-The initial public repository revision uses trust-on-first-use per-file hashes. After the first validated device pass, publish a stable Hugging Face tag and pin every file hash in the app registry.
+The initial public repository revision uses trust-on-first-use per-file hashes. After the native device pass, publish a stable Hugging Face tag and pin every file hash in the app registry.
 
-Pass: partial downloads resume, incomplete packs never appear ready, deletion removes the complete pack, and normal app interaction remains responsive.
+Pass: partial downloads resume, incomplete packs never appear ready, verification covers all 15 files and normal app interaction remains responsive.
 
 ## 4. EmbeddingGemma runtime probe
 
 Open **Settings → Intelligence → Local models → EmbeddingGemma**.
 
+Use:
+
+```text
+embeddinggemma-300M_seq512_mixed-precision.tflite
+sentencepiece.model
+```
+
+Do not use the Qualcomm SM8750 AOT `.tflite` file with the current `localagents-rag` wrapper.
+
 1. Confirm both files show Ready.
 2. Run the semantic retrieval probe.
 3. Record:
    - runtime path;
-   - accelerator claim;
    - document and query latency;
    - matching score;
    - unrelated score;
    - margin.
-4. Run the probe a second time.
+4. Run the probe a second time after force-stop/reopen.
 
-Pass when:
+Current confirmed device result:
 
-- no native crash or System UI restart occurs;
-- both vectors have the expected 256 stored dimensions;
-- the relevant training passage ranks above the unrelated passage;
-- a failed accelerator path returns a readable error rather than crashing.
+- matching score: `0.7881`;
+- unrelated score: `0.2535`;
+- margin: `0.5346`;
+- document pass: `1040 ms`;
+- query pass: `408 ms`.
 
-The first probe does not by itself prove NPU residency. Treat the displayed accelerator claim and Android logs as the source of truth.
+Pass when the relevant training passage ranks above the unrelated passage, vectors use the expected 256 stored dimensions and no native crash occurs.
 
-## 5. Gemma E2B same-model backend comparison
+## 5. Gemma E2B generic backend comparison
 
 Use the same bounded prompt, sampler settings and output limit for every run.
 
-### Generic artefact
-
-1. Run the CPU baseline twice.
-2. Run the GPU baseline twice.
-
-### Qualcomm SM8750 artefact
-
-1. Run the NPU baseline twice.
-2. Do not permit silent fallback to CPU or GPU.
+1. Run the generic artefact CPU baseline twice.
+2. Run the generic artefact GPU baseline twice.
+3. Confirm no NPU control is offered for the generic CPU/GPU file.
 
 For every run record:
 
@@ -126,29 +131,33 @@ For every run record:
 - output validity;
 - app and launcher stability.
 
-Pass when each successful result identifies its actual backend and the NPU build either runs genuinely on NPU or fails clearly without fallback. Compare warm and cold behaviour before changing the production default away from generic E2B on CPU.
+Pass when each successful result identifies its actual backend. Retain generic E2B on CPU as the ordinary-work default until a custom GenieX NPU build is compiled and measured.
 
-## 6. Qwen GenieX runtime gate
+## 6. Qwen native GenieX/QAIRT runtime gate
 
-Installation support does not by itself prove native execution. Run this section only after the GenieX QAIRT Android adapter and matching runtime libraries are included.
+Follow the complete setup and failure-capture procedure in:
 
-1. Confirm the adapter selects `qwen.qwen3-4b` and `geniex-qairt`.
-2. Confirm the configured context ceiling is 12,288 tokens.
-3. Load the model once with a short prompt.
-4. Confirm generation includes the expected thinking-capable Qwen behaviour while the app stores only the structured final artefact required by MAIS.
-5. Repeat after a force-stop/reopen.
-6. Test progressively larger packets without exceeding 12,288 tokens.
-7. Record:
-   - native runtime and QAIRT version;
+```text
+docs/PHASE_3B_QWEN_NATIVE_DEVICE_TEST.md
+```
+
+1. Confirm **QAIRT 2.45** reports **Runtime ready**.
+2. Confirm the open JNI bridge is loaded.
+3. Confirm the Qwen pack is verified.
+4. Run **Qwen NPU baseline** once.
+5. Record:
+   - runtime and QAIRT version;
    - load time;
-   - prompt-prefill rate;
-   - time to first token;
-   - decode rate;
-   - peak native/process memory;
+   - first callback/TTFT;
+   - prompt-processing rate;
+   - token-generation rate;
+   - peak process memory;
    - unload time and reclaimed memory;
-   - sustained temperature and throttling behaviour.
+   - final output;
+   - sustained stability.
+6. Force-stop and reopen, then run once more after a clean first pass.
 
-Pass when Qwen executes through the intended Qualcomm NPU/HTP path, survives repeated load/unload cycles and does not destabilise System UI. Until this passes, deep roles must produce a deterministic fallback record rather than attempting LiteRT-LM execution.
+Pass when Qwen creates a Genie dialog, generates non-empty text through the intended Qualcomm NPU/HTP path, unloads cleanly and does not destabilise System UI. Until this passes repeatedly, deep roles continue to produce a deterministic fallback record.
 
 ## 7. Ordinary session path
 
@@ -173,7 +182,7 @@ Expected expanded path:
 
 1. Governor;
 2. Analyst;
-3. Coding Analyst using Qwen3-4B Thinking 12K once the GenieX gate has passed, otherwise a recorded deterministic fallback;
+3. Coding Analyst using Qwen3-4B Thinking 12K only after the native GenieX gate passes repeatedly, otherwise a recorded deterministic fallback;
 4. deterministic analysis execution against an immutable snapshot;
 5. Auditor challenge;
 6. Coach reversible experiment draft.
