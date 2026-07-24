@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1 — Qwen GenieX Android integration
+
+- Added the supported `com.qualcomm.qti:geniex-android:0.3.5` Maven dependency.
+- Replaced the custom JNI/dlopen and private QAIRT ZIP path with Qualcomm's public `GenieXSdk` and `LlmWrapper` APIs.
+- Bundled the QAIRT plugin through the ordinary APK/AAB build so users do not need WSL, a Qualcomm SDK installation, Termux runtime staging or a manual runtime import.
+- Preserved the existing resumable, verified 15-file Qwen3-4B 12K model installer.
+- Added thinking-enabled chat-template generation, streaming output, supported cancellation, profiler telemetry and deterministic wrapper destruction.
+- Kept raw Qwen reasoning ephemeral while persisting the final response and aggregate runtime metrics.
+- Raised the Android minimum from API 26 to API 27 to meet the supported GenieX Android library contract rather than forcing an unsafe manifest override.
+
 ## 0.5.0 — MAIS runtime laboratory
 
 - Added resumable, SHA-256-verified installation of app-private local model artefacts.
