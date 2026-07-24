@@ -1,4 +1,5 @@
 import type { MaisArtifactKind, MaisRole } from './contracts';
+import { MAIS_ANALYSIS_RECIPE_V2 } from './expandedAnalysisSandbox';
 
 export interface MaisRoleContentValidation {
   valid: boolean;
@@ -12,10 +13,11 @@ interface RoleContract {
 }
 
 const analysisRecipeExample = JSON.stringify({
-  schema: 'MaisAnalysisRecipeV1',
-  operations: [
-    { op: 'mean', field: 'totalEffectiveVolumeKgReps', as: 'meanVolume' },
-    { op: 'linear_regression', x: 'exposureIndex', y: 'bestEstimatedOneRepMaxKg', as: 'trend' },
+  schema: MAIS_ANALYSIS_RECIPE_V2,
+  steps: [
+    { op: 'filter', conditions: [{ field: 'recordKind', equals: 'comparable_exposure' }], as: 'exposures' },
+    { op: 'mean', input: 'exposures', field: 'totalEffectiveVolumeKgReps', as: 'meanVolume' },
+    { op: 'theil_sen_regression', input: 'exposures', x: 'exposureIndex', y: 'bestEstimatedOneRepMaxKg', as: 'robustTrend' },
   ],
 });
 
@@ -91,17 +93,31 @@ const roleContracts: Omit<Record<MaisRole, RoleContract>, 'coach'> = {
     requiredKeys: ['observations', 'beliefs'],
   },
   coding_analyst: {
-    purpose: 'Specify one reproducible analysis over the immutable supplied snapshot. Generate only a MaisAnalysisRecipeV1 JSON source; never ordinary JavaScript, network, filesystem or host access.',
+    purpose: 'Specify one reproducible analysis over the immutable supplied snapshot. Prefer MaisAnalysisRecipeV2 and compose the supplied deterministic operations. Never emit ordinary JavaScript, Python, network, filesystem or host access. When the catalogue genuinely cannot express a responsible method, include the optional toolSuggestion contract while still providing the safest available bounded programme.',
     contentExample: {
       analysisPlan: { question: 'Question', inputRefs: ['snapshot_id'], method: 'bounded deterministic comparison' },
       programme: {
         language: 'javascript_subset',
         inputSnapshotId: 'snapshot_id_from_packet',
         source: analysisRecipeExample,
-        outputSchema: 'MaisAnalysisResultV1',
+        outputSchema: 'MaisAnalysisResultV2',
         permittedLibraries: ['statistics'],
       },
-      sensitivityChecks: ['repeat with a trimmed mean'],
+      sensitivityChecks: ['repeat with robust and low-confidence records excluded'],
+      toolSuggestion: {
+        title: 'Optional missing capability title',
+        analyticalQuestion: 'Question the missing method must answer',
+        missingCapability: 'Exact missing operation or pipeline',
+        reasonExistingToolsFail: 'Why composition is insufficient',
+        inputFields: ['fieldName'],
+        desiredOutputs: ['resultName'],
+        proposedMethod: 'Optional method family',
+        assumptions: [],
+        minimumEvidence: [],
+        requiredTests: ['known synthetic result', 'sparse data'],
+        exampleUse: 'Concrete My Mettle use',
+        fallbackPreference: 'either',
+      },
     },
     requiredKeys: ['analysisPlan', 'programme', 'sensitivityChecks'],
   },
@@ -212,6 +228,7 @@ export function validateMaisRoleContent(
       if (!Array.isArray(content.programme.permittedLibraries)) errors.push('artifact.content.programme.permittedLibraries must be an array.');
     }
     if (!Array.isArray(content.sensitivityChecks)) errors.push('artifact.content.sensitivityChecks must be an array.');
+    if (content.toolSuggestion !== undefined && !isRecord(content.toolSuggestion)) errors.push('artifact.content.toolSuggestion must be an object when supplied.');
   }
   if (role === 'coach') {
     if (!isRecord(content.proposal)) {
@@ -251,9 +268,7 @@ export function validateMaisRoleContent(
     if (!Array.isArray(content.memoryUpdates)) errors.push('artifact.content.memoryUpdates must be an array.');
     if (!Array.isArray(content.unresolvedQuestions)) errors.push('artifact.content.unresolvedQuestions must be an array.');
   }
-  if (role === 'research_broker' && !isRecord(content.request)) {
-    errors.push('artifact.content.request must be an object.');
-  }
+  if (role === 'research_broker' && !isRecord(content.request)) errors.push('artifact.content.request must be an object.');
 
   return { valid: errors.length === 0, errors };
 }
