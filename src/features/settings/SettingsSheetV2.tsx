@@ -12,6 +12,7 @@ import { QwenGenieXRuntimePanel } from './QwenGenieXRuntimePanel';
 import { ResearchSettingsPanel } from './ResearchSettingsPanel';
 import { TimerSettingsPanel } from './TimerSettingsPanel';
 import './intelligence-settings.css';
+import './health-analysis-settings.css';
 
 interface Props {
   database: AppDatabase;
