@@ -20,6 +20,12 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+      - name: Validate private runtime scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/package-qairt-android-runtime.sh
+          bash -n scripts/install-qairt-build-assets.sh
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
