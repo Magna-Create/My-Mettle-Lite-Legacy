@@ -71,7 +71,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
         try {
             call.resolve(status())
         } catch (error: Throwable) {
-            call.reject(rootMessage(error), error)
+            call.reject(rootMessage(error), asException(error))
         }
     }
 
@@ -235,10 +235,11 @@ class MaisGenieXRuntimePlugin : Plugin() {
             }
         } finally {
             val unloadStarted = System.currentTimeMillis()
+            val active = wrapper
             activeWrapper.set(null)
-            if (wrapper != null) {
-                runCatching { wrapper.stopStream() }
-                runCatching { wrapper.destroy() }
+            if (active != null) {
+                runCatching { active.stopStream() }
+                runCatching { active.destroy() }
                     .onFailure { closeError ->
                         if (failure == null && state == "completed") {
                             state = "failed"
@@ -253,9 +254,11 @@ class MaisGenieXRuntimePlugin : Plugin() {
         }
 
         val completedAt = System.currentTimeMillis()
-        val resolvedFirstChunk = when {
-            profile != null && profile!!.ttftMs >= 0.0 -> profile!!.ttftMs.roundToLong()
-            else -> firstChunkMs
+        val reportedProfile = profile
+        val resolvedFirstChunk = if (reportedProfile != null && reportedProfile.ttftMs >= 0.0) {
+            reportedProfile.ttftMs.roundToLong()
+        } else {
+            firstChunkMs
         }
         val result = JSObject()
         result.put("state", state)
@@ -283,7 +286,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
         result.put("memoryAfterBytes", currentPssBytes())
         result.put("finalOutput", finalOutput)
         result.put("outputChars", finalOutput.length)
-        result.put("profile", profileMetrics(profile))
+        result.put("profile", profileMetrics(reportedProfile))
         result.put("error", failure ?: JSONObject.NULL)
         writeLastResult(result)
         emitProgress(modelId, state, loadMs, finalOutput.length)
@@ -292,6 +295,8 @@ class MaisGenieXRuntimePlugin : Plugin() {
 
     private fun status(): JSObject {
         val missing = missingModelFiles()
+        val missingArray = JSArray()
+        missing.forEach { missingArray.put(it) }
         val ready = ensureSdkReady()
         val result = JSObject()
         result.put("ready", missing.isEmpty() && ready)
@@ -305,7 +310,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
         result.put("contextTokens", CONTEXT_TOKENS)
         result.put("thinkingEnabled", true)
         result.put("bundleReady", missing.isEmpty())
-        result.put("missingModelFiles", JSArray(missing))
+        result.put("missingModelFiles", missingArray)
         result.put("runtimeInstalled", true)
         result.put("bridgeLoaded", ready)
         result.put("bridgeError", sdkError ?: JSONObject.NULL)
@@ -316,20 +321,25 @@ class MaisGenieXRuntimePlugin : Plugin() {
     private fun ensureSdkReady(): Boolean = synchronized(sdkLock) {
         if (sdkReady) return@synchronized true
         sdkError = null
-        GenieXSdk.getInstance().init(
-            context,
-            object : GenieXSdk.InitCallback {
-                override fun onSuccess() {
-                    sdkReady = true
-                    sdkError = null
-                }
+        try {
+            GenieXSdk.getInstance().init(
+                context,
+                object : GenieXSdk.InitCallback {
+                    override fun onSuccess() {
+                        sdkReady = true
+                        sdkError = null
+                    }
 
-                override fun onFailure(reason: String) {
-                    sdkReady = false
-                    sdkError = reason.trim().ifEmpty { "GenieX initialisation failed." }
-                }
-            },
-        )
+                    override fun onFailure(reason: String) {
+                        sdkReady = false
+                        sdkError = reason.trim().ifEmpty { "GenieX initialisation failed." }
+                    }
+                },
+            )
+        } catch (error: Throwable) {
+            sdkReady = false
+            sdkError = rootMessage(error)
+        }
         sdkReady
     }
 
@@ -417,6 +427,9 @@ class MaisGenieXRuntimePlugin : Plugin() {
             }
         }.getOrDefault(JSONObject.NULL)
     }
+
+    private fun asException(error: Throwable): Exception =
+        error as? Exception ?: RuntimeException(rootMessage(error), error)
 
     private fun rootMessage(error: Throwable): String {
         var current = error
