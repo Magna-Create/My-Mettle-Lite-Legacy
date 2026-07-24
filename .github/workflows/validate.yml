@@ -141,16 +141,20 @@ jobs:
         run: |
           set -euo pipefail
           unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep 'lib/arm64-v8a/libmais_geniex.so'
-      - name: Vendor compiled bridge on agent branch
-        if: github.event_name == 'push' && startsWith(github.ref_name, 'agent/')
+      - name: Vendor compiled bridge on feature branch
+        if: >-
+          (github.event_name == 'push' && startsWith(github.ref_name, 'agent/')) ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
         shell: bash
+        env:
+          TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           set -euo pipefail
           binary="$GITHUB_WORKSPACE/android/app/src/main/jniLibs/arm64-v8a/libmais_geniex.so"
           staged="$RUNNER_TEMP/libmais_geniex.so"
           cp "$binary" "$staged"
-          git fetch origin "$GITHUB_REF_NAME"
-          git checkout -B "$GITHUB_REF_NAME" "origin/$GITHUB_REF_NAME"
+          git fetch origin "$TARGET_BRANCH"
+          git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
           cp "$staged" android/app/src/main/jniLibs/arm64-v8a/libmais_geniex.so
           git config user.name "github-actions[bot]"
@@ -160,7 +164,7 @@ jobs:
             echo "GenieX bridge binary is already current."
           else
             git commit -m "Vendor ARM64 GenieX JNI bridge"
-            git push origin "HEAD:$GITHUB_REF_NAME"
+            git push origin "HEAD:$TARGET_BRANCH"
           fi
       - name: Upload Android failure log
         if: failure() && steps.android-build.outcome == 'failure'
