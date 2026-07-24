@@ -75,12 +75,12 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
             prompt = optional(
                 call,
                 "prompt",
-                "Reply with exactly two short sentences. First confirm that this response was generated locally. Second state that verified evidence should be preferred over an unbounded transcript."
+                "/think\nReason carefully, then reply with exactly two short sentences. First confirm that this response was generated locally. Second state that verified evidence should be preferred over an unbounded transcript."
             );
             systemInstruction = optional(
                 call,
                 "systemInstruction",
-                "You are the bounded native Qwen runtime check for My Mettle. Be concise, factual and never claim access to data that was not supplied."
+                "You are the bounded native Qwen runtime check for My Mettle. Use thinking mode before answering. Keep the final response concise, factual and limited to supplied evidence."
             );
             ensureReady();
             if (!RUNNING.compareAndSet(false, true)) {
@@ -114,6 +114,7 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
         long firstChunkMs = -1L;
         long generationMs = 0L;
         long unloadMs = 0L;
+        int thinkingCharacters = 0;
         String rawOutput = "";
         String finalOutput = "";
         String profileJson = "";
@@ -142,9 +143,10 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
             generationMs = Math.max(0L, MaisGenieXNative.nativeGetLastQueryMs(handle));
             firstChunkMs = MaisGenieXNative.nativeGetLastFirstChunkMs(handle);
             profileJson = nullToEmpty(MaisGenieXNative.nativeGetLastProfileJson(handle));
+            thinkingCharacters = countThinkingCharacters(rawOutput);
             finalOutput = extractFinalOutput(rawOutput);
             if (finalOutput.isEmpty()) {
-                throw new IllegalStateException("Qwen completed without returning a final response.");
+                throw new IllegalStateException("Qwen completed without returning a final response after thinking.");
             }
             peakPss = Math.max(peakPss, currentPssBytes());
         } catch (Throwable error) {
@@ -178,6 +180,10 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
             result.put("runtimeVersion", RUNTIME_VERSION);
             result.put("backend", "npu");
             result.put("contextTokens", CONTEXT_TOKENS);
+            result.put("thinkingEnabled", true);
+            result.put("thinkingObserved", thinkingCharacters > 0);
+            result.put("thinkingCharacters", thinkingCharacters);
+            result.put("reasoningContentStored", false);
             result.put("startedAtEpochMs", startedAt);
             result.put("completedAtEpochMs", completedAt);
             result.put("loadMs", loadMs);
@@ -188,7 +194,6 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
             result.put("memoryBeforeBytes", memoryBefore);
             result.put("peakPssBytes", peakPss);
             result.put("memoryAfterBytes", currentPssBytes());
-            result.put("rawOutput", rawOutput);
             result.put("finalOutput", finalOutput);
             result.put("outputChars", finalOutput.length());
             result.put("profile", profileMetrics(profileJson));
@@ -220,6 +225,7 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
         result.put("runtimeVersion", RUNTIME_VERSION);
         result.put("backend", "npu");
         result.put("contextTokens", CONTEXT_TOKENS);
+        result.put("thinkingEnabled", true);
         result.put("bundleReady", missingFiles.length() == 0);
         result.put("missingModelFiles", missingFiles);
         result.put("runtimeInstalled", runtimeInstalled);
@@ -272,6 +278,9 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
     }
 
     private String buildTaggedPrompt(String systemInstruction, String userPrompt) {
+        String thinkingPrompt = userPrompt.trim().startsWith("/think")
+            ? userPrompt.trim()
+            : "/think\n" + userPrompt.trim();
         String tagged;
         try {
             JSONObject metadata = new JSONObject(readText(new File(modelDirectory(), "metadata.json")));
@@ -280,15 +289,15 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
                 + systemInstruction
                 + template.getString("system_suffix")
                 + template.getString("user_prefix")
-                + userPrompt
+                + thinkingPrompt
                 + template.getString("user_suffix")
                 + template.getString("assistant_prefix");
         } catch (Exception ignored) {
             tagged = "<|im_start|>system\n" + systemInstruction + "<|im_end|>\n"
-                + "<|im_start|>user\n" + userPrompt + "<|im_end|>\n"
+                + "<|im_start|>user\n" + thinkingPrompt + "<|im_end|>\n"
                 + "<|im_start|>assistant\n";
         }
-        return tagged + "<think>\n\n</think>\n";
+        return tagged;
     }
 
     private JSObject profileMetrics(String profileJson) {
@@ -344,6 +353,17 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
             }
         }
         return false;
+    }
+
+    private int countThinkingCharacters(String raw) {
+        String output = nullToEmpty(raw);
+        int closingThink = output.lastIndexOf("</think>");
+        if (closingThink < 0) return 0;
+        int openingThink = output.indexOf("<think>");
+        int contentStart = openingThink >= 0
+            ? openingThink + "<think>".length()
+            : 0;
+        return Math.max(0, closingThink - contentStart);
     }
 
     private String extractFinalOutput(String raw) {
@@ -409,7 +429,10 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
     private Object readLastResult() {
         try {
             if (!lastResultFile().isFile()) return JSONObject.NULL;
-            return new JSONObject(readText(lastResultFile()));
+            JSONObject result = new JSONObject(readText(lastResultFile()));
+            result.remove("rawOutput");
+            result.put("reasoningContentStored", false);
+            return result;
         } catch (Exception ignored) {
             return JSONObject.NULL;
         }
