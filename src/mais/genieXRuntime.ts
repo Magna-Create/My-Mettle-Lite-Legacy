@@ -27,6 +27,10 @@ export interface MaisGenieXRunResult {
   runtimeVersion: string;
   backend: 'npu';
   contextTokens: number;
+  thinkingEnabled: true;
+  thinkingObserved: boolean;
+  thinkingCharacters: number;
+  reasoningContentStored: false;
   startedAtEpochMs: number;
   completedAtEpochMs: number;
   loadMs: number;
@@ -37,7 +41,6 @@ export interface MaisGenieXRunResult {
   memoryBeforeBytes: number;
   peakPssBytes: number;
   memoryAfterBytes: number;
-  rawOutput: string;
   finalOutput: string;
   outputChars: number;
   profile: MaisGenieXProfileMetrics;
@@ -52,6 +55,7 @@ export interface MaisGenieXRuntimeStatus {
   runtimeVersion: string;
   backend: 'npu';
   contextTokens: number;
+  thinkingEnabled: boolean;
   bundleReady: boolean;
   missingModelFiles: string[];
   runtimeInstalled: boolean;
@@ -99,6 +103,7 @@ export async function readMaisGenieXStatus(): Promise<MaisGenieXRuntimeStatus> {
       runtimeVersion: 'QAIRT 2.45.0.260326154327',
       backend: 'npu',
       contextTokens: 12_288,
+      thinkingEnabled: true,
       bundleReady: false,
       missingModelFiles: [],
       runtimeInstalled: false,
