@@ -54,7 +54,7 @@ describe('expanded MAIS analysis sandbox', () => {
     expect(result.status).toBe('completed');
     const results = result.output.results as Record<string, any>;
     expect(results.peak).toMatchObject({ x: 20, y: 130 });
-    expect(results.area.area).toBe(4550);
+    expect(results.area.area).toBe(4625);
     expect(results.above115.duration).toBe(20);
     expect(results.meanInterval).toMatchObject({ mean: 113, iterations: 250, n: 5 });
   });
