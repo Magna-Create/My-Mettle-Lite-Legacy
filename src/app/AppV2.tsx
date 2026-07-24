@@ -36,6 +36,11 @@ import '../features/phase3-functional.css';
 import { MaisCoordinator } from '../mais/coordinator';
 import type { MaisResourceSnapshot } from '../mais/contracts';
 import { readMaisResourceSnapshot, subscribeMaisDeviceState } from '../mais/deviceState';
+import {
+  readMaisHighPriorityWork,
+  subscribeMaisHighPriorityWork,
+  type MaisHighPriorityWorkState,
+} from '../mais/highPriorityWork';
 import { materialiseMaisLabProposals } from '../mais/labProposalMaterialiser';
 import { createNativeMaisRoleRunner } from '../mais/nativeRoleRunner';
 import { deriveMaisResourceMode } from '../mais/resourceGovernor';
@@ -69,8 +74,10 @@ export function AppV2() {
     batterySaver: false,
     isCharging: false,
     activeWorkoutInteraction: false,
+    userPaused: false,
     capturedAt: new Date().toISOString(),
   });
+  const [maisHighPriorityWork, setMaisHighPriorityWork] = useState<MaisHighPriorityWorkState>(readMaisHighPriorityWork());
   const [tab, setTab] = useState<Tab>('brief');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -81,6 +88,7 @@ export function AppV2() {
   const databaseRef = useRef<AppDatabase | null>(null);
   const operationQueue = useRef<Promise<void>>(Promise.resolve());
   const maisReadyRef = useRef(false);
+  const highPriorityWorkRef = useRef<MaisHighPriorityWorkState>(maisHighPriorityWork);
   const restTimer = useRestTimer(database?.settings.restTimer ?? fallbackTimerSettings);
 
   useEffect(() => {
@@ -92,6 +100,16 @@ export function AppV2() {
     });
   }, [service]);
 
+  useEffect(() => subscribeMaisHighPriorityWork((state) => {
+    highPriorityWorkRef.current = state;
+    setMaisHighPriorityWork(state);
+    setMaisResources((current) => ({
+      ...current,
+      userPaused: state.active,
+      capturedAt: new Date().toISOString(),
+    }));
+  }), []);
+
   useEffect(() => {
     let cancelled = false;
     let dispose: (() => Promise<void>) | undefined;
@@ -100,7 +118,8 @@ export function AppV2() {
       try {
         await mais.initialise();
         maisReadyRef.current = true;
-        const resources = await readMaisResourceSnapshot({ activeWorkoutInteraction: Boolean(databaseRef.current?.activeSessionId) });
+        const measured = await readMaisResourceSnapshot({ activeWorkoutInteraction: Boolean(databaseRef.current?.activeSessionId) });
+        const resources: MaisResourceSnapshot = { ...measured, userPaused: highPriorityWorkRef.current.active };
         const foregrounded = await mais.ingest({ type: resources.appVisibility === 'foreground' ? 'app_foregrounded' : 'app_backgrounded' }, resources.capturedAt);
         const reconciled = await reconcileMaisSnapshot(foregrounded);
         if (!cancelled) {
@@ -109,16 +128,16 @@ export function AppV2() {
         }
         dispose = await subscribeMaisDeviceState((state) => {
           void (async () => {
+            const halted = highPriorityWorkRef.current.active;
             const nextResources: MaisResourceSnapshot = {
               ...state,
               activeWorkoutInteraction: Boolean(databaseRef.current?.activeSessionId),
-              userPaused: false,
+              userPaused: halted,
             };
+            if (!cancelled) setMaisResources(nextResources);
+            if (halted) return;
             const next = await mais.ingest({ type: state.appVisibility === 'foreground' ? 'app_foregrounded' : 'app_backgrounded' }, state.capturedAt);
-            if (!cancelled) {
-              setMaisResources(nextResources);
-              setMaisSnapshot(await reconcileMaisSnapshot(next));
-            }
+            if (!cancelled) setMaisSnapshot(await reconcileMaisSnapshot(next));
           })();
         });
       } catch (reason) {
@@ -137,17 +156,20 @@ export function AppV2() {
     setMaisResources((current) => ({
       ...current,
       activeWorkoutInteraction: Boolean(database?.activeSessionId),
+      userPaused: highPriorityWorkRef.current.active,
       capturedAt: new Date().toISOString(),
     }));
   }, [database?.activeSessionId]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      if (!maisReadyRef.current) return;
+      if (!maisReadyRef.current || highPriorityWorkRef.current.active) return;
       void (async () => {
         try {
-          const resources = await readMaisResourceSnapshot({ activeWorkoutInteraction: Boolean(databaseRef.current?.activeSessionId) });
+          const measured = await readMaisResourceSnapshot({ activeWorkoutInteraction: Boolean(databaseRef.current?.activeSessionId) });
+          const resources: MaisResourceSnapshot = { ...measured, userPaused: highPriorityWorkRef.current.active };
           setMaisResources(resources);
+          if (resources.userPaused) return;
           setMaisSnapshot(await reconcileMaisSnapshot(await mais.pulse(resources)));
         } catch (reason) {
           setError(reason instanceof Error ? reason.message : 'The MAIS heartbeat failed.');
@@ -209,18 +231,26 @@ export function AppV2() {
     setTrainProgress((current) => current.progress === progress && current.condensed === condensed ? current : { progress, condensed });
   }, []);
 
+  function assertMaisAvailable(): void {
+    if (!highPriorityWorkRef.current.active) return;
+    throw new Error(`MAIS is halted while ${highPriorityWorkRef.current.label ?? 'a high-priority native task'} is active.`);
+  }
+
   async function currentMaisResources(): Promise<MaisResourceSnapshot> {
-    const resources = await readMaisResourceSnapshot({ activeWorkoutInteraction: Boolean(databaseRef.current?.activeSessionId) });
+    const measured = await readMaisResourceSnapshot({ activeWorkoutInteraction: Boolean(databaseRef.current?.activeSessionId) });
+    const resources: MaisResourceSnapshot = { ...measured, userPaused: highPriorityWorkRef.current.active };
     setMaisResources(resources);
     return resources;
   }
 
   async function pulseMaisOnce(): Promise<void> {
+    assertMaisAvailable();
     const resources = await currentMaisResources();
     setMaisSnapshot(await reconcileMaisSnapshot(await mais.pulse(resources)));
   }
 
   async function runMaisDemo(): Promise<void> {
+    assertMaisAvailable();
     const eventTime = new Date().toISOString();
     await mais.ingest({
       type: 'session_completed',
@@ -232,6 +262,7 @@ export function AppV2() {
   }
 
   async function clearMais(): Promise<void> {
+    assertMaisAvailable();
     setMaisSnapshot(await mais.clear());
   }
 
@@ -264,6 +295,7 @@ export function AppV2() {
 
   async function importResearchReport(content: string): Promise<void> {
     try {
+      assertMaisAvailable();
       await mais.importResearchReport(content);
       const resources = await currentMaisResources();
       setMaisSnapshot(await reconcileMaisSnapshot(await mais.runUntilSettled(resources, 12)));
@@ -304,6 +336,7 @@ export function AppV2() {
       }, occurredAt);
     }
     setMaisSnapshot(next);
+    if (highPriorityWorkRef.current.active) return;
     const resources = await currentMaisResources();
     setMaisSnapshot(await reconcileMaisSnapshot(await mais.pulse(resources)));
   }
