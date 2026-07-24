@@ -3,15 +3,18 @@ set -euo pipefail
 
 EXPECTED_VERSION="2.45.0.260326154327"
 QAIRT_ROOT="${1:-${QAIRT_HOME:-}}"
-OUTPUT="${2:-$PWD/my-mettle-qairt-${EXPECTED_VERSION}-android.zip}"
+OUTPUT="${2:-$PWD/my-mettle-qairt-${EXPECTED_VERSION}-build-assets.zip}"
 HTP_ARCH="${MY_METTLE_HTP_ARCH:-73}"
 
 if [[ -z "$QAIRT_ROOT" ]]; then
   cat >&2 <<'EOF'
 Usage:
-  scripts/package-qairt-android-runtime.sh /path/to/qairt/2.45.0.260326154327 [output.zip]
+  bash scripts/package-qairt-android-runtime.sh \
+    /path/to/qairt/2.45.0.260326154327 \
+    [output.zip]
 
 The first argument may also be supplied through QAIRT_HOME.
+The resulting ZIP is a private build input. Do not publish or commit it.
 EOF
   exit 2
 fi
@@ -52,9 +55,13 @@ fi
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-mkdir -p "$work/arm64" "$work/hexagon"
+root="$work/qairt-build-assets"
+arm64_destination="$root/android/app/src/main/jniLibs/arm64-v8a"
+asset_root="$root/android/app/src/main/assets/qairt"
+hexagon_destination="$asset_root/hexagon"
+mkdir -p "$arm64_destination" "$hexagon_destination"
 
-copy_arm64=(
+required_arm64=(
   libGenie.so
   libQnnSystem.so
   libQnnHtp.so
@@ -67,48 +74,51 @@ optional_arm64=(
   libQnnHtpProfilingReader.so
 )
 
-for name in "${copy_arm64[@]}"; do
-  cp -L "$ARM64_SOURCE/$name" "$work/arm64/$name"
+for name in "${required_arm64[@]}"; do
+  cp -L "$ARM64_SOURCE/$name" "$arm64_destination/$name"
 done
 for name in "${optional_arm64[@]}"; do
-  [[ -f "$ARM64_SOURCE/$name" ]] && cp -L "$ARM64_SOURCE/$name" "$work/arm64/$name"
+  [[ -f "$ARM64_SOURCE/$name" ]] && cp -L "$ARM64_SOURCE/$name" "$arm64_destination/$name"
 done
 for path in "${stub_files[@]}"; do
-  cp -L "$path" "$work/arm64/$(basename "$path")"
+  cp -L "$path" "$arm64_destination/$(basename "$path")"
 done
 for path in "${skel_files[@]}"; do
-  cp -L "$path" "$work/hexagon/$(basename "$path")"
+  cp -L "$path" "$hexagon_destination/$(basename "$path")"
 done
 
-cat > "$work/qairt-runtime.json" <<EOF
+cat > "$asset_root/qairt-runtime.json" <<EOF
 {
-  "purpose": "My Mettle private on-device Genie runtime",
+  "purpose": "My Mettle private build-time Genie runtime",
   "qairtVersion": "$EXPECTED_VERSION",
   "htpArchitecture": "v$HTP_ARCH",
-  "sourceRoot": "local QAIRT SDK; not redistributed by My Mettle",
+  "source": "local QAIRT SDK; not redistributed by My Mettle",
   "createdAtUtc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
 
 (
-  cd "$work"
-  find arm64 hexagon -type f -print0 \
+  cd "$root"
+  find android -type f -print0 \
     | sort -z \
     | xargs -0 sha256sum \
     > SHA256SUMS.txt
 )
 
 mkdir -p "$(dirname "$OUTPUT")"
+OUTPUT="$(cd "$(dirname "$OUTPUT")" && pwd)/$(basename "$OUTPUT")"
 rm -f "$OUTPUT"
 (
   cd "$work"
-  zip -9 -r "$OUTPUT" arm64 hexagon qairt-runtime.json SHA256SUMS.txt
+  zip -9 -r "$OUTPUT" qairt-build-assets
 )
 
-printf '\nCreated: %s\n' "$OUTPUT"
+printf '\nCreated private QAIRT build-assets package:\n  %s\n' "$OUTPUT"
 du -h "$OUTPUT"
-printf '\nIncluded libraries:\n'
+printf '\nIncluded files:\n'
 (
-  cd "$work"
-  find arm64 hexagon -maxdepth 1 -type f -printf '%p\t%s bytes\n' | sort
+  cd "$root"
+  find android -type f -printf '%p\t%s bytes\n' | sort
 )
+printf '\nNext step on the phone:\n'
+printf '  bash scripts/install-qairt-build-assets.sh "%s"\n' "<path-to-this-zip>"
