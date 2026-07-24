@@ -1,6 +1,7 @@
 import type { AppDatabase, Session, SessionExercise } from '../domain/model';
 import type {
   NativeActivitySummary,
+  NativeHealthDevice,
   NativeHealthInstantRecord,
   NativeHealthWindow,
   NativeHeartRateSample,
@@ -27,13 +28,13 @@ export interface MaisHealthEvidenceRecord {
   id: string;
   kind: HealthEvidenceKind;
   startTime: string;
-  endTime?: string;
-  value?: number;
-  unit?: string;
+  endTime?: string | undefined;
+  value?: number | undefined;
+  unit?: string | undefined;
   provider: 'health_connect' | 'manual';
   dataOrigin: string;
   sourceRecordId: string;
-  sourceDevice?: Record<string, unknown> | null;
+  sourceDevice?: NativeHealthDevice | null | undefined;
   payload: Record<string, unknown>;
   importedAt: string;
   schemaVersion: number;
@@ -42,15 +43,15 @@ export interface MaisHealthEvidenceRecord {
 export interface MaisManualBodyCompositionRecord {
   id: string;
   recordedAt: string;
-  bodyFatPercent?: number;
-  basalMetabolicRateKcal?: number;
-  skeletalMuscleMassKg?: number;
-  leanMassKg?: number;
-  visceralFatRating?: number;
-  weightKg?: number;
+  bodyFatPercent?: number | undefined;
+  basalMetabolicRateKcal?: number | undefined;
+  skeletalMuscleMassKg?: number | undefined;
+  leanMassKg?: number | undefined;
+  visceralFatRating?: number | undefined;
+  weightKg?: number | undefined;
   source: 'gym_bia' | 'home_scale' | 'samsung_device' | 'dexa' | 'manual_estimate' | 'other';
-  sourceLabel?: string;
-  note?: string;
+  sourceLabel?: string | undefined;
+  note?: string | undefined;
   createdAt: string;
   schemaVersion: number;
 }
@@ -108,8 +109,8 @@ export interface MaisHealthEvidenceSnapshot {
   observations: MaisHealthEvidenceRecord[];
   manualBodyComposition: MaisManualBodyCompositionRecord[];
   sessionEvidence: MaisSessionHealthEvidence[];
-  lastSyncedAt?: string;
-  lastError?: string;
+  lastSyncedAt?: string | undefined;
+  lastError?: string | undefined;
   createdAt: string;
   updatedAt: string;
 }
