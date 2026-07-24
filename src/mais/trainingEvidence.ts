@@ -1,7 +1,9 @@
 import { IndexedDbGymRepository } from '../adapters/storage/IndexedDbGymRepository';
+import { IndexedDbHealthEvidenceRepository } from '../adapters/storage/IndexedDbHealthEvidenceRepository';
 import { IndexedDbMaisEmbeddingRepository } from '../adapters/storage/IndexedDbMaisEmbeddingRepository';
 import { IndexedDbMaisRepository } from '../adapters/storage/IndexedDbMaisRepository';
 import type { AppDatabase, Experiment, Exercise, RoutineVersion, Session, SessionExercise } from '../domain/model';
+import type { MaisManualBodyCompositionRecord, MaisSessionHealthEvidence } from '../health/healthEvidence';
 import { deriveComparableExposure } from './comparableExposureEngine';
 import type { MaisRoleRequest } from './contracts';
 import { NativeMaisEmbeddingRuntime } from './embeddingRuntime';
@@ -35,6 +37,8 @@ export interface MaisTrainingEvidencePacket {
   routines: Array<ReturnType<typeof routineEvidence>>;
   experiments: Array<ReturnType<typeof experimentEvidence>>;
   recentBodyMeasurements: AppDatabase['bodyMeasurements'];
+  healthSessionEvidence: MaisSessionHealthEvidence[];
+  manualBodyComposition: MaisManualBodyCompositionRecord[];
   investigationCandidates: MaisInvestigationCandidate[];
   semanticContext: {
     query: string;
@@ -249,6 +253,8 @@ export function compileTrainingEvidence(database: AppDatabase, request: MaisRole
       || exerciseIds.has(experiment.exerciseId)
       || sessions.some((session) => experiment.testedSessionId === session.id)).map(experimentEvidence),
     recentBodyMeasurements: database.bodyMeasurements.slice(-3),
+    healthSessionEvidence: [],
+    manualBodyComposition: [],
     investigationCandidates: selectMaisInvestigationCandidates(database).slice(0, 6),
     semanticContext: null,
     warnings,
@@ -261,12 +267,31 @@ export class IndexedDbMaisTrainingEvidenceProvider implements MaisTrainingEviden
     private readonly maisRepository = new IndexedDbMaisRepository(),
     private readonly embeddingRuntime = new NativeMaisEmbeddingRuntime(),
     private readonly embeddingRepository = new IndexedDbMaisEmbeddingRepository(),
+    private readonly healthRepository = new IndexedDbHealthEvidenceRepository(),
   ) {}
 
   async read(request: MaisRoleRequest): Promise<MaisTrainingEvidencePacket | null> {
     const database = await this.repository.load();
     if (!database) return null;
     const packet = compileTrainingEvidence(database, request);
+
+    try {
+      const health = await this.healthRepository.load();
+      const sessionIds = new Set(packet.sessions.map((session) => session.id));
+      packet.healthSessionEvidence = health.sessionEvidence.filter((record) => sessionIds.has(record.sessionId));
+      packet.manualBodyComposition = health.manualBodyComposition.slice(-8);
+      packet.directRefs = unique([
+        ...packet.directRefs,
+        ...packet.healthSessionEvidence.flatMap((record) => [record.id, ...record.sourceRefs]),
+        ...packet.manualBodyComposition.map((record) => record.id),
+      ]);
+      if (packet.sessions.length && packet.healthSessionEvidence.length === 0) {
+        packet.warnings.push('No synced Health Connect evidence is linked to the selected session window.');
+      }
+    } catch (reason) {
+      packet.warnings.push(`Health evidence could not be loaded: ${reason instanceof Error ? reason.message : String(reason)}`);
+    }
+
     if (!this.embeddingRuntime.isAvailable()) {
       packet.warnings.push('Semantic retrieval is unavailable outside the native Android runtime.');
       return packet;
