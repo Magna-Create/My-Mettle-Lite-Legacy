@@ -78,6 +78,9 @@ std::vector<std::string> ListQnnLibraries(const std::string& directory) {
         if (name == "." || name == ".." || name == "libGenie.so") continue;
         if (!EndsWith(name, ".so")) continue;
         if (name.rfind("libQnn", 0) != 0) continue;
+        // HTP skeletons are Hexagon DSP binaries. They belong on
+        // ADSP_LIBRARY_PATH and must not be passed to Android's AArch64 dlopen.
+        if (name.find("Skel") != std::string::npos) continue;
         paths.push_back(directory + "/" + name);
     }
     closedir(handle);
@@ -157,7 +160,7 @@ class GenieRuntime final {
         }
 
         const std::string geniePath = arm64Directory_ + "/libGenie.so";
-        if (!IsRegularFile(geniePath)) throw std::runtime_error("libGenie.so is not installed in the imported QAIRT runtime.");
+        if (!IsRegularFile(geniePath)) throw std::runtime_error("libGenie.so is not installed in the packaged QAIRT runtime.");
         genieLibrary_ = OpenLibrary(geniePath, RTLD_NOW | RTLD_LOCAL, true);
 
         dialogConfigCreateFromJson_ = ResolveRequired<DialogConfigCreateFromJsonFn>(genieLibrary_, "GenieDialogConfig_createFromJson");
