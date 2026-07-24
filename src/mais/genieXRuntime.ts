@@ -1,10 +1,19 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
+import { withMaisHighPriorityWork } from './highPriorityWork';
 import {
   readMaisModelArtifactStatus,
   type MaisModelArtifactDefinition,
 } from './modelArtifacts';
 
-export type MaisGenieXRunState = 'loading' | 'generating' | 'completed' | 'cancelled' | 'failed';
+export type MaisGenieXRunState =
+  | 'preparing'
+  | 'importing'
+  | 'initialising'
+  | 'loading'
+  | 'generating'
+  | 'completed'
+  | 'cancelled'
+  | 'failed';
 
 export interface MaisGenieXProfileMetrics {
   available: boolean;
@@ -50,6 +59,29 @@ export interface MaisGenieXRunResult {
   error?: string | null | undefined;
 }
 
+export interface MaisGenieXPrepareResult {
+  success: boolean;
+  state: 'completed' | 'failed';
+  modelId: string;
+  imported: boolean;
+  totalMs: number;
+  sourceBundleBytes: number;
+  cachedBundleBytes: number;
+  modelPath?: string | null | undefined;
+  error?: string | null | undefined;
+}
+
+export interface MaisGenieXRuntimeStage {
+  capturedAtEpochMs: number;
+  component: string;
+  stage: string;
+  state: string;
+  detail?: string | null | undefined;
+  processPssBytes?: number | undefined;
+  nativeHeapAllocatedBytes?: number | undefined;
+  javaHeapUsedBytes?: number | undefined;
+}
+
 export interface MaisGenieXRuntimeStatus {
   ready: boolean;
   running: boolean;
@@ -62,10 +94,15 @@ export interface MaisGenieXRuntimeStatus {
   contextTokens: number;
   thinkingEnabled: boolean;
   bundleReady: boolean;
+  modelPrepared: boolean;
+  preparedModelPath?: string | null | undefined;
+  sourceBundleBytes: number;
+  cachedBundleBytes: number;
   missingModelFiles: string[];
   runtimeInstalled: boolean;
   bridgeLoaded: boolean;
   bridgeError?: string | null | undefined;
+  lastNativeStage?: MaisGenieXRuntimeStage | null | undefined;
   lastResult?: MaisGenieXRunResult | null | undefined;
 }
 
@@ -80,6 +117,8 @@ export interface MaisGenieXProgress {
 
 interface MaisGenieXRuntimePlugin {
   getStatus(): Promise<MaisGenieXRuntimeStatus>;
+  prepareModel(options: { modelId: string }): Promise<MaisGenieXPrepareResult>;
+  clearPreparedModel(options: { modelId: string }): Promise<{ cleared: boolean }>;
   runBaseline(options: {
     modelId: string;
     prompt?: string;
@@ -112,27 +151,62 @@ export async function readMaisGenieXStatus(): Promise<MaisGenieXRuntimeStatus> {
       contextTokens: 12_288,
       thinkingEnabled: true,
       bundleReady: false,
+      modelPrepared: false,
+      preparedModelPath: null,
+      sourceBundleBytes: 0,
+      cachedBundleBytes: 0,
       missingModelFiles: [],
       runtimeInstalled: false,
       bridgeLoaded: false,
       bridgeError: 'Android native runtime unavailable.',
+      lastNativeStage: null,
       lastResult: null,
     };
   }
   return nativePlugin.getStatus();
 }
 
-export async function runMaisGenieXBaseline(
-  artifact: MaisModelArtifactDefinition,
-): Promise<MaisGenieXRunResult> {
+function validateArtifact(artifact: MaisModelArtifactDefinition): void {
   requireNative();
   if (artifact.runtime !== 'geniex-qairt') throw new Error(`${artifact.displayName} is not a GenieX QAIRT model pack.`);
   if (artifact.modelId !== 'qwen.qwen3-4b') throw new Error('The current GenieX adapter supports Qwen3-4B only.');
+}
+
+async function requireVerifiedPack(artifact: MaisModelArtifactDefinition): Promise<void> {
   const installation = await readMaisModelArtifactStatus(artifact);
   if (installation.state !== 'ready' || !installation.verified) {
     throw new Error('Verify the complete Qwen3-4B 12K pack before starting native inference.');
   }
-  return nativePlugin.runBaseline({ modelId: artifact.modelId });
+}
+
+export async function prepareMaisGenieXModel(
+  artifact: MaisModelArtifactDefinition,
+): Promise<MaisGenieXPrepareResult> {
+  validateArtifact(artifact);
+  await requireVerifiedPack(artifact);
+  return withMaisHighPriorityWork('model-import', 'Preparing Qwen3-4B for GenieX', () =>
+    nativePlugin.prepareModel({ modelId: artifact.modelId }));
+}
+
+export async function clearMaisGenieXPreparedModel(
+  artifact: MaisModelArtifactDefinition,
+): Promise<boolean> {
+  validateArtifact(artifact);
+  return withMaisHighPriorityWork('developer-operation', 'Clearing the GenieX Qwen cache', async () =>
+    (await nativePlugin.clearPreparedModel({ modelId: artifact.modelId })).cleared);
+}
+
+export async function runMaisGenieXBaseline(
+  artifact: MaisModelArtifactDefinition,
+): Promise<MaisGenieXRunResult> {
+  validateArtifact(artifact);
+  await requireVerifiedPack(artifact);
+  const status = await nativePlugin.getStatus();
+  if (!status.modelPrepared) {
+    throw new Error('Prepare the verified Qwen pack for GenieX before loading the NPU model.');
+  }
+  return withMaisHighPriorityWork('model-generation', 'Loading and running Qwen3-4B on the NPU', () =>
+    nativePlugin.runBaseline({ modelId: artifact.modelId }));
 }
 
 export async function cancelMaisGenieXRun(): Promise<{ requested: boolean; supported: boolean; reason?: string }> {
