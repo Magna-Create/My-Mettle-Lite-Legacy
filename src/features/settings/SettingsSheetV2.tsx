@@ -5,6 +5,7 @@ import type { MaisSystemSnapshot } from '../../mais/systemState';
 import { MaisActivityPanel } from '../lab/MaisActivityPanel';
 import { MaisRuntimeLabPanel } from '../lab/MaisRuntimeLabPanel';
 import { DataSettingsPanel } from './DataSettingsPanel';
+import { DeveloperToolsPanel } from './DeveloperToolsPanel';
 import { EmbeddingGemmaImportPanel } from './EmbeddingGemmaImportPanel';
 import { HealthEvidenceSettingsPanel } from './HealthEvidenceSettingsPanel';
 import { QwenGenieXRuntimePanel } from './QwenGenieXRuntimePanel';
@@ -29,7 +30,7 @@ interface Props {
   onRejectResearchRequest: (requestId: string) => Promise<void>;
 }
 
-type Screen = 'root' | 'workout' | 'timer' | 'intelligence' | 'models' | 'health' | 'research' | 'activity' | 'data';
+type Screen = 'root' | 'workout' | 'timer' | 'intelligence' | 'models' | 'health' | 'research' | 'activity' | 'developer' | 'data';
 
 const titles: Record<Screen, string> = {
   root: 'Settings',
@@ -40,6 +41,7 @@ const titles: Record<Screen, string> = {
   health: 'Health evidence',
   research: 'Research exchange',
   activity: 'Activity & diagnostics',
+  developer: 'Developer tools',
   data: 'Data',
 };
 
@@ -51,6 +53,7 @@ const parentScreen: Record<Exclude<Screen, 'root'>, Screen> = {
   health: 'intelligence',
   research: 'intelligence',
   activity: 'intelligence',
+  developer: 'root',
   data: 'root',
 };
 
@@ -74,7 +77,7 @@ export function SettingsSheetV2({
   onRejectResearchRequest,
 }: Props) {
   const [screen, setScreen] = useState<Screen>('root');
-  const wide = screen === 'models' || screen === 'health' || screen === 'research' || screen === 'activity';
+  const wide = screen === 'models' || screen === 'health' || screen === 'research' || screen === 'activity' || screen === 'developer';
 
   return <div className="modal-backdrop settings-backdrop" onMouseDown={onClose}>
     <aside className={`settings-sheet ${wide ? 'is-intelligence-wide' : ''}`} onMouseDown={(event) => event.stopPropagation()}>
@@ -83,6 +86,7 @@ export function SettingsSheetV2({
       {screen === 'root' && <nav className="settings-navigation">
         <Row title="Workout" detail="Rest timer and workout behaviour" onClick={() => setScreen('workout')} />
         <Row title="Intelligence" detail="Evidence, local models, research and diagnostics" onClick={() => setScreen('intelligence')} />
+        <Row title="Developer tools" detail="Live resources, halt state, crash exits and native breadcrumbs" onClick={() => setScreen('developer')} />
         <Row title="Data" detail="Export, restore and reset" onClick={() => setScreen('data')} />
       </nav>}
 
@@ -107,6 +111,7 @@ export function SettingsSheetV2({
         onRejectRequest={onRejectResearchRequest}
       />}
       {screen === 'activity' && <MaisActivityPanel snapshot={maisSnapshot} resourceMode={maisResourceMode} onRunDemo={onRunMaisDemo} onPulse={onPulseMais} onClear={onClearMais} onExportReport={onExportMaisReport} />}
+      {screen === 'developer' && <DeveloperToolsPanel />}
       {screen === 'data' && <DataSettingsPanel database={database} onReset={onReset} />}
     </aside>
   </div>;
