@@ -70,22 +70,37 @@ export function QwenGenieXRuntimePanel() {
     try {
       const next = await runMaisGenieXBaseline(artifact);
       setResult(next);
-      setRuntimeStatus(await readMaisGenieXStatus());
+      const [model, runtime] = await Promise.all([
+        readMaisModelArtifactStatus(artifact),
+        readMaisGenieXStatus(),
+      ]);
+      setArtifactStatus(model);
+      setRuntimeStatus(runtime);
       if (!next.success) setError(next.error ?? 'Qwen did not complete the native baseline.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Qwen native baseline failed.');
-      setRuntimeStatus(await readMaisGenieXStatus());
+      const [model, runtime] = await Promise.all([
+        readMaisModelArtifactStatus(artifact),
+        readMaisGenieXStatus(),
+      ]);
+      setArtifactStatus(model);
+      setRuntimeStatus(runtime);
     } finally {
       setProgress(null);
       setBusy(false);
     }
   }
 
-  const modelReady = artifactStatus?.state === 'ready';
-  const nativeReady = runtimeStatus?.ready === true;
+  const modelReady = artifactStatus?.state === 'ready' && artifactStatus.verified;
+  const runtimeReady = runtimeStatus?.ready === true;
+  const nativeReady = modelReady && runtimeReady;
   const statusText = busy
     ? progress?.state === 'generating' ? 'Generating' : 'Loading'
-    : nativeReady ? 'Native runtime ready' : modelReady ? 'QAIRT setup required' : 'Model pack required';
+    : nativeReady
+      ? 'Native runtime ready'
+      : modelReady
+        ? 'QAIRT setup required'
+        : 'Verified model pack required';
 
   return (
     <section className="paper-card intelligence-model-import" aria-labelledby="qwen-native-runtime-title">
@@ -110,6 +125,9 @@ export function QwenGenieXRuntimePanel() {
 
       {runtimeStatus?.missingModelFiles.length ? (
         <p className="mais-runtime-note">Missing Qwen files: {runtimeStatus.missingModelFiles.join(', ')}</p>
+      ) : null}
+      {artifactStatus && artifactStatus.state !== 'ready' ? (
+        <p className="mais-runtime-note">Run **Verify 12K pack** in the model card before native inference.</p>
       ) : null}
       {runtimeStatus?.bridgeError ? <p className="mais-runtime-error">JNI bridge: {runtimeStatus.bridgeError}</p> : null}
       {error ? <p className="mais-runtime-error" role="alert">{error}</p> : null}
