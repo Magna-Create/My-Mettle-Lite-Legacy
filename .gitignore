@@ -5,3 +5,10 @@ dist/
 android/.gradle/
 android/local.properties
 android/app/build/
+
+# Licensed Qualcomm QAIRT runtime files are staged locally before an Android
+# build and must never be committed. The open My Mettle JNI bridge remains
+# versioned separately as libmais_geniex.so.
+android/app/src/main/jniLibs/arm64-v8a/libGenie.so
+android/app/src/main/jniLibs/arm64-v8a/libQnn*.so
+android/app/src/main/assets/qairt/
