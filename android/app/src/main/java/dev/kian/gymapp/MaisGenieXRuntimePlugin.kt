@@ -239,7 +239,9 @@ class MaisGenieXRuntimePlugin : Plugin() {
             activeWrapper.set(null)
             if (active != null) {
                 val destroyFailure = try {
-                    active.destroy().exceptionOrNull()
+                    val destroyCode = active.destroy()
+                    if (destroyCode == 0) null
+                    else IllegalStateException("GenieX destroy returned status $destroyCode.")
                 } catch (error: Throwable) {
                     error
                 }
