@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   cancelMaisGenieXRun,
+  clearMaisGenieXPreparedModel,
+  prepareMaisGenieXModel,
   readMaisGenieXStatus,
   runMaisGenieXBaseline,
   subscribeMaisGenieXProgress,
+  type MaisGenieXPrepareResult,
   type MaisGenieXProgress,
   type MaisGenieXRunResult,
   type MaisGenieXRuntimeStatus,
@@ -16,6 +19,7 @@ import {
 } from '../../mais/modelArtifacts';
 
 const QWEN_ARTIFACT_ID = 'qwen.qwen3-4b.geniex-qairt.w4a16.sm8750.ctx12288';
+type Operation = 'prepare' | 'run' | 'clear' | null;
 
 function formatDuration(milliseconds: number): string {
   if (!Number.isFinite(milliseconds) || milliseconds < 0) return 'Not recorded';
@@ -28,13 +32,24 @@ function metric(value: number | null | undefined, unit?: string | null): string 
   return `${Number.isInteger(value) ? value : value.toFixed(2)}${unit ? ` ${unit}` : ''}`;
 }
 
+function progressLabel(progress: MaisGenieXProgress | null, operation: Operation): string {
+  if (progress?.state === 'importing') return 'Importing local bundle';
+  if (progress?.state === 'initialising') return 'Initialising NPU runtime';
+  if (progress?.state === 'loading') return 'Loading NPU model';
+  if (progress?.state === 'generating') return 'Thinking & generating';
+  if (operation === 'prepare') return 'Preparing model';
+  if (operation === 'clear') return 'Clearing cache';
+  return 'Working';
+}
+
 export function QwenGenieXRuntimePanel() {
   const artifact = useMemo(() => getMaisModelArtifact(QWEN_ARTIFACT_ID), []);
   const [artifactStatus, setArtifactStatus] = useState<MaisModelArtifactStatus | null>(null);
   const [runtimeStatus, setRuntimeStatus] = useState<MaisGenieXRuntimeStatus | null>(null);
   const [progress, setProgress] = useState<MaisGenieXProgress | null>(null);
+  const [prepareResult, setPrepareResult] = useState<MaisGenieXPrepareResult | null>(null);
   const [result, setResult] = useState<MaisGenieXRunResult | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<Operation>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function refresh(): Promise<void> {
@@ -64,31 +79,53 @@ export function QwenGenieXRuntimePanel() {
     };
   }, []);
 
+  async function prepareModel(): Promise<void> {
+    setOperation('prepare');
+    setError(null);
+    setPrepareResult(null);
+    try {
+      const next = await prepareMaisGenieXModel(artifact);
+      setPrepareResult(next);
+      if (!next.success) setError(next.error ?? 'GenieX did not prepare the Qwen model.');
+      await refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Qwen model preparation failed.');
+      await refresh();
+    } finally {
+      setProgress(null);
+      setOperation(null);
+    }
+  }
+
   async function runBaseline(): Promise<void> {
-    setBusy(true);
+    setOperation('run');
     setError(null);
     setResult(null);
     try {
       const next = await runMaisGenieXBaseline(artifact);
       setResult(next);
-      const [model, runtime] = await Promise.all([
-        readMaisModelArtifactStatus(artifact),
-        readMaisGenieXStatus(),
-      ]);
-      setArtifactStatus(model);
-      setRuntimeStatus(runtime);
+      await refresh();
       if (!next.success && next.state !== 'cancelled') setError(next.error ?? 'Qwen did not complete the native baseline.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Qwen native baseline failed.');
-      const [model, runtime] = await Promise.all([
-        readMaisModelArtifactStatus(artifact),
-        readMaisGenieXStatus(),
-      ]);
-      setArtifactStatus(model);
-      setRuntimeStatus(runtime);
+      await refresh();
     } finally {
       setProgress(null);
-      setBusy(false);
+      setOperation(null);
+    }
+  }
+
+  async function clearPreparedModel(): Promise<void> {
+    setOperation('clear');
+    setError(null);
+    try {
+      await clearMaisGenieXPreparedModel(artifact);
+      setPrepareResult(null);
+      await refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The prepared Qwen cache could not be cleared.');
+    } finally {
+      setOperation(null);
     }
   }
 
@@ -102,15 +139,19 @@ export function QwenGenieXRuntimePanel() {
   }
 
   const modelReady = artifactStatus?.state === 'ready' && artifactStatus.verified;
-  const runtimeReady = runtimeStatus?.ready === true;
-  const nativeReady = modelReady && runtimeReady;
+  const runtimeInstalled = runtimeStatus?.runtimeInstalled === true;
+  const modelPrepared = runtimeStatus?.modelPrepared === true;
+  const nativeReady = modelReady && runtimeInstalled && modelPrepared;
+  const busy = operation !== null;
   const statusText = busy
-    ? progress?.state === 'generating' ? 'Thinking & generating' : 'Loading'
+    ? progressLabel(progress, operation)
     : nativeReady
-      ? 'Native runtime ready'
-      : modelReady
-        ? 'Bundled GenieX unavailable'
-        : 'Verified model pack required';
+      ? 'Prepared & ready'
+      : modelReady && runtimeInstalled
+        ? 'Preparation required'
+        : modelReady
+          ? 'Bundled GenieX unavailable'
+          : 'Verified model pack required';
 
   return (
     <section className="paper-card intelligence-model-import" aria-labelledby="qwen-native-runtime-title">
@@ -123,46 +164,78 @@ export function QwenGenieXRuntimePanel() {
       </header>
 
       <p>
-        GenieX and its Qualcomm runtime ship inside the normal APK through Maven Central. The Qwen model pack remains separately downloadable, so an app update never requires WSL, a private SDK ZIP or a manual runtime installation.
+        The verified download, GenieX local import and NPU model load are now separate stages. Each preparation or inference task acquires the app-wide halt lease before native work begins, pausing the MAIS heartbeat and competing intelligence work.
       </p>
 
       <dl className="settings-fact-list">
-        <div><dt>Model pack</dt><dd>{modelReady ? 'Verified' : artifactStatus?.state ?? 'Checking'}</dd></div>
+        <div><dt>Source model pack</dt><dd>{modelReady ? 'Verified' : artifactStatus?.state ?? 'Checking'}</dd></div>
         <div><dt>Runtime delivery</dt><dd>{runtimeStatus?.distribution === 'maven-central' ? 'Bundled with app' : 'Checking'}</dd></div>
         <div><dt>GenieX Android</dt><dd>{runtimeStatus?.sdkVersion ?? '0.3.5'}</dd></div>
-        <div><dt>QAIRT plugin</dt><dd>{runtimeStatus?.runtimeInstalled ? runtimeStatus.runtimeVersion : 'Unavailable'}</dd></div>
+        <div><dt>QAIRT plugin</dt><dd>{runtimeInstalled ? runtimeStatus?.runtimeVersion : 'Unavailable'}</dd></div>
+        <div><dt>Prepared cache</dt><dd>{modelPrepared ? 'Ready' : 'Not prepared'}</dd></div>
+        <div><dt>Source storage</dt><dd>{formatModelBytes(runtimeStatus?.sourceBundleBytes ?? 0)}</dd></div>
+        <div><dt>GenieX cache storage</dt><dd>{formatModelBytes(runtimeStatus?.cachedBundleBytes ?? 0)}</dd></div>
         <div><dt>Thinking mode</dt><dd>Enabled</dd></div>
         <div><dt>Context ceiling</dt><dd>12,288 tokens</dd></div>
       </dl>
 
+      {runtimeStatus?.lastNativeStage ? (
+        <p className="mais-runtime-note">
+          Last native stage: <strong>{runtimeStatus.lastNativeStage.stage} · {runtimeStatus.lastNativeStage.state}</strong>
+          {runtimeStatus.lastNativeStage.detail ? ` — ${runtimeStatus.lastNativeStage.detail}` : ''}
+        </p>
+      ) : null}
       {runtimeStatus?.missingModelFiles.length ? (
         <p className="mais-runtime-note">Missing Qwen files: {runtimeStatus.missingModelFiles.join(', ')}</p>
       ) : null}
       {artifactStatus && artifactStatus.state !== 'ready' ? (
-        <p className="mais-runtime-note">Run <strong>Verify 12K pack</strong> in the model card before native inference.</p>
+        <p className="mais-runtime-note">Run <strong>Verify 12K pack</strong> in the model card before native preparation.</p>
       ) : null}
       {runtimeStatus?.bridgeError ? <p className="mais-runtime-error">GenieX: {runtimeStatus.bridgeError}</p> : null}
       {error ? <p className="mais-runtime-error" role="alert">{error}</p> : null}
 
       {progress ? (
         <p className="mais-runtime-live" aria-live="polite">
-          <strong>{progress.state === 'generating' ? 'thinking & generating' : progress.state}</strong>
+          <strong>{progressLabel(progress, operation)}</strong>
           <span>NPU · load {formatDuration(progress.loadMs)} · {progress.outputChars} streamed characters</span>
         </p>
       ) : null}
 
       <div className="mais-runtime-actions">
-        {!busy ? (
+        {!busy && !modelPrepared ? (
+          <button className="primary-action compact" type="button" disabled={!modelReady || !runtimeInstalled} onClick={() => void prepareModel()}>
+            Prepare Qwen for GenieX
+          </button>
+        ) : null}
+        {!busy && modelPrepared ? (
           <button className="primary-action compact" type="button" disabled={!nativeReady} onClick={() => void runBaseline()}>
             Run Qwen thinking baseline
           </button>
-        ) : (
+        ) : null}
+        {operation === 'run' ? (
           <button className="text-button danger-text" type="button" onClick={() => void cancelBaseline()}>
             Stop Qwen run
           </button>
-        )}
+        ) : null}
+        {busy && operation !== 'run' ? <button className="text-button" type="button" disabled>{progressLabel(progress, operation)}…</button> : null}
+        {!busy && modelPrepared ? <button className="text-button danger-text" type="button" onClick={() => void clearPreparedModel()}>Clear prepared cache</button> : null}
         <button className="text-button" type="button" disabled={busy} onClick={() => void refresh()}>Refresh</button>
       </div>
+
+      {prepareResult ? (
+        <article className={`mais-runtime-result is-${prepareResult.state}`}>
+          <header>
+            <strong>{prepareResult.success ? 'Preparation completed' : 'Preparation failed'}</strong>
+            <span>{formatDuration(prepareResult.totalMs)}</span>
+          </header>
+          <dl>
+            <div><dt>Local import performed</dt><dd>{prepareResult.imported ? 'Yes' : 'Existing cache reused'}</dd></div>
+            <div><dt>Source bundle</dt><dd>{formatModelBytes(prepareResult.sourceBundleBytes)}</dd></div>
+            <div><dt>Prepared cache</dt><dd>{formatModelBytes(prepareResult.cachedBundleBytes)}</dd></div>
+          </dl>
+          {prepareResult.error ? <p className="mais-runtime-error">{prepareResult.error}</p> : null}
+        </article>
+      ) : null}
 
       {result ? (
         <article className={`mais-runtime-result is-${result.state}`}>
@@ -192,7 +265,7 @@ export function QwenGenieXRuntimePanel() {
       ) : null}
 
       <p className="mais-runtime-note">
-        Qwen’s reasoning is used during generation but is not persisted or shown. The supported GenieX stop API is used for cancellation; native destruction remains in the run’s final cleanup path.
+        Persistent native breadcrumbs and Android process-exit reasons are available under Settings → Developer tools after a restart, including cases where the process dies before the native call can return an error.
       </p>
     </section>
   );
