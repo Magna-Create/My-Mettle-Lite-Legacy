@@ -1,0 +1,77 @@
+name: Build GenieX JNI bridge
+
+on:
+  push:
+    branches:
+      - agent/phase-3b-model-runtime-lab
+    paths:
+      - android/app/src/main/cpp/geniex/**
+      - .github/workflows/build-geniex-bridge.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Build ARM64 bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir="$GITHUB_WORKSPACE/android/app/src/main/cpp/geniex"
+          build_dir="$RUNNER_TEMP/mais-geniex-build"
+          cmake_bin="$ANDROID_SDK_ROOT/cmake/3.22.1/bin/cmake"
+          ndk_dir="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
+
+          "$cmake_bin" \
+            -S "$source_dir" \
+            -B "$build_dir" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ndk_dir/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-24 \
+            -DANDROID_STL=c++_shared
+
+          "$cmake_bin" --build "$build_dir" --config Release --parallel 2
+
+          destination="$GITHUB_WORKSPACE/android/app/src/main/jniLibs/arm64-v8a"
+          mkdir -p "$destination"
+          cp "$build_dir/libmais_geniex.so" "$destination/libmais_geniex.so"
+
+      - name: Verify bridge ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          file android/app/src/main/jniLibs/arm64-v8a/libmais_geniex.so
+          llvm-readelf -h android/app/src/main/jniLibs/arm64-v8a/libmais_geniex.so | grep -E 'Class:|Machine:'
+
+      - name: Commit compiled bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android/app/src/main/jniLibs/arm64-v8a/libmais_geniex.so
+          if git diff --cached --quiet; then
+            echo "Bridge binary is already current."
+            exit 0
+          fi
+          git commit -m "Vendor ARM64 GenieX JNI bridge"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
