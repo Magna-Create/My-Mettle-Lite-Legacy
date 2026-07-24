@@ -1,0 +1,125 @@
+.compact-settings-list {
+  gap: 0.55rem;
+}
+
+.settings-navigation-row.is-static {
+  cursor: default;
+  text-align: left;
+}
+
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0;
+}
+
+.settings-toggle-row > span {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.settings-toggle-row small,
+.intelligence-form-grid span {
+  color: var(--ink-muted, rgba(29, 29, 31, 0.62));
+}
+
+.mais-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.mais-stat-grid > div {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.8rem;
+  border-radius: 0.9rem;
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.mais-stat-grid strong {
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.mais-stat-grid span {
+  font-size: 0.74rem;
+  color: var(--ink-muted, rgba(29, 29, 31, 0.62));
+}
+
+.intelligence-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.intelligence-form-grid label {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.intelligence-form-grid .span-two {
+  grid-column: 1 / -1;
+}
+
+.intelligence-form-grid input,
+.intelligence-form-grid select,
+.intelligence-form-grid textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid rgba(127, 127, 127, 0.22);
+  border-radius: 0.75rem;
+  padding: 0.72rem 0.78rem;
+  background: rgba(255, 255, 255, 0.72);
+  color: inherit;
+  font: inherit;
+}
+
+.intelligence-form-grid textarea {
+  min-height: 5.5rem;
+  resize: vertical;
+}
+
+.tool-request-form {
+  padding-top: 0.4rem;
+}
+
+.tool-request-months {
+  display: grid;
+  gap: 1.2rem;
+  margin-top: 1rem;
+}
+
+.tool-request-months h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 620px) {
+  .intelligence-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .intelligence-form-grid .span-two {
+    grid-column: auto;
+  }
+
+  .mais-stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .intelligence-form-grid input,
+  .intelligence-form-grid select,
+  .intelligence-form-grid textarea {
+    background: rgba(20, 20, 22, 0.72);
+  }
+}
