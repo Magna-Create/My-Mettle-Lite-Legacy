@@ -3,12 +3,15 @@ package dev.kian.gymapp
 import android.os.Debug
 import com.geniex.sdk.GenieXSdk
 import com.geniex.sdk.LlmWrapper
+import com.geniex.sdk.ModelManagerWrapper
 import com.geniex.sdk.bean.ChatMessage
-import com.geniex.sdk.bean.ComputeUnitValue
 import com.geniex.sdk.bean.GenerationConfig
+import com.geniex.sdk.bean.HubSource
 import com.geniex.sdk.bean.LlmCreateInput
 import com.geniex.sdk.bean.LlmStreamResult
 import com.geniex.sdk.bean.ModelConfig
+import com.geniex.sdk.bean.ModelPaths
+import com.geniex.sdk.bean.ModelPullInput
 import com.geniex.sdk.bean.ProfilingData
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -31,7 +34,7 @@ import kotlin.math.roundToLong
 class MaisGenieXRuntimePlugin : Plugin() {
     companion object {
         private const val MODEL_ID = "qwen.qwen3-4b"
-        private const val MODEL_NAME = "Qwen3-4B"
+        private const val GENIEX_MODEL_KEY = "local/my-mettle-qwen3-4b-12k-v1"
         private const val GENIEX_ANDROID_VERSION = "0.3.5"
         private const val CONTEXT_TOKENS = 12_288
         private const val MAX_OUTPUT_TOKENS = 2_048
@@ -109,25 +112,33 @@ class MaisGenieXRuntimePlugin : Plugin() {
 
     @PluginMethod
     fun cancelRun(call: PluginCall) {
+        if (!running.get()) {
+            call.resolve(cancelResult(false, "No GenieX run is active."))
+            return
+        }
+
         val wrapper = activeWrapper.get()
-        if (!running.get() || wrapper == null) {
-            val result = JSObject()
-            result.put("requested", false)
-            result.put("supported", true)
-            result.put("reason", "No GenieX generation is active.")
-            call.resolve(result)
+        if (wrapper == null) {
+            call.resolve(cancelResult(false, "The model is still being imported or loaded; generation has not started."))
             return
         }
 
         cancelRequested.set(true)
         runtimeScope.launch {
             val stopResult = wrapper.stopStream()
-            val result = JSObject()
-            result.put("requested", stopResult.isSuccess)
-            result.put("supported", true)
-            result.put("reason", stopResult.exceptionOrNull()?.let(::rootMessage) ?: JSONObject.NULL)
-            call.resolve(result)
+            call.resolve(
+                cancelResult(
+                    stopResult.isSuccess,
+                    stopResult.exceptionOrNull()?.let(::rootMessage),
+                ),
+            )
         }
+    }
+
+    private fun cancelResult(requested: Boolean, reason: String?): JSObject = JSObject().apply {
+        put("requested", requested)
+        put("supported", true)
+        put("reason", reason ?: JSONObject.NULL)
     }
 
     private suspend fun executeBaseline(
@@ -152,24 +163,21 @@ class MaisGenieXRuntimePlugin : Plugin() {
 
         emitProgress(modelId, "loading", 0L, 0)
         try {
-            val modelDirectory = modelDirectory()
-            val tokenizer = File(modelDirectory, "tokenizer.json")
+            val resolvedPaths = resolveGenieXModelPaths(modelId)
             val loadStarted = System.currentTimeMillis()
             wrapper = LlmWrapper
                 .builder()
                 .llmCreateInput(
                     LlmCreateInput(
-                        model_name = MODEL_NAME,
-                        model_path = modelDirectory.absolutePath,
-                        tokenizer_path = tokenizer.absolutePath,
+                        model_name = resolvedPaths.model_name,
+                        model_path = resolvedPaths.model_path,
                         config = ModelConfig(
                             nCtx = 0,
-                            nGpuLayers = 0,
                             max_tokens = MAX_OUTPUT_TOKENS,
                             enable_thinking = true,
                         ),
-                        runtime_id = GenieXSdk.PLUGIN_ID_QAIRT,
-                        compute_unit = ComputeUnitValue.NPU.value,
+                        runtime_id = resolvedPaths.runtime_id,
+                        compute_unit = null,
                     ),
                 )
                 .build()
@@ -296,29 +304,71 @@ class MaisGenieXRuntimePlugin : Plugin() {
         call.resolve(result)
     }
 
+    private suspend fun resolveGenieXModelPaths(modelId: String): ModelPaths {
+        ModelManagerWrapper.init(genieXDataDirectory().absolutePath).getOrThrow()
+
+        val cached = ModelManagerWrapper.getPaths(GENIEX_MODEL_KEY)
+        if (cached != null && File(cached.model_path).exists() && File(cached.model_dir).isDirectory) {
+            return cached
+        }
+        if (cached != null) {
+            try {
+                ModelManagerWrapper.remove(GENIEX_MODEL_KEY)
+            } catch (_: Throwable) {
+                // A stale cache entry is harmless; the local import below is authoritative.
+            }
+        }
+
+        emitProgress(modelId, "loading", 0L, 0)
+        var completed = false
+        ModelManagerWrapper.pullFlow(
+            ModelPullInput(
+                model_name = GENIEX_MODEL_KEY,
+                hub = HubSource.LOCALFS,
+                local_path = modelDirectory().absolutePath,
+            ),
+        ).collect { event ->
+            when (event) {
+                is ModelManagerWrapper.PullEvent.Progress -> {
+                    emitProgress(modelId, "loading", 0L, 0)
+                }
+                ModelManagerWrapper.PullEvent.Completed -> completed = true
+                is ModelManagerWrapper.PullEvent.Error -> {
+                    throw IllegalStateException("GenieX local model import failed: ${event.message} (code ${event.code}).")
+                }
+            }
+        }
+        if (!completed) {
+            throw IllegalStateException("GenieX local model import ended without completing.")
+        }
+
+        return ModelManagerWrapper.getPaths(GENIEX_MODEL_KEY)
+            ?: throw IllegalStateException("GenieX imported the Qwen bundle but did not return resolved model paths.")
+    }
+
     private fun status(): JSObject {
         val missing = missingModelFiles()
         val missingArray = JSArray()
         missing.forEach { missingArray.put(it) }
         val ready = ensureSdkReady()
-        val result = JSObject()
-        result.put("ready", missing.isEmpty() && ready)
-        result.put("running", running.get())
-        result.put("modelId", MODEL_ID)
-        result.put("runtime", "geniex-qairt")
-        result.put("runtimeVersion", runtimeVersion())
-        result.put("sdkVersion", GENIEX_ANDROID_VERSION)
-        result.put("distribution", "maven-central")
-        result.put("backend", "npu")
-        result.put("contextTokens", CONTEXT_TOKENS)
-        result.put("thinkingEnabled", true)
-        result.put("bundleReady", missing.isEmpty())
-        result.put("missingModelFiles", missingArray)
-        result.put("runtimeInstalled", ready)
-        result.put("bridgeLoaded", ready)
-        result.put("bridgeError", sdkError ?: JSONObject.NULL)
-        result.put("lastResult", readLastResult())
-        return result
+        return JSObject().apply {
+            put("ready", missing.isEmpty() && ready)
+            put("running", running.get())
+            put("modelId", MODEL_ID)
+            put("runtime", "geniex-qairt")
+            put("runtimeVersion", runtimeVersion())
+            put("sdkVersion", GENIEX_ANDROID_VERSION)
+            put("distribution", "maven-central")
+            put("backend", "npu")
+            put("contextTokens", CONTEXT_TOKENS)
+            put("thinkingEnabled", true)
+            put("bundleReady", missing.isEmpty())
+            put("missingModelFiles", missingArray)
+            put("runtimeInstalled", ready)
+            put("bridgeLoaded", ready)
+            put("bridgeError", sdkError ?: JSONObject.NULL)
+            put("lastResult", readLastResult())
+        }
     }
 
     private fun ensureSdkReady(): Boolean = synchronized(sdkLock) {
@@ -354,20 +404,18 @@ class MaisGenieXRuntimePlugin : Plugin() {
             ?: "GenieX Android $GENIEX_ANDROID_VERSION"
     }
 
-    private fun profileMetrics(profile: ProfilingData?): JSObject {
-        val metrics = JSObject()
-        metrics.put("available", profile != null)
-        metrics.put("timeToFirstTokenMs", profile?.ttftMs ?: JSONObject.NULL)
-        metrics.put("promptProcessingTimeMs", profile?.promptTimeMs ?: JSONObject.NULL)
-        metrics.put("decodeTimeMs", profile?.decodeTimeMs ?: JSONObject.NULL)
-        metrics.put("tokenGenerationRate", profile?.decodingSpeed ?: JSONObject.NULL)
-        metrics.put("tokenGenerationRateUnit", if (profile == null) JSONObject.NULL else "tok/s")
-        metrics.put("promptProcessingRate", profile?.prefillSpeed ?: JSONObject.NULL)
-        metrics.put("promptProcessingRateUnit", if (profile == null) JSONObject.NULL else "tok/s")
-        metrics.put("promptTokens", profile?.promptTokens ?: JSONObject.NULL)
-        metrics.put("generatedTokens", profile?.generatedTokens ?: JSONObject.NULL)
-        metrics.put("stopReason", profile?.stopReason ?: JSONObject.NULL)
-        return metrics
+    private fun profileMetrics(profile: ProfilingData?): JSObject = JSObject().apply {
+        put("available", profile != null)
+        put("timeToFirstTokenMs", profile?.ttftMs ?: JSONObject.NULL)
+        put("promptProcessingTimeMs", profile?.promptTimeMs ?: JSONObject.NULL)
+        put("decodeTimeMs", profile?.decodeTimeMs ?: JSONObject.NULL)
+        put("tokenGenerationRate", profile?.decodingSpeed ?: JSONObject.NULL)
+        put("tokenGenerationRateUnit", if (profile == null) JSONObject.NULL else "tok/s")
+        put("promptProcessingRate", profile?.prefillSpeed ?: JSONObject.NULL)
+        put("promptProcessingRateUnit", if (profile == null) JSONObject.NULL else "tok/s")
+        put("promptTokens", profile?.promptTokens ?: JSONObject.NULL)
+        put("generatedTokens", profile?.generatedTokens ?: JSONObject.NULL)
+        put("stopReason", profile?.stopReason ?: JSONObject.NULL)
     }
 
     private fun missingModelFiles(): List<String> {
@@ -376,6 +424,12 @@ class MaisGenieXRuntimePlugin : Plugin() {
     }
 
     private fun modelDirectory(): File = File(context.filesDir, "mais-models")
+
+    private fun genieXDataDirectory(): File = File(context.filesDir, "geniex").apply {
+        if (!exists() && !mkdirs()) {
+            throw IllegalStateException("Could not create the GenieX model-manager directory.")
+        }
+    }
 
     private fun hasCompletedThinkingSection(raw: String): Boolean = raw.lastIndexOf("</think>") >= 0
 
