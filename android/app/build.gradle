@@ -30,6 +30,16 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    packagingOptions {
+        jniLibs {
+            // Qualcomm's Genie Android sample requires real filesystem paths for
+            // libGenie, QNN host libraries, HTP stubs and HTP skeletons.
+            useLegacyPackaging = true
+            // Hexagon skeletons are DSP binaries carried in the Android native
+            // source set; do not send them through the host ELF strip step.
+            keepDebugSymbols += ['**/libQnnHtpV*Skel.so']
+        }
+    }
 }
 
 repositories {
