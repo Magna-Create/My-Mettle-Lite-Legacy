@@ -6,6 +6,7 @@ import { MaisActivityPanel } from '../lab/MaisActivityPanel';
 import { MaisRuntimeLabPanel } from '../lab/MaisRuntimeLabPanel';
 import { DataSettingsPanel } from './DataSettingsPanel';
 import { EmbeddingGemmaImportPanel } from './EmbeddingGemmaImportPanel';
+import { HealthEvidenceSettingsPanel } from './HealthEvidenceSettingsPanel';
 import { QairtRuntimeImportPanel } from './QairtRuntimeImportPanel';
 import { QwenGenieXRuntimePanel } from './QwenGenieXRuntimePanel';
 import { ResearchSettingsPanel } from './ResearchSettingsPanel';
@@ -28,7 +29,7 @@ interface Props {
   onRejectResearchRequest: (requestId: string) => Promise<void>;
 }
 
-type Screen = 'root' | 'workout' | 'timer' | 'intelligence' | 'models' | 'research' | 'activity' | 'data';
+type Screen = 'root' | 'workout' | 'timer' | 'intelligence' | 'models' | 'health' | 'research' | 'activity' | 'data';
 
 const titles: Record<Screen, string> = {
   root: 'Settings',
@@ -36,6 +37,7 @@ const titles: Record<Screen, string> = {
   timer: 'Rest timer',
   intelligence: 'Intelligence',
   models: 'Local models',
+  health: 'Health evidence',
   research: 'Research exchange',
   activity: 'Activity & diagnostics',
   data: 'Data',
@@ -46,6 +48,7 @@ const parentScreen: Record<Exclude<Screen, 'root'>, Screen> = {
   timer: 'workout',
   intelligence: 'root',
   models: 'intelligence',
+  health: 'intelligence',
   research: 'intelligence',
   activity: 'intelligence',
   data: 'root',
@@ -71,7 +74,7 @@ export function SettingsSheetV2({
   onRejectResearchRequest,
 }: Props) {
   const [screen, setScreen] = useState<Screen>('root');
-  const wide = screen === 'models' || screen === 'research' || screen === 'activity';
+  const wide = screen === 'models' || screen === 'health' || screen === 'research' || screen === 'activity';
 
   return <div className="modal-backdrop settings-backdrop" onMouseDown={onClose}>
     <aside className={`settings-sheet ${wide ? 'is-intelligence-wide' : ''}`} onMouseDown={(event) => event.stopPropagation()}>
@@ -79,7 +82,7 @@ export function SettingsSheetV2({
 
       {screen === 'root' && <nav className="settings-navigation">
         <Row title="Workout" detail="Rest timer and workout behaviour" onClick={() => setScreen('workout')} />
-        <Row title="Intelligence" detail="Local models, research and diagnostics" onClick={() => setScreen('intelligence')} />
+        <Row title="Intelligence" detail="Evidence, local models, research and diagnostics" onClick={() => setScreen('intelligence')} />
         <Row title="Data" detail="Export, restore and reset" onClick={() => setScreen('data')} />
       </nav>}
 
@@ -88,15 +91,17 @@ export function SettingsSheetV2({
       </nav>}
 
       {screen === 'intelligence' && <nav className="settings-navigation">
+        <Row title="Health evidence" detail="Health Connect, Samsung-origin records and manual body composition" onClick={() => setScreen('health')} />
         <Row title="Local models" detail="Install, import, benchmark and remove model artefacts" onClick={() => setScreen('models')} />
-        <Row title="Research exchange" detail="Export focused requests and import cited reports" onClick={() => setScreen('research')} />
+        <Row title="Research exchange" detail="Export research and analysis-tool requests for ChatGPT" onClick={() => setScreen('research')} />
         <Row title="Activity & diagnostics" detail="Heartbeat, role execution, task ledger and report export" onClick={() => setScreen('activity')} />
       </nav>}
 
       {screen === 'timer' && <TimerSettingsPanel timer={database.settings.restTimer} onUpdate={(patch) => onUpdateSettings({ restTimer: patch })} />}
+      {screen === 'health' && <HealthEvidenceSettingsPanel database={database} />}
       {screen === 'models' && <div className="intelligence-settings-stack"><EmbeddingGemmaImportPanel /><QairtRuntimeImportPanel /><MaisRuntimeLabPanel /><QwenGenieXRuntimePanel /></div>}
       {screen === 'research' && <ResearchSettingsPanel
-        research={maisSnapshot?.research ?? { requests: [], reports: [], rollingWindowDays: 30, maxRequestsPerWindow: 3, cooldownDays: 7 }}
+        research={maisSnapshot?.research ?? { requests: [], reports: [], rollingWindowDays: 30, maxRequestsPerWindow: 3, cooldownDays: 0 }}
         onExportRequest={onExportResearchRequest}
         onImportReport={onImportResearchReport}
         onRejectRequest={onRejectResearchRequest}
