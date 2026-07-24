@@ -44,7 +44,7 @@ The Qualcomm accelerator is an NPU/HTP path, not a TPU. The generic model works 
 - ambiguous-task triage only after deterministic routing cannot decide;
 - must emit an escalation rather than improvise when causal or longitudinal analysis is required.
 
-The language-provider interface remains modular so the future custom E2B GenieX build can reuse the native runtime lifecycle without changing role contracts.
+The language-provider interface remains modular so the future custom E2B GenieX build can reuse the supported GenieX Android lifecycle without changing role contracts.
 
 ### Qwen3-4B Thinking · custom 12K GenieX QAIRT
 
@@ -52,33 +52,36 @@ Purpose: infrequent deep analysis.
 
 - repository: `MagneRex/Qwen3-4B-Genie-Snapdragon-8-Elite-12K`;
 - runtime: GenieX QAIRT;
+- Android SDK distribution: `com.qualcomm.qti:geniex-android:0.3.5` from Maven Central;
 - precision: W4A16;
 - compiled target: Snapdragon 8 Elite for Galaxy;
 - QAIRT compilation identifier: `2.45.0.260326154327`;
 - context: 12,288 tokens;
 - prompt/decode sequence lengths: 128 / 1;
 - preferred backend: Qualcomm NPU/HTP;
-- thinking mode: enabled explicitly with `/think`;
+- thinking mode: enabled through GenieX's model configuration and chat-template API;
 - competing hypotheses, confounds and causal challenges;
 - experiment design and evaluation;
 - generated-analysis and declarative widget-code authoring within validated sandboxes;
 - monthly external-research request drafting;
 - runs only for recognised complex tasks, explicit user requests or bounded overnight work.
 
-The app installs the complete multi-file GenieX bundle through resumable Hugging Face downloads. Runtime Lab can re-verify all 15 files at any time.
+The app installs the complete multi-file model bundle through resumable Hugging Face downloads. Runtime Lab can re-verify all 15 files at any time. The execution runtime is bundled in every normal APK/AAB through Gradle; users do not install QAIRT, WSL, Termux build assets or a private runtime ZIP.
 
-The native Android adapter is implemented as:
+The Android adapter uses Qualcomm's supported public API:
 
-- an open, statically linked ARM64 JNI bridge included in the repository;
-- private QAIRT 2.45 build assets staged locally before APK assembly;
-- Qualcomm-style legacy extraction of Genie, QNN host libraries, HTP stubs and v73 skeletons;
-- absolute runtime rewriting of tokenizer, backend extension and context-binary paths;
-- one bounded thinking-enabled dialog lifecycle with profiler, timing and process-memory capture;
+- `GenieXSdk` initialisation and QAIRT plugin registration;
+- `LlmWrapper` with the existing model bundle directory;
+- model-default QAIRT context values and explicit NPU compute selection;
+- chat-template application with thinking enabled;
+- token streaming through Kotlin Flow;
+- supported stop-stream cancellation;
+- profiler data for TTFT, token counts, prefill and decoding rates;
+- deterministic `destroy()` cleanup and process-memory capture;
 - final-answer extraction after the `<think>...</think>` section;
-- ephemeral reasoning content: the transcript is not persisted, displayed or exported;
-- deterministic cleanup and persistent final-result/error reporting.
+- ephemeral reasoning content: the transcript is not persisted, displayed or exported.
 
-This is now a target-device validation candidate, not yet a production-proven runtime. Qwen remains outside autonomous role execution until it creates a dialog, thinks, generates final text and unloads cleanly on the S25 Ultra in repeated tests.
+This is now a target-device validation candidate, not yet a production-proven runtime. Qwen remains outside autonomous role execution until it loads, thinks, generates final text and unloads cleanly on the S25 Ultra in repeated tests.
 
 Qwen produces structured Workbench artefacts rather than final UI prose. It never applies a database mutation directly.
 
@@ -101,7 +104,7 @@ App upgrades delete the retired E4B model, partial download and verification rec
 1. Deterministic code handles known calculations, templates and obvious task classes.
 2. E2B handles ordinary language work on the generic CPU runtime.
 3. E2B may classify only genuinely ambiguous routes and cannot answer during the routing pass.
-4. Qwen receives longitudinal, causal, contradictory, experiment or routine-change work only after its native device gate passes.
+4. Qwen receives longitudinal, causal, contradictory, experiment or routine-change work only after its device gate passes.
 5. Qwen uses thinking mode for those deep tasks; only its validated final artefact is retained.
 6. Until the gate passes, deep Qwen episodes record a deterministic fallback instead of attempting native inference.
 7. The user may explicitly choose Quick, Deep or Automatic during beta evaluation after the runtime gate passes.
