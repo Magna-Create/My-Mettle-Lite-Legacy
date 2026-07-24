@@ -11,14 +11,16 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,6 +31,7 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
     private static final String MODEL_ID = "qwen.qwen3-4b";
     private static final String RUNTIME_VERSION = "QAIRT 2.45.0.260326154327";
     private static final int CONTEXT_TOKENS = 12_288;
+    private static final int READ_BUFFER_BYTES = 64 * 1024;
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
     private static final AtomicBoolean RUNNING = new AtomicBoolean(false);
     private static final AtomicLong ACTIVE_HANDLE = new AtomicLong(0L);
@@ -66,24 +69,27 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
         final String systemInstruction;
         try {
             modelId = required(call, "modelId");
-            if (!MODEL_ID.equals(modelId)) throw new IllegalArgumentException("The GenieX adapter currently supports Qwen3-4B only.");
-            prompt = call.getString(
+            if (!MODEL_ID.equals(modelId)) {
+                throw new IllegalArgumentException("The GenieX adapter currently supports Qwen3-4B only.");
+            }
+            prompt = optional(
+                call,
                 "prompt",
-                "/no_think\nReply with exactly two short sentences. First confirm that this response was generated locally. Second state that verified evidence should be preferred over an unbounded transcript."
-            ).trim();
-            systemInstruction = call.getString(
+                "Reply with exactly two short sentences. First confirm that this response was generated locally. Second state that verified evidence should be preferred over an unbounded transcript."
+            );
+            systemInstruction = optional(
+                call,
                 "systemInstruction",
                 "You are the bounded native Qwen runtime check for My Mettle. Be concise, factual and never claim access to data that was not supplied."
-            ).trim();
-            if (prompt.isEmpty()) throw new IllegalArgumentException("prompt is required.");
-            if (systemInstruction.isEmpty()) throw new IllegalArgumentException("systemInstruction is required.");
+            );
             ensureReady();
-            if (!RUNNING.compareAndSet(false, true)) throw new IllegalStateException("A GenieX run is already active.");
+            if (!RUNNING.compareAndSet(false, true)) {
+                throw new IllegalStateException("A GenieX run is already active.");
+            }
         } catch (Exception error) {
             call.reject(rootMessage(error), error);
             return;
         }
-
         EXECUTOR.execute(() -> executeBaseline(call, modelId, prompt, systemInstruction));
     }
 
@@ -92,7 +98,10 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("requested", false);
         result.put("supported", false);
-        result.put("reason", "The currently integrated Genie C API does not expose a validated cancellation ABI. The bounded probe must finish before another run starts.");
+        result.put(
+            "reason",
+            "The currently integrated Genie C API does not expose a validated cancellation ABI. The bounded probe must finish before another run starts."
+        );
         call.resolve(result);
     }
 
@@ -114,8 +123,8 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
         emitProgress(modelId, "loading", 0L, 0);
         try {
             MaisGenieXNative.requireLoaded();
-            final String configJson = buildRuntimeConfig();
-            final long loadStarted = System.currentTimeMillis();
+            String configJson = buildRuntimeConfig();
+            long loadStarted = System.currentTimeMillis();
             handle = MaisGenieXNative.nativeCreate(
                 MaisQairtRuntimePlugin.arm64Directory(getContext().getFilesDir()).getAbsolutePath(),
                 MaisQairtRuntimePlugin.hexagonDirectory(getContext().getFilesDir()).getAbsolutePath(),
@@ -127,19 +136,22 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
             peakPss = Math.max(peakPss, currentPssBytes());
 
             emitProgress(modelId, "generating", loadMs, 0);
-            final String taggedPrompt = buildTaggedPrompt(systemInstruction, prompt);
-            rawOutput = nullToEmpty(MaisGenieXNative.nativeQuery(handle, taggedPrompt)).trim();
+            rawOutput = nullToEmpty(
+                MaisGenieXNative.nativeQuery(handle, buildTaggedPrompt(systemInstruction, prompt))
+            ).trim();
             generationMs = Math.max(0L, MaisGenieXNative.nativeGetLastQueryMs(handle));
             firstChunkMs = MaisGenieXNative.nativeGetLastFirstChunkMs(handle);
             profileJson = nullToEmpty(MaisGenieXNative.nativeGetLastProfileJson(handle));
             finalOutput = extractFinalOutput(rawOutput);
-            if (finalOutput.isEmpty()) throw new IllegalStateException("Qwen completed without returning a final response.");
+            if (finalOutput.isEmpty()) {
+                throw new IllegalStateException("Qwen completed without returning a final response.");
+            }
             peakPss = Math.max(peakPss, currentPssBytes());
         } catch (Throwable error) {
             state = "failed";
             failure = rootMessage(error);
         } finally {
-            final long unloadStarted = System.currentTimeMillis();
+            long unloadStarted = System.currentTimeMillis();
             if (handle != 0L) {
                 try {
                     MaisGenieXNative.nativeFree(handle);
@@ -156,7 +168,7 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
             RUNNING.set(false);
         }
 
-        final long completedAt = System.currentTimeMillis();
+        long completedAt = System.currentTimeMillis();
         try {
             JSObject result = new JSObject();
             result.put("state", state);
@@ -196,6 +208,7 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
         boolean runtimeInstalled = new File(arm64, "libGenie.so").isFile()
             && new File(arm64, "libQnnSystem.so").isFile()
             && new File(arm64, "libQnnHtp.so").isFile()
+            && new File(arm64, "libQnnHtpPrepare.so").isFile()
             && hasLibrary(arm64, "Stub.so")
             && hasLibrary(hexagon, "Skel.so");
 
@@ -211,47 +224,59 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
         result.put("missingModelFiles", missingFiles);
         result.put("runtimeInstalled", runtimeInstalled);
         result.put("bridgeLoaded", MaisGenieXNative.isLoaded());
-        result.put("bridgeError", MaisGenieXNative.loadError() == null ? JSONObject.NULL : MaisGenieXNative.loadError());
+        result.put(
+            "bridgeError",
+            MaisGenieXNative.loadError() == null ? JSONObject.NULL : MaisGenieXNative.loadError()
+        );
         result.put("lastResult", readLastResult());
         return result;
     }
 
     private void ensureReady() throws Exception {
         JSObject current = status();
-        if (!current.getBool("bundleReady", false)) {
+        if (!current.getBool("bundleReady")) {
             throw new IllegalStateException("The complete verified Qwen3-4B 12K model pack is not installed.");
         }
-        if (!current.getBool("runtimeInstalled", false)) {
+        if (!current.getBool("runtimeInstalled")) {
             throw new IllegalStateException("Import the matching QAIRT 2.45 Android runtime before running Qwen.");
         }
         MaisGenieXNative.requireLoaded();
     }
 
     private String buildRuntimeConfig() throws Exception {
-        File modelDirectory = modelDirectory();
-        JSONObject config = new JSONObject(readText(new File(modelDirectory, "genie_config.json")));
+        File models = modelDirectory();
+        JSONObject config = new JSONObject(readText(new File(models, "genie_config.json")));
         JSONObject dialog = config.getJSONObject("dialog");
-        dialog.getJSONObject("tokenizer").put("path", new File(modelDirectory, "tokenizer.json").getAbsolutePath());
+        dialog.getJSONObject("tokenizer").put(
+            "path",
+            new File(models, "tokenizer.json").getAbsolutePath()
+        );
         JSONObject engine = dialog.getJSONObject("engine");
         engine.getJSONObject("backend").put(
             "extensions",
-            new File(modelDirectory, "htp_backend_ext_config.json").getAbsolutePath()
+            new File(models, "htp_backend_ext_config.json").getAbsolutePath()
         );
-        JSONArray binaries = engine.getJSONObject("model").getJSONObject("binary").getJSONArray("ctx-bins");
+        JSONArray binaries = engine
+            .getJSONObject("model")
+            .getJSONObject("binary")
+            .getJSONArray("ctx-bins");
         for (int index = 0; index < binaries.length(); index += 1) {
             String name = new File(binaries.getString(index)).getName();
-            File binary = new File(modelDirectory, name);
-            if (!binary.isFile()) throw new IllegalStateException("Qwen context binary is missing: " + name + ".");
+            File binary = new File(models, name);
+            if (!binary.isFile()) {
+                throw new IllegalStateException("Qwen context binary is missing: " + name + ".");
+            }
             binaries.put(index, binary.getAbsolutePath());
         }
         return config.toString();
     }
 
     private String buildTaggedPrompt(String systemInstruction, String userPrompt) {
+        String tagged;
         try {
             JSONObject metadata = new JSONObject(readText(new File(modelDirectory(), "metadata.json")));
             JSONObject template = metadata.getJSONObject("genie").getJSONObject("chat_template");
-            return template.getString("system_prefix")
+            tagged = template.getString("system_prefix")
                 + systemInstruction
                 + template.getString("system_suffix")
                 + template.getString("user_prefix")
@@ -259,21 +284,22 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
                 + template.getString("user_suffix")
                 + template.getString("assistant_prefix");
         } catch (Exception ignored) {
-            return "<|im_start|>system\n" + systemInstruction + "<|im_end|>\n"
+            tagged = "<|im_start|>system\n" + systemInstruction + "<|im_end|>\n"
                 + "<|im_start|>user\n" + userPrompt + "<|im_end|>\n"
                 + "<|im_start|>assistant\n";
         }
+        return tagged + "<think>\n\n</think>\n";
     }
 
     private JSObject profileMetrics(String profileJson) {
         JSObject metrics = new JSObject();
-        metrics.put("available", !profileJson.isBlank());
+        metrics.put("available", !profileJson.trim().isEmpty());
         metrics.put("timeToFirstTokenMs", JSONObject.NULL);
         metrics.put("tokenGenerationRate", JSONObject.NULL);
         metrics.put("promptProcessingRate", JSONObject.NULL);
         metrics.put("promptTokens", JSONObject.NULL);
         metrics.put("generatedTokens", JSONObject.NULL);
-        if (profileJson.isBlank()) return metrics;
+        if (profileJson.trim().isEmpty()) return metrics;
         try {
             JSONObject profile = new JSONObject(profileJson);
             findMetric(profile, "time-to-first-token", metrics, "timeToFirstTokenMs");
@@ -287,7 +313,12 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
         return metrics;
     }
 
-    private boolean findMetric(Object node, String targetKey, JSObject output, String outputKey) throws Exception {
+    private boolean findMetric(
+        Object node,
+        String targetKey,
+        JSObject output,
+        String outputKey
+    ) throws Exception {
         if (node instanceof JSONObject) {
             JSONObject object = (JSONObject) node;
             if (object.has(targetKey)) {
@@ -301,31 +332,40 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
                 }
                 return true;
             }
-            for (String key : object.keySet()) if (findMetric(object.get(key), targetKey, output, outputKey)) return true;
+            Iterator<String> keys = object.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                if (findMetric(object.get(key), targetKey, output, outputKey)) return true;
+            }
         } else if (node instanceof JSONArray) {
             JSONArray array = (JSONArray) node;
-            for (int index = 0; index < array.length(); index += 1) if (findMetric(array.get(index), targetKey, output, outputKey)) return true;
+            for (int index = 0; index < array.length(); index += 1) {
+                if (findMetric(array.get(index), targetKey, output, outputKey)) return true;
+            }
         }
         return false;
     }
 
     private String extractFinalOutput(String raw) {
-        String output = raw == null ? "" : raw.trim();
+        String output = nullToEmpty(raw).trim();
         int closingThink = output.lastIndexOf("</think>");
         if (closingThink >= 0) output = output.substring(closingThink + "</think>".length()).trim();
-        output = output.replace("<|im_end|>", "").trim();
-        return output;
+        return output.replace("<|im_end|>", "").trim();
     }
 
     private JSONArray missingModelFiles() {
         JSONArray missing = new JSONArray();
         File directory = modelDirectory();
-        for (String name : REQUIRED_MODEL_FILES) if (!new File(directory, name).isFile()) missing.put(name);
+        for (String name : REQUIRED_MODEL_FILES) {
+            if (!new File(directory, name).isFile()) missing.put(name);
+        }
         return missing;
     }
 
     private boolean hasLibrary(File directory, String suffix) {
-        File[] matches = directory.listFiles((parent, name) -> name.startsWith("libQnnHtpV") && name.endsWith(suffix));
+        File[] matches = directory.listFiles(
+            (parent, name) -> name.startsWith("libQnnHtpV") && name.endsWith(suffix)
+        );
         return matches != null && matches.length > 0;
     }
 
@@ -358,7 +398,9 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
 
     private void writeLastResult(JSObject result) throws Exception {
         File directory = runtimeResultDirectory();
-        if (!directory.exists() && !directory.mkdirs()) throw new IllegalStateException("Could not create the MAIS runtime directory.");
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw new IllegalStateException("Could not create the MAIS runtime directory.");
+        }
         try (BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(lastResultFile()))) {
             output.write(result.toString(2).getBytes(StandardCharsets.UTF_8));
         }
@@ -374,12 +416,30 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
     }
 
     private String readText(File file) throws Exception {
-        return Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        try (
+            BufferedInputStream input = new BufferedInputStream(new FileInputStream(file), READ_BUFFER_BYTES);
+            ByteArrayOutputStream output = new ByteArrayOutputStream()
+        ) {
+            byte[] buffer = new byte[READ_BUFFER_BYTES];
+            int count;
+            while ((count = input.read(buffer)) >= 0) {
+                if (count > 0) output.write(buffer, 0, count);
+            }
+            return output.toString(StandardCharsets.UTF_8.name());
+        }
     }
 
     private String required(PluginCall call, String key) {
         String value = call.getString(key);
-        if (value == null || value.trim().isEmpty()) throw new IllegalArgumentException(key + " is required.");
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(key + " is required.");
+        }
+        return value.trim();
+    }
+
+    private String optional(PluginCall call, String key, String fallback) {
+        String value = call.getString(key, fallback);
+        if (value == null || value.trim().isEmpty()) return fallback;
         return value.trim();
     }
 
@@ -391,7 +451,9 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
         Throwable current = error;
         while (current.getCause() != null) current = current.getCause();
         String message = current.getMessage();
-        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
+        return message == null || message.trim().isEmpty()
+            ? current.getClass().getSimpleName()
+            : message;
     }
 
     @Override
@@ -401,7 +463,7 @@ public final class MaisGenieXRuntimePlugin extends Plugin {
             try {
                 MaisGenieXNative.nativeFree(handle);
             } catch (Throwable ignored) {
-                // The process is being torn down; native resources are reclaimed by Android.
+                // Android reclaims the process native address space during teardown.
             }
         }
         super.handleOnDestroy();
