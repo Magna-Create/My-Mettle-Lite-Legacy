@@ -56,10 +56,9 @@ fi
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 root="$work/qairt-build-assets"
-arm64_destination="$root/android/app/src/main/jniLibs/arm64-v8a"
+native_destination="$root/android/app/src/main/jniLibs/arm64-v8a"
 asset_root="$root/android/app/src/main/assets/qairt"
-hexagon_destination="$asset_root/hexagon"
-mkdir -p "$arm64_destination" "$hexagon_destination"
+mkdir -p "$native_destination" "$asset_root"
 
 required_arm64=(
   libGenie.so
@@ -75,16 +74,16 @@ optional_arm64=(
 )
 
 for name in "${required_arm64[@]}"; do
-  cp -L "$ARM64_SOURCE/$name" "$arm64_destination/$name"
+  cp -L "$ARM64_SOURCE/$name" "$native_destination/$name"
 done
 for name in "${optional_arm64[@]}"; do
-  [[ -f "$ARM64_SOURCE/$name" ]] && cp -L "$ARM64_SOURCE/$name" "$arm64_destination/$name"
+  [[ -f "$ARM64_SOURCE/$name" ]] && cp -L "$ARM64_SOURCE/$name" "$native_destination/$name"
 done
 for path in "${stub_files[@]}"; do
-  cp -L "$path" "$arm64_destination/$(basename "$path")"
+  cp -L "$path" "$native_destination/$(basename "$path")"
 done
 for path in "${skel_files[@]}"; do
-  cp -L "$path" "$hexagon_destination/$(basename "$path")"
+  cp -L "$path" "$native_destination/$(basename "$path")"
 done
 
 cat > "$asset_root/qairt-runtime.json" <<EOF
@@ -93,6 +92,7 @@ cat > "$asset_root/qairt-runtime.json" <<EOF
   "qairtVersion": "$EXPECTED_VERSION",
   "htpArchitecture": "v$HTP_ARCH",
   "source": "local QAIRT SDK; not redistributed by My Mettle",
+  "packaging": "APK arm64-v8a native libraries with legacy extraction",
   "createdAtUtc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
@@ -115,10 +115,10 @@ rm -f "$OUTPUT"
 
 printf '\nCreated private QAIRT build-assets package:\n  %s\n' "$OUTPUT"
 du -h "$OUTPUT"
-printf '\nIncluded files:\n'
+printf '\nIncluded native libraries:\n'
 (
   cd "$root"
-  find android -type f -printf '%p\t%s bytes\n' | sort
+  find android/app/src/main/jniLibs/arm64-v8a -type f -printf '%f\t%s bytes\n' | sort
 )
 printf '\nNext step on the phone:\n'
 printf '  bash scripts/install-qairt-build-assets.sh "%s"\n' "<path-to-this-zip>"
