@@ -73,10 +73,12 @@ class MaisGenieXRuntimePlugin : Plugin() {
 
     @PluginMethod
     fun getStatus(call: PluginCall) {
-        try {
-            call.resolve(status())
-        } catch (error: Throwable) {
-            call.reject(rootMessage(error), asException(error))
+        runtimeScope.launch {
+            try {
+                call.resolve(status())
+            } catch (error: Throwable) {
+                call.reject(rootMessage(error), asException(error))
+            }
         }
     }
 
@@ -190,17 +192,6 @@ class MaisGenieXRuntimePlugin : Plugin() {
             call.reject("The Qwen model is still being prepared for GenieX.")
             return
         }
-
-        val resolvedPaths = try {
-            preparedModelPaths()
-        } catch (error: Throwable) {
-            call.reject(rootMessage(error), asException(error))
-            return
-        }
-        if (resolvedPaths == null) {
-            call.reject("Prepare the verified Qwen pack for GenieX before loading the NPU model.")
-            return
-        }
         if (!running.compareAndSet(false, true)) {
             call.reject("A GenieX run is already active.")
             return
@@ -213,6 +204,18 @@ class MaisGenieXRuntimePlugin : Plugin() {
             ?: "You are the bounded native Qwen runtime check for My Mettle. Use thinking mode before answering. Keep the final response concise, factual and limited to supplied evidence."
 
         runtimeScope.launch {
+            val resolvedPaths = try {
+                preparedModelPaths()
+            } catch (error: Throwable) {
+                running.set(false)
+                call.reject(rootMessage(error), asException(error))
+                return@launch
+            }
+            if (resolvedPaths == null) {
+                running.set(false)
+                call.reject("Prepare the verified Qwen pack for GenieX before loading the NPU model.")
+                return@launch
+            }
             executeBaseline(call, modelId, resolvedPaths, prompt, systemInstruction)
         }
     }
@@ -488,7 +491,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
         return ResolvedModel(paths, imported = true)
     }
 
-    private fun preparedModelPaths(): ModelPaths? {
+    private suspend fun preparedModelPaths(): ModelPaths? {
         ModelManagerWrapper.init(genieXDataDirectory().absolutePath).getOrThrow()
         return ModelManagerWrapper.getPaths(GENIEX_MODEL_KEY)?.takeIf(::validPreparedPaths)
     }
@@ -496,7 +499,7 @@ class MaisGenieXRuntimePlugin : Plugin() {
     private fun validPreparedPaths(paths: ModelPaths): Boolean =
         File(paths.model_path).exists() && File(paths.model_dir).isDirectory
 
-    private fun status(): JSObject {
+    private suspend fun status(): JSObject {
         val missing = missingModelFiles()
         val missingArray = JSArray()
         missing.forEach { missingArray.put(it) }
