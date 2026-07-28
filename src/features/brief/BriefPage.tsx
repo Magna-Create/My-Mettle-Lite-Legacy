@@ -28,10 +28,14 @@ export function BriefPage({ database, onBeginSession }: Props) {
   if (!currentCycle) throw new Error('Current cycle missing.');
 
   const cycle = getCycleSnapshot(currentCycle);
-  const [selectedDay, setSelectedDay] = useState<DaySymbol>(cycle.nextRecommendedDay);
-  const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long' }).format(new Date());
   const routine = database.routineVersions.find((item) => item.id === database.currentRoutineVersionId);
-  const recommendedDay = routine?.days.find((day) => day.symbol === cycle.nextRecommendedDay);
+  const optionalExerciseCount = routine?.days.find((day) => day.symbol === '&')?.slots.length ?? 0;
+  const recommendedSymbol: DaySymbol = cycle.nextRecommendedDay === '&' && optionalExerciseCount === 0
+    ? 'ψ'
+    : cycle.nextRecommendedDay;
+  const [selectedDay, setSelectedDay] = useState<DaySymbol>(recommendedSymbol);
+  const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long' }).format(new Date());
+  const recommendedDay = routine?.days.find((day) => day.symbol === recommendedSymbol);
   const recommendedExerciseCount = recommendedDay?.slots.length ?? 0;
   const firstExerciseId = recommendedDay?.slots[0]?.exerciseId;
   const firstMovement = database.exercises.find((exercise) => exercise.id === firstExerciseId)?.name;
@@ -42,8 +46,8 @@ export function BriefPage({ database, onBeginSession }: Props) {
       <div className="hero-atmosphere" aria-hidden="true" />
       <div className="particle-field" aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <i key={index} />)}</div>
       <div className="brief-intro">
-        <p className="eyebrow">{weekday} · {cycle.nextRecommendedDay}</p>
-        <h1>{DAY_LABELS[cycle.nextRecommendedDay]}.</h1>
+        <p className="eyebrow">{weekday} · {recommendedSymbol}</p>
+        <h1>{DAY_LABELS[recommendedSymbol]}.</h1>
         <div className="brief-snapshot">
           <span>{recommendedExerciseCount} exercise{recommendedExerciseCount === 1 ? '' : 's'}</span>
           <span>{cycle.completedCoreDays.length}/3 core days</span>
@@ -53,10 +57,16 @@ export function BriefPage({ database, onBeginSession }: Props) {
         {suggestions.map((suggestion) => <article key={suggestion.label}><span>{suggestion.label}</span><p>{suggestion.value}</p></article>)}
       </section>
       <div className="brief-action-zone">
-        <button className="primary-action brief-begin" onClick={() => { setSelectedDay(cycle.nextRecommendedDay); setModalOpen(true); }} disabled={Boolean(database.activeSessionId)}>{database.activeSessionId ? 'Session active' : `Begin ${cycle.nextRecommendedDay}`}</button>
+        <button className="primary-action brief-begin" onClick={() => { setSelectedDay(recommendedSymbol); setModalOpen(true); }} disabled={Boolean(database.activeSessionId)}>{database.activeSessionId ? 'Session active' : `Begin ${recommendedSymbol}`}</button>
         <div className="day-override">
           <span>Or choose</span>
-          {(['ψ', 'φ', 'π', '&'] as DaySymbol[]).map((day) => <button key={day} title={day === '&' ? 'Optional fourth day' : DAY_LABELS[day]} disabled={Boolean(database.activeSessionId) || (day === '&' && !cycle.andEligible)} onClick={() => { setSelectedDay(day); setModalOpen(true); }}>{day}</button>)}
+          {(['ψ', 'φ', 'π', '&'] as DaySymbol[]).map((day) => {
+            const optionalUnavailable = day === '&' && (!cycle.andEligible || optionalExerciseCount === 0);
+            const title = day === '&'
+              ? optionalExerciseCount === 0 ? 'Optional fourth day · no exercises assigned' : 'Optional fourth day'
+              : DAY_LABELS[day];
+            return <button key={day} title={title} disabled={Boolean(database.activeSessionId) || optionalUnavailable} onClick={() => { setSelectedDay(day); setModalOpen(true); }}>{day}</button>;
+          })}
         </div>
       </div>
     </section>
