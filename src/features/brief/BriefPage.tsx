@@ -6,17 +6,29 @@ import { ModeSelectionModal } from '../../components/ModeSelectionModal';
 
 interface Props { database: AppDatabase; onBeginSession: (day: DaySymbol, mode: Mode) => Promise<void>; }
 interface BriefSuggestion { label: string; value: string; }
+
 function buildSuggestions(hour: number, firstMovement?: string): BriefSuggestion[] {
-  const carbohydrate = hour < 11 ? '30–60 g carbohydrate with breakfast or a light pre-workout meal.' : hour < 18 ? '30–60 g carbohydrate 1–3 hours before training; use the lower end if eating close to the session.' : '30–45 g easy carbohydrate if dinner is not already covering the session.';
-  return [{ label: 'Carbohydrate', value: carbohydrate }, { label: 'Protein', value: '25–40 g protein in the 1–3 hours before training.' }, { label: 'Water', value: '500–750 ml across the hour before training.' }, { label: 'Warm-up', value: firstMovement ? `Two lighter sets before ${firstMovement}.` : 'Two lighter sets before the first working movement.' }];
+  const carbohydrate = hour < 11
+    ? '30–60 g carbohydrate with breakfast or a light pre-workout meal.'
+    : hour < 18
+      ? '30–60 g carbohydrate 1–3 hours before training; use the lower end if eating close to the session.'
+      : '30–45 g easy carbohydrate if dinner is not already covering the session.';
+
+  return [
+    { label: 'Carbohydrate', value: carbohydrate },
+    { label: 'Protein', value: '25–40 g protein in the 1–3 hours before training.' },
+    { label: 'Water', value: '500–750 ml across the hour before training.' },
+    { label: 'Warm-up', value: firstMovement ? `Two lighter sets before ${firstMovement}.` : 'Two lighter sets before the first working movement.' },
+  ];
 }
+
 export function BriefPage({ database, onBeginSession }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const currentCycle = database.cycles.find((item) => item.id === database.currentCycleId);
   if (!currentCycle) throw new Error('Current cycle missing.');
+
   const cycle = getCycleSnapshot(currentCycle);
   const [selectedDay, setSelectedDay] = useState<DaySymbol>(cycle.nextRecommendedDay);
-  const completedCount = database.sessions.filter((session) => session.status === 'completed').length;
   const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long' }).format(new Date());
   const routine = database.routineVersions.find((item) => item.id === database.currentRoutineVersionId);
   const recommendedDay = routine?.days.find((day) => day.symbol === cycle.nextRecommendedDay);
@@ -24,6 +36,30 @@ export function BriefPage({ database, onBeginSession }: Props) {
   const firstExerciseId = recommendedDay?.slots[0]?.exerciseId;
   const firstMovement = database.exercises.find((exercise) => exercise.id === firstExerciseId)?.name;
   const suggestions = useMemo(() => buildSuggestions(new Date().getHours(), firstMovement), [firstMovement]);
-  const openExperimentCount = database.experiments.filter((item) => ['active', 'ready_for_decision'].includes(item.status)).length;
-  return <main className="page brief-page"><section className="hero-panel"><div className="hero-atmosphere" aria-hidden="true" /><div className="particle-field" aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <i key={index} />)}</div><div className="brief-intro"><p className="eyebrow">{weekday} · {cycle.nextRecommendedDay}</p><h1>{DAY_LABELS[cycle.nextRecommendedDay]}.</h1><div className="brief-snapshot"><span>{recommendedExerciseCount} exercise{recommendedExerciseCount === 1 ? '' : 's'}</span><span>{cycle.completedCoreDays.length}/3 core days</span><span>{openExperimentCount} live test{openExperimentCount === 1 ? '' : 's'}</span></div></div><section className="brief-suggestions">{suggestions.map((suggestion) => <article key={suggestion.label}><span>{suggestion.label}</span><p>{suggestion.value}</p></article>)}</section><div className="brief-action-zone"><button className="primary-action brief-begin" onClick={() => { setSelectedDay(cycle.nextRecommendedDay); setModalOpen(true); }} disabled={Boolean(database.activeSessionId)}>{database.activeSessionId ? 'Session active' : `Begin ${cycle.nextRecommendedDay}`}</button><div className="day-override"><span>Or choose</span>{(['ψ', 'φ', 'π', '&'] as DaySymbol[]).map((day) => <button key={day} disabled={Boolean(database.activeSessionId) || (day === '&' && !cycle.andEligible)} onClick={() => { setSelectedDay(day); setModalOpen(true); }}>{day}</button>)}</div></div></section><section className="card-grid"><article className="paper-card featured-card"><p className="eyebrow">Next</p><h2>{cycle.nextRecommendedDay}</h2><p>{recommendedExerciseCount} movements in the current routine.</p></article><article className="paper-card"><p className="eyebrow">Cycle</p><h2>{cycle.completedCoreDays.length}/3</h2><p>& {cycle.andEligible ? 'open' : 'locked'}.</p></article><article className="paper-card"><p className="eyebrow">Evidence</p><h2>{completedCount}</h2><p>Completed session{completedCount === 1 ? '' : 's'}.</p></article><article className="paper-card"><p className="eyebrow">Lab</p><h2>{openExperimentCount}</h2><p>Active or ready for review.</p></article></section>{modalOpen && <ModeSelectionModal day={selectedDay} onClose={() => setModalOpen(false)} onSelect={async (mode) => { await onBeginSession(selectedDay, mode); setModalOpen(false); }} />}</main>;
+
+  return <main className="page brief-page">
+    <section className="hero-panel">
+      <div className="hero-atmosphere" aria-hidden="true" />
+      <div className="particle-field" aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <i key={index} />)}</div>
+      <div className="brief-intro">
+        <p className="eyebrow">{weekday} · {cycle.nextRecommendedDay}</p>
+        <h1>{DAY_LABELS[cycle.nextRecommendedDay]}.</h1>
+        <div className="brief-snapshot">
+          <span>{recommendedExerciseCount} exercise{recommendedExerciseCount === 1 ? '' : 's'}</span>
+          <span>{cycle.completedCoreDays.length}/3 core days</span>
+        </div>
+      </div>
+      <section className="brief-suggestions">
+        {suggestions.map((suggestion) => <article key={suggestion.label}><span>{suggestion.label}</span><p>{suggestion.value}</p></article>)}
+      </section>
+      <div className="brief-action-zone">
+        <button className="primary-action brief-begin" onClick={() => { setSelectedDay(cycle.nextRecommendedDay); setModalOpen(true); }} disabled={Boolean(database.activeSessionId)}>{database.activeSessionId ? 'Session active' : `Begin ${cycle.nextRecommendedDay}`}</button>
+        <div className="day-override">
+          <span>Or choose</span>
+          {(['ψ', 'φ', 'π', '&'] as DaySymbol[]).map((day) => <button key={day} title={day === '&' ? 'Optional fourth day' : DAY_LABELS[day]} disabled={Boolean(database.activeSessionId) || (day === '&' && !cycle.andEligible)} onClick={() => { setSelectedDay(day); setModalOpen(true); }}>{day}</button>)}
+        </div>
+      </div>
+    </section>
+    {modalOpen && <ModeSelectionModal day={selectedDay} onClose={() => setModalOpen(false)} onSelect={async (mode) => { await onBeginSession(selectedDay, mode); setModalOpen(false); }} />}
+  </main>;
 }
