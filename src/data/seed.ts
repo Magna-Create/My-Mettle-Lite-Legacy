@@ -251,5 +251,5 @@ export const DAY_LABELS: Record<DaySymbol, string> = {
   ψ: 'Core day ψ',
   φ: 'Core day φ',
   π: 'Core day π',
-  '&': 'Catch-up day &',
+  '&': 'Optional day &',
 };
