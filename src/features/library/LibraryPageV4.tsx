@@ -55,6 +55,11 @@ export function LibraryPageV4(props: Props) {
       button.setAttribute('aria-hidden', 'true');
       button.classList.add('routine-title-static');
     });
+    root.querySelectorAll<HTMLElement>('.routine-column').forEach((column) => {
+      if (column.querySelector('header strong')?.textContent !== '&') return;
+      const description = column.querySelector<HTMLElement>('header span');
+      if (description) description.textContent = 'optional fourth day';
+    });
   }, [database.currentRoutineVersionId, editDraft]);
 
   useEffect(() => {
