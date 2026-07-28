@@ -1,0 +1,92 @@
+.routine-import-dialog {
+  width: min(92vw, 720px);
+  max-height: min(90dvh, 880px);
+  overflow-y: auto;
+}
+
+.routine-import-dialog > p {
+  margin: 0 0 18px;
+  color: var(--ink-muted, #67645e);
+  line-height: 1.5;
+}
+
+.routine-import-editor {
+  width: 100%;
+  min-height: 240px;
+  resize: vertical;
+  border: 1px solid rgba(38, 36, 31, 0.18);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 16px;
+  color: inherit;
+  font: 0.82rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.routine-import-editor:focus {
+  outline: 2px solid rgba(35, 32, 26, 0.22);
+  outline-offset: 2px;
+}
+
+.routine-import-actions {
+  margin-top: 14px;
+}
+
+.routine-import-preview {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid rgba(38, 36, 31, 0.13);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.routine-import-preview h3 {
+  margin: 4px 0 14px;
+}
+
+.routine-import-summary,
+.routine-import-days {
+  display: grid;
+  gap: 10px;
+}
+
+.routine-import-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.routine-import-days {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 10px;
+}
+
+.routine-import-summary span,
+.routine-import-days span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.routine-import-warning {
+  margin: 14px 0 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.library-edit-portal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 620px) {
+  .routine-import-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .routine-import-dialog {
+    width: min(94vw, 720px);
+  }
+}
