@@ -1,0 +1,133 @@
+/* Field-test layout corrections.
+   Keep these rules narrowly scoped so the temporary Lite UI stays stable. */
+
+/* Three real destinations: centre each circular control inside its grid cell. */
+.bottom-nav {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-items: center;
+  align-items: center;
+}
+
+.bottom-nav button,
+.bottom-nav button[data-active="true"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  align-self: center;
+  margin: 0;
+}
+
+/* Keep routine actions in their own row rather than allowing them to occupy
+   the title's layout area. This is intentional on every viewport size. */
+.library-heading {
+  display: flex !important;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.library-heading > div:first-child {
+  width: 100%;
+  min-width: 0;
+}
+
+.library-heading h1 {
+  max-width: 100%;
+  margin-bottom: 0;
+}
+
+.library-edit-portal {
+  position: static !important;
+  inset: auto !important;
+  align-self: flex-start;
+  display: grid;
+  grid-template-columns: repeat(3, 52px);
+  justify-content: start;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+
+/* Restore deliberate vertical rhythm in the add-exercise wizard. */
+.exercise-wizard {
+  width: min(520px, calc(100vw - 28px));
+  max-height: calc(100dvh - 28px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 22px;
+}
+
+.exercise-wizard .wizard-header {
+  align-items: flex-start;
+  gap: 16px;
+  margin: 0 0 18px;
+}
+
+.exercise-wizard .wizard-header > div {
+  min-width: 0;
+  padding-right: 8px;
+}
+
+.exercise-wizard .wizard-header h2 {
+  margin: 0;
+  line-height: 1.02;
+}
+
+.exercise-wizard .wizard-progress {
+  margin: 0 0 18px;
+}
+
+.exercise-wizard .wizard-viewport {
+  min-height: 0;
+  overflow: visible;
+}
+
+.exercise-wizard .wizard-card {
+  min-height: 0;
+  padding: 22px;
+}
+
+.exercise-wizard .wizard-card h3 {
+  margin-bottom: 20px;
+}
+
+.exercise-wizard .wizard-actions {
+  margin-top: 18px;
+  padding-top: 0;
+}
+
+@media (max-width: 620px) {
+  .exercise-wizard {
+    width: 100%;
+    padding: 20px 18px;
+    border-radius: 26px;
+  }
+
+  .exercise-wizard .wizard-header {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .exercise-wizard .wizard-header h2 {
+    font-size: clamp(1.8rem, 9vw, 2.35rem);
+  }
+
+  .exercise-wizard .wizard-progress {
+    margin-bottom: 16px;
+  }
+
+  .exercise-wizard .wizard-card {
+    padding: 20px 18px;
+  }
+
+  .exercise-wizard .wizard-card h3 {
+    margin-bottom: 18px;
+    font-size: clamp(1.7rem, 9vw, 2.25rem);
+  }
+
+  .exercise-wizard .wizard-actions {
+    margin-top: 16px;
+  }
+}
