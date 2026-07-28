@@ -1,0 +1,130 @@
+{
+  "format": "my-mettle-routine-pack",
+  "version": 1,
+  "name": "Example three-day routine",
+  "exercises": [
+    {
+      "key": "incline-dumbbell-press",
+      "name": "Incline dumbbell press",
+      "tracking": {
+        "metric": "load_reps",
+        "loadRelationship": "external",
+        "entryBasis": "per_hand"
+      },
+      "progressionStep": 1,
+      "memory": {
+        "category": "Press",
+        "equipment": "Dumbbells and adjustable bench",
+        "targetMuscles": ["Upper chest", "Front delts", "Triceps"],
+        "fatigueCost": 3,
+        "skillDifficulty": 3,
+        "cues": ["Set the shoulder blades before pressing."],
+        "commonMistakes": ["Losing the upper-back shelf."],
+        "setupNotes": "Bench at 30 degrees.",
+        "videoReferenceUrl": "",
+        "machineSettings": "Record the bench angle used.",
+        "substitutions": ["Incline machine press"]
+      }
+    },
+    {
+      "key": "hack-squat",
+      "name": "Hack squat",
+      "tracking": {
+        "metric": "load_reps",
+        "loadRelationship": "external",
+        "entryBasis": "total"
+      },
+      "progressionStep": 5,
+      "memory": {
+        "category": "Squat",
+        "equipment": "Hack squat machine",
+        "targetMuscles": ["Quads", "Glutes"],
+        "fatigueCost": 4,
+        "skillDifficulty": 3,
+        "cues": ["Own the bottom position."],
+        "commonMistakes": ["Shortening depth as fatigue rises."],
+        "setupNotes": "Use a pain-free stance and controlled depth.",
+        "videoReferenceUrl": "",
+        "machineSettings": "Record foot position and sled setting.",
+        "substitutions": ["Leg press"]
+      }
+    },
+    {
+      "key": "neutral-pulldown",
+      "name": "Neutral-grip pulldown",
+      "tracking": {
+        "metric": "load_reps",
+        "loadRelationship": "external",
+        "entryBasis": "total"
+      },
+      "progressionStep": 2.5,
+      "memory": {
+        "category": "Vertical pull",
+        "equipment": "Cable stack and neutral handle",
+        "targetMuscles": ["Lats", "Upper back", "Biceps"],
+        "fatigueCost": 3,
+        "skillDifficulty": 3,
+        "cues": ["Let the shoulder blade rise before pulling down."],
+        "commonMistakes": [],
+        "setupNotes": "Keep the ribcage controlled.",
+        "videoReferenceUrl": "",
+        "machineSettings": "Record seat and thigh-pad settings.",
+        "substitutions": ["Assisted pull-up"]
+      }
+    }
+  ],
+  "days": [
+    {
+      "symbol": "ψ",
+      "slots": [
+        {
+          "exerciseKey": "incline-dumbbell-press",
+          "importance": "principal",
+          "plannedLoad": 18,
+          "lockedToDay": true,
+          "prescriptions": {
+            "A": { "included": true, "sets": 3, "repMin": 6, "repMax": 8, "restSeconds": 150 },
+            "B": { "included": true, "sets": 2, "repMin": 6, "repMax": 8, "restSeconds": 150 },
+            "C": { "included": true, "sets": 1, "repMin": 6, "repMax": 8, "restSeconds": 150 }
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "φ",
+      "slots": [
+        {
+          "exerciseKey": "hack-squat",
+          "importance": "principal",
+          "plannedLoad": 60,
+          "lockedToDay": true,
+          "prescriptions": {
+            "A": { "included": true, "sets": 3, "repMin": 6, "repMax": 8, "restSeconds": 180 },
+            "B": { "included": true, "sets": 2, "repMin": 6, "repMax": 8, "restSeconds": 180 },
+            "C": { "included": true, "sets": 1, "repMin": 6, "repMax": 8, "restSeconds": 180 }
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "π",
+      "slots": [
+        {
+          "exerciseKey": "neutral-pulldown",
+          "importance": "principal",
+          "plannedLoad": 40,
+          "lockedToDay": true,
+          "prescriptions": {
+            "A": { "included": true, "sets": 3, "repMin": 6, "repMax": 8, "restSeconds": 150 },
+            "B": { "included": true, "sets": 2, "repMin": 6, "repMax": 8, "restSeconds": 150 },
+            "C": { "included": true, "sets": 1, "repMin": 6, "repMax": 8, "restSeconds": 150 }
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "&",
+      "slots": []
+    }
+  ]
+}
