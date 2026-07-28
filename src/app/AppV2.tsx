@@ -62,18 +62,33 @@ export function AppV2() {
     return operationQueue.current;
   }
 
+  async function runAndConfirm(operation: (current: AppDatabase) => Promise<AppDatabase>): Promise<boolean> {
+    let succeeded = false;
+    await run(async (current) => {
+      const next = await operation(current);
+      succeeded = true;
+      return next;
+    });
+    return succeeded;
+  }
+
   function apply(transform: (current: AppDatabase) => AppDatabase): Promise<void> {
     return run((current) => service.persist(transform(current)));
   }
 
   async function importRoutine(pack: ParsedRoutinePack): Promise<boolean> {
-    let succeeded = false;
-    await run(async (current) => {
-      const persisted = await service.persist(applyRoutinePack(current, pack));
-      succeeded = true;
-      return persisted;
-    });
-    return succeeded;
+    return runAndConfirm((current) => service.persist(applyRoutinePack(current, pack)));
+  }
+
+  async function startSession(day: DaySymbol, mode: Mode): Promise<void> {
+    const succeeded = await runAndConfirm((current) => service.persist(beginLiteSession(current, day, mode)));
+    if (succeeded) setTab('train');
+  }
+
+  async function finishSession(sessionId: string): Promise<void> {
+    restTimer.dismiss();
+    const succeeded = await runAndConfirm((current) => service.persist(completeLiteSession(current, sessionId)));
+    if (succeeded) setTab('brief');
   }
 
   const handleProgressState = useCallback((progress: number, condensed: boolean) => {
@@ -114,8 +129,8 @@ export function AppV2() {
     </header>
     {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError(null)}>Dismiss</button></div>}
     <div className="page-stack">
-      <section hidden={tab !== 'brief'}><BriefPage database={database} onBeginSession={(day: DaySymbol, mode: Mode) => run((current) => service.persist(beginLiteSession(current, day, mode))).then(() => setTab('train'))} /></section>
-      <section hidden={tab !== 'train'}><TrainPage database={database} onGoBrief={() => navigate('brief')} onProgressState={handleProgressState} onStartRest={restTimer.start} onAddSet={(sessionId, exerciseId) => apply((current) => addSessionSet(current, sessionId, exerciseId))} onRemoveSet={(sessionId, exerciseId, setId) => apply((current) => removeSessionSet(current, sessionId, exerciseId, setId))} onUpdateExercise={(exerciseId, patch) => apply((current) => updateExerciseRecord(current, exerciseId, patch))} onSaveReflection={(sessionId, exerciseId, input) => apply((current) => saveExerciseReflection(current, sessionId, exerciseId, input))} onUpdateSet={(sessionId, exerciseId, setId, patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>) => run((current) => service.updateSet(current, sessionId, exerciseId, setId, patch))} onCompleteExercise={(sessionId, exerciseId) => run((current) => service.completeExercise(current, sessionId, exerciseId))} onCompleteSession={async (sessionId) => { restTimer.dismiss(); await run((current) => service.persist(completeLiteSession(current, sessionId))); setTab('brief'); }} /></section>
+      <section hidden={tab !== 'brief'}><BriefPage database={database} onBeginSession={startSession} /></section>
+      <section hidden={tab !== 'train'}><TrainPage database={database} onGoBrief={() => navigate('brief')} onProgressState={handleProgressState} onStartRest={restTimer.start} onAddSet={(sessionId, exerciseId) => apply((current) => addSessionSet(current, sessionId, exerciseId))} onRemoveSet={(sessionId, exerciseId, setId) => apply((current) => removeSessionSet(current, sessionId, exerciseId, setId))} onUpdateExercise={(exerciseId, patch) => apply((current) => updateExerciseRecord(current, exerciseId, patch))} onSaveReflection={(sessionId, exerciseId, input) => apply((current) => saveExerciseReflection(current, sessionId, exerciseId, input))} onUpdateSet={(sessionId, exerciseId, setId, patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>) => run((current) => service.updateSet(current, sessionId, exerciseId, setId, patch))} onCompleteExercise={(sessionId, exerciseId) => run((current) => service.completeExercise(current, sessionId, exerciseId))} onCompleteSession={finishSession} /></section>
       <section hidden={tab !== 'library'}><LibraryPage database={database} externalDiscardToken={routineEditDiscardToken} onEditStateChange={setRoutineEditState} onCommitRoutineEdit={(draft: RoutineEditDraft) => apply((current) => commitRoutineEditDraft(current, draft))} onImportRoutine={importRoutine} onAddExercise={(input: AddExerciseInput) => run((current) => service.addExerciseToRoutine(current, input))} onReorderSlot={(slotId, direction) => apply((current) => reorderRoutineSlot(current, slotId, direction))} onMoveSlot={(slotId, day) => apply((current) => moveRoutineSlot(current, slotId, day))} onRemoveSlot={(slotId) => apply((current) => removeRoutineSlotWithArchive(current, slotId))} onUpdateSlot={(slotId, patch: RoutineSlotPatch) => apply((current) => updateRoutineSlot(current, slotId, patch))} onUpdateExercise={(exerciseId, patch: ExerciseRecordPatch) => apply((current) => updateExerciseRecord(current, exerciseId, patch))} onArchiveExercise={(exerciseId) => apply((current) => archiveExercise(current, exerciseId))} onRestoreExercise={(exerciseId) => apply((current) => restoreArchivedExercise(current, exerciseId))} /></section>
     </div>
     <nav className="bottom-nav" aria-label="Primary navigation">{tabs.map((item) => <button key={item} data-active={tab === item} aria-label={tabLabels[item]} title={tabLabels[item]} onClick={() => navigate(item)}><NavIcon name={item} /></button>)}</nav>
