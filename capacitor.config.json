@@ -1,6 +1,6 @@
 {
-  "appId": "dev.kian.gymapp",
-  "appName": "Gym App",
+  "appId": "dev.kian.mymettle.litelegacy",
+  "appName": "My Mettle Lite",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

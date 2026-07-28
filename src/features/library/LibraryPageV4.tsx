@@ -9,8 +9,10 @@ import {
   type RoutineEditDraft,
 } from '../../application/RoutineEditDraft';
 import type { AppDatabase, DaySymbol } from '../../domain/model';
+import type { ParsedRoutinePack } from '../../domain/routinePack';
 import { LibraryPageV2 } from './LibraryPageV2';
 import { ROUTINE_EDIT_STORAGE_KEY_V2, RoutineEditModeV2 } from './RoutineEditModeV2';
+import { RoutineImportDialog } from './RoutineImportDialog';
 
 interface EditState { editing: boolean; dirty: boolean; }
 
@@ -19,6 +21,7 @@ interface Props {
   externalDiscardToken: number;
   onEditStateChange: (state: EditState) => void;
   onCommitRoutineEdit: (draft: RoutineEditDraft) => Promise<void>;
+  onImportRoutine: (pack: ParsedRoutinePack) => Promise<boolean>;
   onAddExercise: (input: AddExerciseInput) => Promise<void>;
   onReorderSlot: (slotId: string, direction: -1 | 1) => Promise<void>;
   onMoveSlot: (slotId: string, day: DaySymbol) => Promise<void>;
@@ -33,6 +36,8 @@ export function LibraryPageV4(props: Props) {
   const [editDraft, setEditDraft] = useState<RoutineEditDraft | null>(null);
   const [recoveryDraft, setRecoveryDraft] = useState<RoutineEditDraft | null>(null);
   const [headingTarget, setHeadingTarget] = useState<Element | null>(null);
+  const [nativeAddButton, setNativeAddButton] = useState<HTMLButtonElement | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const checkedRecoveryForRoutine = useRef<string | null>(null);
   const { database, onEditStateChange } = props;
@@ -44,12 +49,24 @@ export function LibraryPageV4(props: Props) {
     if (editDraft) return;
     const root = shellRef.current;
     if (!root) return;
-    setHeadingTarget(root.querySelector('.library-heading'));
+
+    const heading = root.querySelector('.library-heading');
+    const addButton = heading?.querySelector<HTMLButtonElement>(':scope > .primary-action') ?? null;
+    if (addButton) addButton.classList.add('library-native-add-action');
+
+    setHeadingTarget(heading);
+    setNativeAddButton(addButton);
+
     root.querySelectorAll<HTMLButtonElement>('.routine-slot-content').forEach((button) => {
       button.disabled = true;
       button.tabIndex = -1;
       button.setAttribute('aria-hidden', 'true');
       button.classList.add('routine-title-static');
+    });
+    root.querySelectorAll<HTMLElement>('.routine-column').forEach((column) => {
+      if (column.querySelector('header strong')?.textContent !== '&') return;
+      const description = column.querySelector<HTMLElement>('header span');
+      if (description) description.textContent = 'optional fourth day';
     });
   }, [database.currentRoutineVersionId, editDraft]);
 
@@ -104,9 +121,40 @@ export function LibraryPageV4(props: Props) {
     />
 
     {headingTarget && createPortal(
-      <div className="library-edit-portal"><button className="secondary-action compact" type="button" onClick={beginEdit}>Edit routine</button></div>,
+      <div className="library-edit-portal" role="group" aria-label="Routine actions">
+        <button
+          className="library-action-button is-primary"
+          type="button"
+          onClick={() => nativeAddButton?.click()}
+          disabled={!nativeAddButton}
+          aria-label="Add exercise"
+          title="Add exercise"
+        >
+          <span className="library-action-icon library-action-icon-add" aria-hidden="true" />
+        </button>
+        <button
+          className="library-action-button"
+          type="button"
+          onClick={() => setImportOpen(true)}
+          aria-label="Import routine"
+          title="Import routine"
+        >
+          <span className="library-action-icon library-action-icon-import" aria-hidden="true" />
+        </button>
+        <button
+          className="library-action-button"
+          type="button"
+          onClick={beginEdit}
+          aria-label="Edit routine"
+          title="Edit routine"
+        >
+          <span className="library-action-icon library-action-icon-edit" aria-hidden="true" />
+        </button>
+      </div>,
       headingTarget,
     )}
+
+    {importOpen && <RoutineImportDialog database={database} onClose={() => setImportOpen(false)} onImport={props.onImportRoutine} />}
 
     {recoveryDraft && <div className="modal-backdrop routine-recovery-backdrop"><section className="modal routine-recovery-dialog">
       <p className="eyebrow">Unfinished routine</p>

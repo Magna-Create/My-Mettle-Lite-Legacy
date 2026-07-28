@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent } from 'react';
 import type { AppDatabase } from '../../domain/model';
-import { restoreBackupPayload } from '../../domain/backup';
+import { createBackupPayload, restoreBackupPayload } from '../../domain/backup';
 import { IndexedDbGymRepository } from '../../adapters/storage/IndexedDbGymRepository';
 
 interface Props { database: AppDatabase; onReset: () => Promise<void>; }
@@ -9,11 +9,12 @@ export function DataSettingsPanel({ database, onReset }: Props) {
   const [message, setMessage] = useState<string | null>(null);
 
   function exportData() {
-    const blob = new Blob([JSON.stringify(database, null, 2)], { type: 'application/json' });
+    const payload = createBackupPayload(database);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `my-mettle-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.download = `my-mettle-lite-backup-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -40,7 +41,7 @@ export function DataSettingsPanel({ database, onReset }: Props) {
     <section className="settings-detail-section">
       <p className="eyebrow">Backup</p>
       <h3>Move the complete local record</h3>
-      <p>Includes routines, sessions, measurements, exercise memory and health provenance.</p>
+      <p>Includes routines, sessions, measurements and exercise memory in a versioned migration file.</p>
       <div className="data-actions">
         <button className="secondary-action" onClick={exportData}>Export JSON backup</button>
         <label className="secondary-action file-action">Restore JSON<input type="file" accept="application/json,.json" onChange={(event) => { void importData(event); }} /></label>

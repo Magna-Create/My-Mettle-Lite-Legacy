@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSeedDatabase } from '../src/data/seed';
-import { restoreBackupPayload } from '../src/domain/backup';
+import { createBackupPayload, restoreBackupPayload } from '../src/domain/backup';
 
 function legacyCompatibleBackup() {
   const database = createSeedDatabase() as unknown as Record<string, unknown>;
@@ -33,6 +33,17 @@ describe('backup restoration', () => {
     expect(restored.exercises[0]?.memory).toBeDefined();
     expect(restored.exercises[0]?.memory?.videoReferenceUrl).toBe('');
     expect(restored.currentRoutineVersionId).toBeTruthy();
+  });
+
+  it('round-trips the versioned Lite backup envelope', () => {
+    const database = createSeedDatabase();
+    const payload = createBackupPayload(database);
+    const restored = restoreBackupPayload(JSON.parse(JSON.stringify(payload)) as unknown);
+
+    expect(payload.format).toBe('my-mettle-backup');
+    expect(payload.source).toBe('my-mettle-lite-legacy');
+    expect(restored.currentRoutineVersionId).toBe(database.currentRoutineVersionId);
+    expect(restored.exercises).toHaveLength(database.exercises.length);
   });
 
   it('rejects incomplete or internally inconsistent backups', () => {
