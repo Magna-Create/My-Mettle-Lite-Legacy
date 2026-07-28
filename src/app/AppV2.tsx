@@ -8,6 +8,7 @@ import { removeRoutineSlotWithArchive } from '../application/removeRoutineSlotWi
 import { restoreArchivedExercise } from '../application/restoreArchivedExercise';
 import { IndexedDbGymRepository } from '../adapters/storage/IndexedDbGymRepository';
 import type { AppDatabase, AppSettings, DaySymbol, Mode, SetRecord } from '../domain/model';
+import { applyRoutinePack, type ParsedRoutinePack } from '../domain/routinePack';
 import { NavIcon } from '../components/NavIcon';
 import { BriefPage } from '../features/brief/BriefPage';
 import { TrainPage } from '../features/train/TrainPage';
@@ -65,6 +66,16 @@ export function AppV2() {
     return run((current) => service.persist(transform(current)));
   }
 
+  async function importRoutine(pack: ParsedRoutinePack): Promise<boolean> {
+    let succeeded = false;
+    await run(async (current) => {
+      const persisted = await service.persist(applyRoutinePack(current, pack));
+      succeeded = true;
+      return persisted;
+    });
+    return succeeded;
+  }
+
   const handleProgressState = useCallback((progress: number, condensed: boolean) => {
     setTrainProgress((current) => current.progress === progress && current.condensed === condensed ? current : { progress, condensed });
   }, []);
@@ -105,7 +116,7 @@ export function AppV2() {
     <div className="page-stack">
       <section hidden={tab !== 'brief'}><BriefPage database={database} onBeginSession={(day: DaySymbol, mode: Mode) => run((current) => service.persist(beginLiteSession(current, day, mode))).then(() => setTab('train'))} /></section>
       <section hidden={tab !== 'train'}><TrainPage database={database} onGoBrief={() => navigate('brief')} onProgressState={handleProgressState} onStartRest={restTimer.start} onAddSet={(sessionId, exerciseId) => apply((current) => addSessionSet(current, sessionId, exerciseId))} onRemoveSet={(sessionId, exerciseId, setId) => apply((current) => removeSessionSet(current, sessionId, exerciseId, setId))} onUpdateExercise={(exerciseId, patch) => apply((current) => updateExerciseRecord(current, exerciseId, patch))} onSaveReflection={(sessionId, exerciseId, input) => apply((current) => saveExerciseReflection(current, sessionId, exerciseId, input))} onUpdateSet={(sessionId, exerciseId, setId, patch: Partial<Pick<SetRecord, 'load' | 'reps' | 'durationSeconds' | 'distanceMetres' | 'note'>>) => run((current) => service.updateSet(current, sessionId, exerciseId, setId, patch))} onCompleteExercise={(sessionId, exerciseId) => run((current) => service.completeExercise(current, sessionId, exerciseId))} onCompleteSession={async (sessionId) => { restTimer.dismiss(); await run((current) => service.persist(completeLiteSession(current, sessionId))); setTab('brief'); }} /></section>
-      <section hidden={tab !== 'library'}><LibraryPage database={database} externalDiscardToken={routineEditDiscardToken} onEditStateChange={setRoutineEditState} onCommitRoutineEdit={(draft: RoutineEditDraft) => apply((current) => commitRoutineEditDraft(current, draft))} onAddExercise={(input: AddExerciseInput) => run((current) => service.addExerciseToRoutine(current, input))} onReorderSlot={(slotId, direction) => apply((current) => reorderRoutineSlot(current, slotId, direction))} onMoveSlot={(slotId, day) => apply((current) => moveRoutineSlot(current, slotId, day))} onRemoveSlot={(slotId) => apply((current) => removeRoutineSlotWithArchive(current, slotId))} onUpdateSlot={(slotId, patch: RoutineSlotPatch) => apply((current) => updateRoutineSlot(current, slotId, patch))} onUpdateExercise={(exerciseId, patch: ExerciseRecordPatch) => apply((current) => updateExerciseRecord(current, exerciseId, patch))} onArchiveExercise={(exerciseId) => apply((current) => archiveExercise(current, exerciseId))} onRestoreExercise={(exerciseId) => apply((current) => restoreArchivedExercise(current, exerciseId))} /></section>
+      <section hidden={tab !== 'library'}><LibraryPage database={database} externalDiscardToken={routineEditDiscardToken} onEditStateChange={setRoutineEditState} onCommitRoutineEdit={(draft: RoutineEditDraft) => apply((current) => commitRoutineEditDraft(current, draft))} onImportRoutine={importRoutine} onAddExercise={(input: AddExerciseInput) => run((current) => service.addExerciseToRoutine(current, input))} onReorderSlot={(slotId, direction) => apply((current) => reorderRoutineSlot(current, slotId, direction))} onMoveSlot={(slotId, day) => apply((current) => moveRoutineSlot(current, slotId, day))} onRemoveSlot={(slotId) => apply((current) => removeRoutineSlotWithArchive(current, slotId))} onUpdateSlot={(slotId, patch: RoutineSlotPatch) => apply((current) => updateRoutineSlot(current, slotId, patch))} onUpdateExercise={(exerciseId, patch: ExerciseRecordPatch) => apply((current) => updateExerciseRecord(current, exerciseId, patch))} onArchiveExercise={(exerciseId) => apply((current) => archiveExercise(current, exerciseId))} onRestoreExercise={(exerciseId) => apply((current) => restoreArchivedExercise(current, exerciseId))} /></section>
     </div>
     <nav className="bottom-nav" aria-label="Primary navigation">{tabs.map((item) => <button key={item} data-active={tab === item} aria-label={tabLabels[item]} title={tabLabels[item]} onClick={() => navigate(item)}><NavIcon name={item} /></button>)}</nav>
     {settingsOpen && <SettingsSheet database={database} onClose={() => setSettingsOpen(false)} onUpdateSettings={(patch) => run((current) => service.updateSettings(current, patch))} onReset={async () => { restTimer.dismiss(); const reset = await service.reset(); databaseRef.current = reset; setDatabase(reset); setTab('brief'); setSettingsOpen(false); }} />}
