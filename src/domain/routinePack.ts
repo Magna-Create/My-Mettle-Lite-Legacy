@@ -4,6 +4,7 @@ import type {
   AppDatabase,
   DaySymbol,
   Exercise,
+  ExerciseMemory,
   ExerciseTrackingProfile,
   Importance,
   Mode,
@@ -26,7 +27,7 @@ export interface RoutinePackExercise {
   name: string;
   tracking: ExerciseTrackingProfile;
   progressionStep: number;
-  memory: Exercise['memory'];
+  memory: ExerciseMemory;
 }
 
 export interface RoutinePackSlot {
@@ -214,7 +215,6 @@ export function applyRoutinePack(database: AppDatabase, pack: ParsedRoutinePack)
 
   const importedAt = new Date().toISOString();
   const exerciseIdByKey = new Map<string, string>();
-  const updatedIds = new Set<string>();
   const importedExercises: Exercise[] = [];
 
   for (const definition of pack.exercises) {
@@ -223,7 +223,6 @@ export function applyRoutinePack(database: AppDatabase, pack: ParsedRoutinePack)
     const existing = matches.length === 1 ? matches[0] : undefined;
     const id = existing?.id ?? createId('exercise');
     exerciseIdByKey.set(definition.key, id);
-    updatedIds.add(id);
     importedExercises.push({
       id,
       name: definition.name,
@@ -231,7 +230,7 @@ export function applyRoutinePack(database: AppDatabase, pack: ParsedRoutinePack)
       defaultUnit: existing?.defaultUnit ?? database.profile.units,
       tracking: structuredClone(definition.tracking),
       progressionStep: definition.progressionStep,
-      essentialCue: definition.memory?.cues[0],
+      essentialCue: definition.memory.cues[0],
       memory: structuredClone(definition.memory),
       createdAt: existing?.createdAt ?? importedAt,
       updatedAt: importedAt,
