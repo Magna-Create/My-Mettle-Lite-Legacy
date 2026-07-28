@@ -9,6 +9,7 @@ import './phase2-fixes.css';
 import './phase2-parity-core.css';
 import './phase2-parity-management.css';
 import './phase2-parity-data.css';
+import './lite.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
