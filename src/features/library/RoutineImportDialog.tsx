@@ -52,7 +52,7 @@ export function RoutineImportDialog({ database, onClose, onImport }: Props) {
   async function importPack() {
     if (!pack || !preview) return;
     const warning = preview.duplicateNames.length > 0
-      ? ` This pack repeats the name${preview.duplicateNames.length === 1 ? '' : 's'} ${preview.duplicateNames.join(', ')}.`
+      ? ` This pack repeats the name${preview.duplicateNames.length === 1 ? '' : 's'} ${preview.duplicateNames.join(', ')}; check that this is intentional.`
       : '';
     if (!window.confirm(`Replace the current routine with “${preview.name}”? Existing sessions and routine history will remain.${warning}`)) return;
 
@@ -101,7 +101,7 @@ export function RoutineImportDialog({ database, onClose, onImport }: Props) {
         <div className="routine-import-days">
           {days.map((day) => <span key={day}><strong>{day}</strong>{preview.dayCounts[day]}</span>)}
         </div>
-        {preview.duplicateNames.length > 0 && <p className="routine-import-warning">Repeated exercise names: {preview.duplicateNames.join(', ')}. They remain separate exercise records because their pack keys differ.</p>}
+        {preview.duplicateNames.length > 0 && <p className="routine-import-warning">Repeated exercise names: {preview.duplicateNames.join(', ')}. Check that these separate pack entries are intentional before replacing the routine.</p>}
       </section>}
 
       <footer>
