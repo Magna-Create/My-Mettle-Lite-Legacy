@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export type Id = string;
 export type DaySymbol = 'ψ' | 'φ' | 'π' | '&';
@@ -12,6 +12,19 @@ export type LoadRelationship = 'external' | 'assistance' | 'bodyweight' | 'bodyw
 export type EntryBasis = 'total' | 'per_hand' | 'per_side';
 
 export interface ExerciseTrackingProfile { metric: TrackingMetric; loadRelationship: LoadRelationship; entryBasis: EntryBasis; }
+
+export type MuscleRole = 'prime' | 'synergist' | 'stabiliser';
+export interface MuscleLoadAllocation {
+  muscle: string;
+  proportion: number;
+  role: MuscleRole;
+}
+export interface MuscleLoadModel {
+  version: 1;
+  basis: string;
+  confidence: number;
+  allocations: MuscleLoadAllocation[];
+}
 
 export interface BodyMeasurement {
   id: Id; recordedAt: string; weightKg?: number | undefined; heightCm?: number | undefined;
@@ -54,8 +67,8 @@ export interface ExerciseMemory {
 
 export interface Exercise {
   id: Id; name: string; archived: boolean; defaultUnit: LoadUnit; tracking: ExerciseTrackingProfile;
-  progressionStep: number; essentialCue?: string | undefined; memory?: ExerciseMemory; createdAt: string;
-  updatedAt: string; schemaVersion: number;
+  progressionStep: number; essentialCue?: string | undefined; memory?: ExerciseMemory;
+  muscleLoadModel?: MuscleLoadModel; createdAt: string; updatedAt: string; schemaVersion: number;
 }
 
 export interface RoutineSlot {
