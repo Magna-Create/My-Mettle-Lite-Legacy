@@ -1,5 +1,6 @@
 import { createId } from './ids';
 import { normaliseExerciseMemory } from './exerciseMemory';
+import { parseMuscleLoadModel } from './muscleLoadModel';
 import type {
   AppDatabase,
   DaySymbol,
@@ -9,6 +10,7 @@ import type {
   Importance,
   Mode,
   ModePrescription,
+  MuscleLoadModel,
   RoutineDay,
   RoutineSlot,
   RoutineVersion,
@@ -28,6 +30,7 @@ export interface RoutinePackExercise {
   tracking: ExerciseTrackingProfile;
   progressionStep: number;
   memory: ExerciseMemory;
+  muscleLoadModel?: MuscleLoadModel;
 }
 
 export interface RoutinePackSlot {
@@ -54,6 +57,7 @@ export interface ParsedRoutinePack {
 export interface RoutinePackPreview {
   name: string;
   exerciseCount: number;
+  muscleModelCount: number;
   slotCount: number;
   dayCounts: Record<DaySymbol, number>;
   duplicateNames: string[];
@@ -141,12 +145,14 @@ export function parseRoutinePack(value: unknown): ParsedRoutinePack {
     seenKeys.add(key);
     const progressionStep = number(candidate.progressionStep, `Exercise ${key} progressionStep`, 1);
     if (progressionStep <= 0) throw new Error(`Exercise ${key} progressionStep must be greater than zero.`);
+    const muscleLoadModel = parseMuscleLoadModel(candidate.muscleLoadModel, `Exercise ${key} muscleLoadModel`);
     return {
       key,
       name: text(candidate.name, `Exercise ${key} name`),
       tracking: parseTracking(candidate.tracking, `Exercise ${key} tracking`),
       progressionStep,
       memory: normaliseExerciseMemory(candidate.memory, candidate.essentialCue),
+      ...(muscleLoadModel ? { muscleLoadModel } : {}),
     };
   });
 
@@ -202,6 +208,7 @@ export function previewRoutinePack(pack: ParsedRoutinePack): RoutinePackPreview 
   return {
     name: pack.name,
     exerciseCount: pack.exercises.length,
+    muscleModelCount: pack.exercises.filter((exercise) => Boolean(exercise.muscleLoadModel)).length,
     slotCount: pack.days.reduce((sum, day) => sum + day.slots.length, 0),
     dayCounts: Object.fromEntries(pack.days.map((day) => [day.symbol, day.slots.length])) as Record<DaySymbol, number>,
     duplicateNames: [...nameCounts.entries()].filter(([, count]) => count > 1).map(([name]) => name),
@@ -222,6 +229,7 @@ export function applyRoutinePack(database: AppDatabase, pack: ParsedRoutinePack)
       && candidate.name.trim().toLocaleLowerCase('en-GB') === definition.name.trim().toLocaleLowerCase('en-GB'));
     const existing = matches.length === 1 ? matches[0] : undefined;
     const id = existing?.id ?? createId('exercise');
+    const muscleLoadModel = definition.muscleLoadModel ?? existing?.muscleLoadModel;
     exerciseIdByKey.set(definition.key, id);
     importedExercises.push({
       id,
@@ -232,6 +240,7 @@ export function applyRoutinePack(database: AppDatabase, pack: ParsedRoutinePack)
       progressionStep: definition.progressionStep,
       essentialCue: definition.memory.cues[0],
       memory: structuredClone(definition.memory),
+      ...(muscleLoadModel ? { muscleLoadModel: structuredClone(muscleLoadModel) } : {}),
       createdAt: existing?.createdAt ?? importedAt,
       updatedAt: importedAt,
       schemaVersion: SCHEMA_VERSION,
