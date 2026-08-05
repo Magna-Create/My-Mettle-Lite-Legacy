@@ -11,6 +11,7 @@ import './phase2-parity-management.css';
 import './phase2-parity-data.css';
 import './lite.css';
 import './lite-layout-fixes.css';
+import './legacy-workout-patches.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

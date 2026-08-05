@@ -13,7 +13,19 @@ describe('exercise memory', () => {
 
     expect(memory.setupNotes).toBe('Seat 4, medium stance.');
     expect(memory.videoReferenceUrl).toBe('https://youtube.com/watch?v=example');
+    expect(memory.setupPhotos).toEqual([]);
     expect(memory).not.toHaveProperty('personalNotes');
+  });
+
+  it('keeps valid local JPEG setup references and rejects unrelated data URLs', () => {
+    const memory = normaliseExerciseMemory({
+      setupPhotos: [
+        { id: 'photo_1', dataUrl: 'data:image/jpeg;base64,abc', createdAt: '2026-08-05T12:00:00Z', width: 800, height: 600 },
+        { id: 'photo_2', dataUrl: 'data:image/png;base64,abc', createdAt: '2026-08-05T12:00:00Z', width: 800, height: 600 },
+      ],
+    });
+    expect(memory.setupPhotos).toHaveLength(1);
+    expect(memory.setupPhotos[0]?.id).toBe('photo_1');
   });
 
   it('updates setup and video reference without creating a routine version', () => {

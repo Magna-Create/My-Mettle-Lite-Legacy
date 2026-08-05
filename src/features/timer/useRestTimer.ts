@@ -201,15 +201,17 @@ export function useRestTimer(settings: RestTimerSettings) {
 
   const addSeconds = useCallback((seconds: number) => {
     setState((current) => {
-      if (!current) return null;
-      const remainingSeconds = current.remainingSeconds + seconds;
+      if (!current || current.completed) return current;
+      const remainingSeconds = Math.max(0, current.remainingSeconds + seconds);
+      const totalSeconds = Math.max(1, current.totalSeconds + seconds);
+      const completed = remainingSeconds === 0;
       return {
         ...current,
-        totalSeconds: current.totalSeconds + seconds,
+        totalSeconds,
         remainingSeconds,
-        completed: false,
-        paused: current.paused,
-        endsAt: current.paused ? null : Date.now() + remainingSeconds * 1000,
+        completed,
+        paused: completed || current.paused,
+        endsAt: completed || current.paused ? null : Date.now() + remainingSeconds * 1000,
       };
     });
   }, []);
