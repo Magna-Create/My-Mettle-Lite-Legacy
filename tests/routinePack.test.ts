@@ -100,7 +100,9 @@ describe('routine packs', () => {
     expect(() => parseRoutinePack(invalid)).toThrow('unknown exercise key');
 
     const invalidModel = routinePackSource();
-    invalidModel.exercises[1]!.muscleLoadModel.allocations[0]!.proportion = 0.2;
+    const model = invalidModel.exercises[1]?.muscleLoadModel;
+    if (!model) throw new Error('Test muscle model missing');
+    model.allocations[0]!.proportion = 0.2;
     expect(() => parseRoutinePack(invalidModel)).toThrow('proportions must total 1.0');
 
     const database = createSeedDatabase();
