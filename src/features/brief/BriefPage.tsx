@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { DAY_LABELS } from '../../data/seed';
 import type { AppDatabase, DaySymbol, Mode } from '../../domain/model';
 import { getCycleSnapshot } from '../../domain/rules/cycle';
-import { ModeSelectionModal } from '../../components/ModeSelectionModal';
+import { ModeSelectionModal, type ModeSummary } from '../../components/ModeSelectionModal';
 
 interface Props { database: AppDatabase; onBeginSession: (day: DaySymbol, mode: Mode) => Promise<void>; }
 interface BriefSuggestion { label: string; value: string; }
@@ -40,6 +40,15 @@ export function BriefPage({ database, onBeginSession }: Props) {
   const firstExerciseId = recommendedDay?.slots[0]?.exerciseId;
   const firstMovement = database.exercises.find((exercise) => exercise.id === firstExerciseId)?.name;
   const suggestions = useMemo(() => buildSuggestions(new Date().getHours(), firstMovement), [firstMovement]);
+  const selectedRoutineDay = routine?.days.find((day) => day.symbol === selectedDay);
+  const modeSummaries = Object.fromEntries((['A', 'B', 'C'] as Mode[]).map((mode) => {
+    const included = selectedRoutineDay?.slots.filter((slot) => slot.prescriptions[mode].included) ?? [];
+    const summary: ModeSummary = {
+      exerciseCount: included.length,
+      setCount: included.reduce((sum, slot) => sum + slot.prescriptions[mode].sets, 0),
+    };
+    return [mode, summary];
+  })) as Record<Mode, ModeSummary>;
 
   return <main className="page brief-page">
     <section className="hero-panel">
@@ -70,6 +79,6 @@ export function BriefPage({ database, onBeginSession }: Props) {
         </div>
       </div>
     </section>
-    {modalOpen && <ModeSelectionModal day={selectedDay} onClose={() => setModalOpen(false)} onSelect={async (mode) => { await onBeginSession(selectedDay, mode); setModalOpen(false); }} />}
+    {modalOpen && <ModeSelectionModal day={selectedDay} summaries={modeSummaries} onClose={() => setModalOpen(false)} onSelect={async (mode) => { await onBeginSession(selectedDay, mode); setModalOpen(false); }} />}
   </main>;
 }
