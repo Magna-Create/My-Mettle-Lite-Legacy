@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ExerciseRecordPatch } from '../../application/Phase2Management';
-import type { AppDatabase, SessionExercise } from '../../domain/model';
+import type { AppDatabase, MuscleLoadModel, SessionExercise } from '../../domain/model';
 import { normaliseExerciseMemory } from '../../domain/exerciseMemory';
 import { calculateExercisePerformance } from '../../domain/rules/performance';
 import { entryBasisLabel, getTrackingPresentation, relationshipLabel } from '../../domain/tracking';
@@ -14,6 +14,16 @@ interface Props {
 
 function DetailList({ items, empty }: { items: string[]; empty: string }) {
   return items.length > 0 ? <ul className="exercise-memory-list">{items.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="muted">{empty}</p>;
+}
+
+function MuscleLoadBreakdown({ model, fallback }: { model: MuscleLoadModel | undefined; fallback: string[] }) {
+  if (!model) return <DetailList items={fallback} empty="No target muscles saved yet." />;
+  return <>
+    <ul className="exercise-memory-list muscle-load-list">
+      {model.allocations.map((allocation) => <li key={allocation.muscle}><strong>{allocation.muscle} · {Math.round(allocation.proportion * 100)}%</strong><span>{allocation.role}</span></li>)}
+    </ul>
+    <small>Model confidence {Math.round(model.confidence * 100)}% · {model.basis}</small>
+  </>;
 }
 
 function isOpenableUrl(value: string) {
@@ -83,7 +93,7 @@ export function ExerciseDetailsOverlay({ database, exercise, onClose, onUpdateEx
       </section>
       <div className="details-memory-grid">
         <section className="details-section"><p className="eyebrow">Key cues</p><DetailList items={memory.cues} empty="No cues saved yet." /></section>
-        <section className="details-section"><p className="eyebrow">Target muscles</p><DetailList items={memory.targetMuscles} empty="No target muscles saved yet." /></section>
+        <section className="details-section"><p className="eyebrow">Muscle-load model</p><MuscleLoadBreakdown model={record?.muscleLoadModel} fallback={memory.targetMuscles} /></section>
         <section className="details-section"><p className="eyebrow">Common mistakes</p><DetailList items={memory.commonMistakes} empty="No common mistakes saved yet." /></section>
         <section className="details-section"><p className="eyebrow">Substitutions</p><DetailList items={memory.substitutions} empty="No substitutions saved yet." /></section>
       </div>
