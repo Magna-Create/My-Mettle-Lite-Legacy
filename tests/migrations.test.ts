@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AppDatabase } from '../src/domain/model';
+import { SCHEMA_VERSION } from '../src/domain/model';
 import { migrateDatabase } from '../src/domain/migrations';
 
 function legacyDatabase() {
@@ -53,7 +54,7 @@ describe('Phase 2 migration', () => {
   it('preserves legacy records while adding parity fields and health provenance', () => {
     const migrated = migrateDatabase(legacyDatabase() as unknown as AppDatabase);
 
-    expect(migrated.schemaVersion).toBe(4);
+    expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
     expect(migrated.exercises).toHaveLength(1);
     expect(migrated.exercises[0]?.name).toBe('Legacy press');
     expect(migrated.exercises[0]?.tracking).toEqual({
