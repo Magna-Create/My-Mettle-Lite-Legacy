@@ -96,6 +96,7 @@ export function RoutineImportDialog({ database, onClose, onImport }: Props) {
         <h3>{preview.name}</h3>
         <div className="routine-import-summary">
           <span><strong>{preview.exerciseCount}</strong> exercises</span>
+          <span><strong>{preview.muscleModelCount}</strong> muscle models</span>
           <span><strong>{preview.slotCount}</strong> routine slots</span>
         </div>
         <div className="routine-import-days">
