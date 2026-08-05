@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createSeedDatabase } from '../src/data/seed';
 import { createBackupPayload, restoreBackupPayload } from '../src/domain/backup';
+import { SCHEMA_VERSION } from '../src/domain/model';
 
 function legacyCompatibleBackup() {
   const database = createSeedDatabase() as unknown as Record<string, unknown>;
@@ -27,7 +28,7 @@ function legacyCompatibleBackup() {
 describe('backup restoration', () => {
   it('validates and migrates a complete legacy-compatible payload', () => {
     const restored = restoreBackupPayload(legacyCompatibleBackup());
-    expect(restored.schemaVersion).toBe(4);
+    expect(restored.schemaVersion).toBe(SCHEMA_VERSION);
     expect(restored.settings.restTimer.vibrationStrength).toBe('medium');
     expect(restored.settings.restTimer.backgroundNotificationEnabled).toBe(true);
     expect(restored.exercises[0]?.memory).toBeDefined();
