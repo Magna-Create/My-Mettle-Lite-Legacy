@@ -1,6 +1,7 @@
 import type { AppDatabase, ExerciseTrackingProfile, VibrationStrength } from './model';
 import { SCHEMA_VERSION } from './model';
 import { normaliseExerciseMemory } from './exerciseMemory';
+import { normaliseMuscleLoadModel } from './muscleLoadModel';
 import { DEFAULT_TRACKING } from './tracking';
 
 type LegacyRecord = Record<string, any>;
@@ -39,13 +40,18 @@ function vibrationStrength(value: unknown): VibrationStrength {
 
 export function migrateDatabase(database: AppDatabase): AppDatabase {
   const source = structuredClone(database) as unknown as LegacyRecord;
-  const exercises = (source.exercises ?? []).map((exercise: LegacyRecord) => ({
-    ...exercise,
-    archived: Boolean(exercise.archived),
-    tracking: cloneTracking(exercise.tracking, exercise.name),
-    memory: normaliseExerciseMemory(exercise.memory, exercise.essentialCue),
-    schemaVersion: SCHEMA_VERSION,
-  }));
+  const exercises = (source.exercises ?? []).map((exercise: LegacyRecord) => {
+    const muscleLoadModel = normaliseMuscleLoadModel(exercise.muscleLoadModel);
+    const { muscleLoadModel: _legacyMuscleLoadModel, ...legacyExercise } = exercise;
+    return {
+      ...legacyExercise,
+      archived: Boolean(exercise.archived),
+      tracking: cloneTracking(exercise.tracking, exercise.name),
+      memory: normaliseExerciseMemory(exercise.memory, exercise.essentialCue),
+      ...(muscleLoadModel ? { muscleLoadModel } : {}),
+      schemaVersion: SCHEMA_VERSION,
+    };
+  });
   const trackingByExercise = new Map(
     exercises.map((exercise: LegacyRecord) => [exercise.id, exercise.tracking as ExerciseTrackingProfile]),
   );
