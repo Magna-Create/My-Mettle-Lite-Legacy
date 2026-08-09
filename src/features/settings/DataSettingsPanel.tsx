@@ -2,21 +2,28 @@ import { useState, type ChangeEvent } from 'react';
 import type { AppDatabase } from '../../domain/model';
 import { createBackupPayload, restoreBackupPayload } from '../../domain/backup';
 import { IndexedDbGymRepository } from '../../adapters/storage/IndexedDbGymRepository';
+import { saveJsonFile } from '../../platform/backupFile';
 
 interface Props { database: AppDatabase; onReset: () => Promise<void>; }
 
 export function DataSettingsPanel({ database, onReset }: Props) {
   const [message, setMessage] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
-  function exportData() {
-    const payload = createBackupPayload(database);
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `my-mettle-lite-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  async function exportData() {
+    if (exporting) return;
+    try {
+      setExporting(true);
+      setMessage('Preparing backup…');
+      const payload = createBackupPayload(database);
+      const filename = `my-mettle-lite-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const saved = await saveJsonFile(filename, JSON.stringify(payload, null, 2));
+      setMessage(saved ? 'Backup saved.' : null);
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : 'Backup could not be saved.');
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function importData(event: ChangeEvent<HTMLInputElement>) {
@@ -43,7 +50,7 @@ export function DataSettingsPanel({ database, onReset }: Props) {
       <h3>Move the complete local record</h3>
       <p>Includes routines, sessions, measurements and exercise memory in a versioned migration file.</p>
       <div className="data-actions">
-        <button className="secondary-action" onClick={exportData}>Export JSON backup</button>
+        <button className="secondary-action" disabled={exporting} onClick={() => { void exportData(); }}>{exporting ? 'Preparing…' : 'Export JSON backup'}</button>
         <label className="secondary-action file-action">Restore JSON<input type="file" accept="application/json,.json" onChange={(event) => { void importData(event); }} /></label>
       </div>
       {message && <p className="settings-inline-status">{message}</p>}
