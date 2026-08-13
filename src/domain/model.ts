@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export type Id = string;
 export type DaySymbol = 'ψ' | 'φ' | 'π' | '&';
@@ -59,10 +59,18 @@ export interface ModePrescription {
   mode: Mode; included: boolean; sets: number; repMin: number; repMax: number; restSeconds: number; deferToAnd: boolean;
 }
 
+export interface ExerciseSetupPhoto {
+  id: Id;
+  dataUrl: string;
+  createdAt: string;
+  width: number;
+  height: number;
+}
+
 export interface ExerciseMemory {
   category: string; equipment: string; targetMuscles: string[]; fatigueCost: 1 | 2 | 3 | 4 | 5;
   skillDifficulty: 1 | 2 | 3 | 4 | 5; cues: string[]; commonMistakes: string[]; setupNotes: string;
-  videoReferenceUrl: string; machineSettings: string; substitutions: string[];
+  setupPhotos: ExerciseSetupPhoto[]; videoReferenceUrl: string; machineSettings: string; substitutions: string[];
 }
 
 export interface Exercise {

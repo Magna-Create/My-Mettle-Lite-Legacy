@@ -1,4 +1,4 @@
-import type { ExerciseMemory } from './model';
+import type { ExerciseMemory, ExerciseSetupPhoto } from './model';
 
 export const EMPTY_EXERCISE_MEMORY: ExerciseMemory = {
   category: '',
@@ -9,6 +9,7 @@ export const EMPTY_EXERCISE_MEMORY: ExerciseMemory = {
   cues: [],
   commonMistakes: [],
   setupNotes: '',
+  setupPhotos: [],
   videoReferenceUrl: '',
   machineSettings: '',
   substitutions: [],
@@ -32,6 +33,25 @@ function text(value: unknown, maxLength = 4000): string {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 }
 
+function setupPhotos(value: unknown): ExerciseSetupPhoto[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item): ExerciseSetupPhoto | null => {
+      if (!item || typeof item !== 'object') return null;
+      const candidate = item as Record<string, unknown>;
+      const id = text(candidate.id, 160);
+      const dataUrl = typeof candidate.dataUrl === 'string' ? candidate.dataUrl : '';
+      const createdAt = text(candidate.createdAt, 80);
+      const width = Math.max(1, Math.round(Number(candidate.width)));
+      const height = Math.max(1, Math.round(Number(candidate.height)));
+      if (!id || !createdAt || !dataUrl.startsWith('data:image/jpeg;base64,')) return null;
+      if (!Number.isFinite(width) || !Number.isFinite(height) || dataUrl.length > 2_500_000) return null;
+      return { id, dataUrl, createdAt, width, height };
+    })
+    .filter((item): item is ExerciseSetupPhoto => item !== null)
+    .slice(0, 12);
+}
+
 export function normaliseExerciseMemory(value: unknown, essentialCue?: unknown): ExerciseMemory {
   const candidate = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const cue = typeof essentialCue === 'string' ? essentialCue.trim() : '';
@@ -47,6 +67,7 @@ export function normaliseExerciseMemory(value: unknown, essentialCue?: unknown):
     cues,
     commonMistakes: strings(candidate.commonMistakes),
     setupNotes: text(candidate.setupNotes),
+    setupPhotos: setupPhotos(candidate.setupPhotos),
     videoReferenceUrl: text(candidate.videoReferenceUrl, 2048),
     machineSettings: text(candidate.machineSettings),
     substitutions: strings(candidate.substitutions),
