@@ -11,10 +11,16 @@ function adjustedLoad(
     : baseline + step;
 }
 
-function latestCompletedExercise(
+interface PreviousSetEvidence {
+  exercise: SessionExercise;
+  set: SetRecord;
+}
+
+function latestCompletedSet(
   database: AppDatabase,
   exerciseId: string,
-): SessionExercise | null {
+  setIndex: number,
+): PreviousSetEvidence | null {
   const sessions = [...database.sessions]
     .filter((session) => session.status === 'completed')
     .sort((left, right) => {
@@ -24,30 +30,23 @@ function latestCompletedExercise(
     });
 
   for (const session of sessions) {
-    const match = session.exercises.find((exercise) => exercise.exerciseId === exerciseId);
-    if (match) return match;
+    const exercise = session.exercises.find((candidate) => candidate.exerciseId === exerciseId);
+    if (!exercise) continue;
+    const set = exercise.sets.find((candidate) =>
+      candidate.setIndex === setIndex
+      && !candidate.warmUp
+      && candidate.kind !== 'additional'
+    );
+    if (set && isSetComplete(set, exercise.trackingSnapshot)) {
+      return { exercise, set };
+    }
   }
   return null;
 }
 
-function previousPrescribedSet(
-  previousExercise: SessionExercise | null,
-  setIndex: number,
-): SetRecord | null {
-  if (!previousExercise) return null;
-  return previousExercise.sets.find((set) =>
-    set.setIndex === setIndex
-    && !set.warmUp
-    && set.kind !== 'additional'
-  ) ?? null;
-}
-
-function earnedProgression(set: SetRecord, exercise: SessionExercise): boolean {
+function earnedProgression(set: SetRecord): boolean {
   const reps = set.reps;
-  return reps !== null
-    && reps >= 6
-    && reps <= 8
-    && isSetComplete(set, exercise.trackingSnapshot);
+  return reps !== null && reps >= 6 && reps <= 8;
 }
 
 export interface SuggestedSetLoadInput {
@@ -71,11 +70,10 @@ export function suggestedSetLoad({
 
   if (experimentLoad !== null) return experimentLoad;
 
-  const previousExercise = latestCompletedExercise(database, exercise.id);
-  const previousSet = previousPrescribedSet(previousExercise, setIndex);
-  if (!previousSet || previousSet.load === null) return fallbackLoad;
+  const previous = latestCompletedSet(database, exercise.id, setIndex);
+  if (!previous || previous.set.load === null) return fallbackLoad;
 
-  return previousExercise && earnedProgression(previousSet, previousExercise)
-    ? adjustedLoad(exercise.tracking.loadRelationship, previousSet.load, exercise.progressionStep)
-    : previousSet.load;
+  return earnedProgression(previous.set)
+    ? adjustedLoad(exercise.tracking.loadRelationship, previous.set.load, exercise.progressionStep)
+    : previous.set.load;
 }
