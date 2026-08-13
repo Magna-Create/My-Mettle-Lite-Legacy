@@ -3,6 +3,7 @@ import type { AppDatabase, CoreDay, DaySymbol, Mode, Session, SessionExercise, S
 import { SCHEMA_VERSION } from '../domain/model';
 import { isAndEligible } from '../domain/rules/cycle';
 import { healthClientRecordId } from '../health/HealthDataProvider';
+import { suggestedSetLoad } from './sessionLoadPrefill';
 
 const timestamp = () => new Date().toISOString();
 
@@ -75,13 +76,23 @@ export function beginLiteSession(database: AppDatabase, day: DaySymbol, mode: Mo
       const sets: SetRecord[] = Array.from({ length: prescription.sets }, (_, setIndex) => ({
         id: createId('set'),
         setIndex,
-        load: startsWithLoad ? slot.plannedLoad : null,
+        load: startsWithLoad
+          ? suggestedSetLoad({
+              database: workingDatabase,
+              exercise,
+              setIndex,
+              fallbackLoad: slot.plannedLoad,
+            })
+          : null,
         reps: null,
         durationSeconds: null,
         distanceMetres: null,
         unit: exercise.defaultUnit,
         warmUp: false,
       }));
+      const plannedLoad = startsWithLoad
+        ? sets[0]?.load ?? slot.plannedLoad
+        : slot.plannedLoad;
 
       return {
         id: createId('session_exercise'),
@@ -91,7 +102,7 @@ export function beginLiteSession(database: AppDatabase, day: DaySymbol, mode: Mo
         importanceSnapshot: slot.importance,
         trackingSnapshot: structuredClone(exercise.tracking),
         bodyweightSnapshotKg,
-        plannedLoad: slot.plannedLoad,
+        plannedLoad,
         prescription,
         status: 'planned',
         sets,
