@@ -25,6 +25,7 @@ import { calculateExercisePerformance } from '../domain/rules/performance';
 import { isSetComplete } from '../domain/tracking';
 import { healthClientRecordId } from '../health/HealthDataProvider';
 import type { GymRepository } from '../adapters/storage/GymRepository';
+import { suggestedSetLoad } from './sessionLoadPrefill';
 
 const timestamp = () => new Date().toISOString();
 
@@ -165,19 +166,30 @@ export class GymAppService {
           (candidate) => candidate.routineSlotId === slot.id,
         );
         const prescription = structuredClone(slot.prescriptions[mode]);
-        const plannedLoad = experiment?.proposedLoad ?? slot.plannedLoad;
+        const fallbackPlannedLoad = experiment?.proposedLoad ?? slot.plannedLoad;
         const startsWithLoad = exercise.tracking.metric === 'load_reps'
           && exercise.tracking.loadRelationship !== 'bodyweight';
         const sets: SetRecord[] = Array.from({ length: prescription.sets }, (_, setIndex) => ({
           id: createId('set'),
           setIndex,
-          load: startsWithLoad ? plannedLoad : null,
+          load: startsWithLoad
+            ? suggestedSetLoad({
+                database: workingDatabase,
+                exercise,
+                setIndex,
+                fallbackLoad: fallbackPlannedLoad,
+                experimentLoad: experiment?.proposedLoad ?? null,
+              })
+            : null,
           reps: null,
           durationSeconds: null,
           distanceMetres: null,
           unit: exercise.defaultUnit,
           warmUp: false,
         }));
+        const plannedLoad = startsWithLoad
+          ? sets[0]?.load ?? fallbackPlannedLoad
+          : fallbackPlannedLoad;
 
         return {
           id: createId('session_exercise'),
