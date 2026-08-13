@@ -37,12 +37,32 @@ describe('session load prefill', () => {
     database = await service.beginSession(database, 'ψ', 'A');
     const nextSession = database.sessions.at(-1);
     const nextExercise = nextSession?.exercises.find((candidate) => candidate.exerciseId === previousExercise.exerciseId);
-    if (!nextExercise) throw new Error('Next exercise missing');
+    if (!nextSession || !nextExercise) throw new Error('Next exercise missing');
 
     expect(nextExercise.sets[0]?.load).toBe(previousLoads[0]! + exerciseRecord.progressionStep);
     expect(nextExercise.sets[1]?.load).toBe(previousLoads[1]! + exerciseRecord.progressionStep);
     expect(nextExercise.sets[2]?.load).toBe(previousLoads[2]);
     expect(nextExercise.plannedLoad).toBe(nextExercise.sets[0]?.load);
+
+    const nextFirstSet = nextExercise.sets[0];
+    if (!nextFirstSet) throw new Error('Next first set missing');
+    database = await service.updateSet(
+      database,
+      nextSession.id,
+      nextExercise.id,
+      nextFirstSet.id,
+      { load: 50, reps: 5 },
+    );
+    database = await service.completeSession(database, nextSession.id);
+
+    database = await service.beginSession(database, 'ψ', 'A');
+    const thirdSession = database.sessions.at(-1);
+    const thirdExercise = thirdSession?.exercises.find((candidate) => candidate.exerciseId === previousExercise.exerciseId);
+    if (!thirdExercise) throw new Error('Third exercise missing');
+
+    expect(thirdExercise.sets[0]?.load).toBe(50);
+    expect(thirdExercise.sets[1]?.load).toBe(previousLoads[1]! + exerciseRecord.progressionStep);
+    expect(thirdExercise.sets[2]?.load).toBe(previousLoads[2]);
   });
 
   it('reduces assistance per eligible set instead of increasing it', async () => {
